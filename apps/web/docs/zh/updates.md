@@ -19,7 +19,15 @@ npx --yes pnpm@10.34.5 --filter worker exec wrangler d1 export db --remote --out
 
 ## 更新与数据库升级
 
-取得最新源码，保留实例配置，在仓库根目录执行：
+先查看目标版本的 [Release](https://github.com/arctan303/FlareMail/releases)，确认升级说明。`main` 跟随最新稳定版本，`dev` 是开发分支；固定标签不会自动更新。保留实例配置，在仓库根目录获取所需源码：
+
+~~~sh
+git fetch origin --tags
+~~~
+
+使用稳定分支的安装可执行 `git switch main` 和 `git pull --ff-only origin main`；固定版本的安装改用 `git switch --detach <目标版本标签>`。有本地源码修改时先妥善保存，不要强制覆盖；不要重新复制实例配置模板。
+
+确认源码版本后安装锁定依赖并部署：
 
 ~~~sh
 npx --yes pnpm@10.34.5 install --frozen-lockfile

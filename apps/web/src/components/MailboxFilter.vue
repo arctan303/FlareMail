@@ -1,8 +1,24 @@
 <template>
-  <select v-if="hasPerm('account:query')" v-model.number="accountStore.mailboxFilterId" class="mailbox-filter" :aria-label="$t('mailboxFilter')" :title="$t('mailboxFilter')" @focus="load">
-    <option :value="0">{{ $t('allMailboxes') }}</option>
-    <option v-for="account in accounts" :key="account.accountId" :value="account.accountId">{{ account.email }}</option>
-  </select>
+  <el-select
+    v-if="hasPerm('account:query')"
+    v-model="accountStore.mailboxFilterId"
+    class="mailbox-filter"
+    popper-class="mailbox-filter-menu"
+    :aria-label="$t('mailboxFilter')"
+    :title="$t('mailboxFilter')"
+    :fit-input-width="false"
+    :show-arrow="false"
+    @visible-change="visible => visible && load()"
+  >
+    <el-option :value="0" :label="$t('allMailboxes')" />
+    <el-option
+      v-for="account in accounts"
+      :key="account.accountId"
+      :value="account.accountId"
+      :label="account.email"
+      :title="account.email"
+    />
+  </el-select>
 </template>
 <script setup>
 import {computed,onMounted,ref} from 'vue';
@@ -25,13 +41,24 @@ async function load(){
     }
     accountStore.accountList=list;
     if(accountStore.mailboxFilterId&&!list.some(a=>a.accountId===accountStore.mailboxFilterId))accountStore.mailboxFilterId=0;
-  }catch{/* The request layer reports errors; focusing retries loading. */}
+  }catch{/* The request layer reports errors; reopening retries loading. */}
   finally{loading.value=false;}
 }
 onMounted(load);
 </script>
 <style scoped>
-.mailbox-filter{width:180px;max-width:100%;height:32px;padding:0 26px 0 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--text);font:inherit;font-size:12px;text-overflow:ellipsis;cursor:pointer;}
-.mailbox-filter:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.mailbox-filter{width:180px;max-width:100%;}
+.mailbox-filter :deep(.el-select__wrapper){min-height:32px;padding:6px 10px;border-radius:8px;background:var(--surface);box-shadow:0 0 0 1px var(--line) inset;font-size:12px;transition:box-shadow .15s ease;}
+.mailbox-filter :deep(.el-select__wrapper.is-hovering){box-shadow:0 0 0 1px var(--line-strong) inset;}
+.mailbox-filter :deep(.el-select__wrapper.is-focused){box-shadow:0 0 0 1px var(--accent) inset,0 0 0 3px var(--focus-ring);}
+.mailbox-filter :deep(.el-select__selected-item){color:var(--text);}
 @media(max-width:767px){.mailbox-filter{width:142px;}}
+</style>
+<style>
+.mailbox-filter-menu.el-popper{border:1px solid var(--line);border-radius:12px;background:var(--surface-elevated);box-shadow:0 8px 24px rgb(0 0 0 / .12);overflow:hidden;}
+.mailbox-filter-menu .el-select-dropdown{min-width:min(240px,calc(100vw - 32px)) !important;max-width:min(360px,calc(100vw - 32px));}
+.mailbox-filter-menu .el-select-dropdown__list{padding:6px;}
+.mailbox-filter-menu .el-select-dropdown__item{height:36px;line-height:36px;padding:0 12px;border-radius:7px;color:var(--text);font-size:13px;}
+.mailbox-filter-menu .el-select-dropdown__item.is-hovering{background:var(--paper-soft);}
+.mailbox-filter-menu .el-select-dropdown__item.is-selected{background:var(--accent-light);color:var(--accent);font-weight:600;}
 </style>

@@ -19,7 +19,15 @@ This exports the remote database referenced by your current db binding. Requests
 
 ## Update and upgrade the database
 
-Obtain the latest source, preserve instance configuration, and run from the repository root:
+Read the target [Release](https://github.com/arctan303/FlareMail/releases) and upgrade notes first. `main` follows the latest stable version, while `dev` is for development. Pinned tags do not update automatically. Preserve instance configuration and fetch the source from the repository root:
+
+~~~sh
+git fetch origin --tags
+~~~
+
+For a stable branch installation, run `git switch main` and `git pull --ff-only origin main`. For a pinned installation, use `git switch --detach <target-version-tag>`. Save local source changes before switching; do not force-overwrite them or replace instance configuration with a fresh template.
+
+After confirming the source version, install locked dependencies and deploy:
 
 ~~~sh
 npx --yes pnpm@10.34.5 install --frozen-lockfile

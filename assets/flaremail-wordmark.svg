@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 205 48" width="205" height="48" role="img" aria-labelledby="title">
+  <title id="title">FlareMail</title>
+  <style>
+    .wordmark { fill: #1f2328; }
+    @media (prefers-color-scheme: dark) { .wordmark { fill: #f0f6fc; } }
+  </style>
+  <svg x="0" y="6" width="36" height="36" viewBox="0 0 128 128">
+  <defs>
+    <!-- Background Squircle Gradient (Obsidian to Charcoal) -->
+    <linearGradient id="flm-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#27272A" />
+      <stop offset="100%" stop-color="#09090B" />
+    </linearGradient>
+
+    <!-- Envelope Paper Gradient (Crisp White to Soft Neutral Paper) -->
+    <linearGradient id="flm-paper" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#F4F4F5" />
+    </linearGradient>
+
+    <!-- Subtle Shimmer Sweep Beam -->
+    <linearGradient id="flm-shimmer" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0" />
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Ambient Shadow for Paper Layer -->
+    <filter id="flm-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.4" />
+    </filter>
+
+    <clipPath id="flm-envelope-clip">
+      <rect x="22" y="37" width="84" height="58" rx="9" />
+    </clipPath>
+  </defs>
+
+  <style>
+    .flm-sweep {
+      animation: flm-light-sweep 5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    @keyframes flm-light-sweep {
+      0%, 20% { transform: translateX(-90px); opacity: 0; }
+      35% { opacity: 0.85; }
+      50%, 100% { transform: translateX(90px); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .flm-sweep {
+        animation: none;
+        display: none;
+      }
+    }
+  </style>
+
+  <!-- Outer Squircle Container -->
+  <rect width="128" height="128" rx="28" fill="url(#flm-bg)" />
+  <rect width="126" height="126" x="1" y="1" rx="27" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="1.5" />
+
+  <!-- Envelope with Ambient Paper Depth -->
+  <g filter="url(#flm-shadow)">
+    <!-- Envelope Body & Masked Shimmer -->
+    <g clip-path="url(#flm-envelope-clip)">
+      <rect x="22" y="37" width="84" height="58" rx="9" fill="url(#flm-paper)" />
+      <rect class="flm-sweep" x="0" y="20" width="40" height="90" fill="url(#flm-shimmer)" transform="skewX(-25)" />
+    </g>
+
+    <!-- Flap Fold Line (Precision dark chevron with smooth rounded joins) -->
+    <path d="M23 42 L64 73 L105 42" fill="none" stroke="#18181B" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Subtle Paper Creases at Bottom -->
+    <path d="M24 93 L48 72 M104 93 L80 72" fill="none" stroke="#E4E4E7" stroke-width="2" stroke-linecap="round" opacity="0.6" />
+  </g>
+</svg>
+  <text class="wordmark" x="46" y="35" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700">FlareMail</text>
+</svg>

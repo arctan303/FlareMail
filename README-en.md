@@ -1,6 +1,5 @@
 <h1 align="center">
-  <img src="./apps/web/public/mail-logo.svg" width="36" height="36" align="middle" alt="" />
-  FlareMail
+  <img src="./assets/flaremail-wordmark.svg" width="205" height="48" alt="FlareMail" />
 </h1>
 
 <p align="center">
@@ -21,7 +20,7 @@
 
 FlareMail is a **private domain mailbox** deployed in your own Cloudflare account. Send and receive mail with your own domain, and share the instance with family or a small team by invitation. Administrators add invited members; each member accesses their own mail.
 
-The first formal release, **v1.0.0**, is in preparation. Try the online experience, then deploy for yourself or a few invited members.
+The first formal release is **[v1.0.0](https://github.com/arctan303/FlareMail/releases/tag/v1.0.0)**. Try the online experience, then deploy for yourself or a few invited members.
 
 <p align="center">
   <a href="https://flaremail-demo.pages.dev/inbox">Try it online</a> ·
@@ -48,6 +47,8 @@ Your real mailbox requires your own Cloudflare account and email domain. A **sin
 Start with the [deployment guide](https://flaremail-demo.pages.dev/docs/en/deployment). See the [user guide](https://flaremail-demo.pages.dev/docs/en/usage), [configuration](https://flaremail-demo.pages.dev/docs/en/configuration), [CLI / Agent](https://flaremail-demo.pages.dev/docs/en/cli) and [updates](https://flaremail-demo.pages.dev/docs/en/updates). Documentation source is in [apps/web/docs/en](apps/web/docs/en).
 
 ## Local development
+
+`main` contains the latest stable version; `dev` is for ongoing development. Start contribution branches from `dev`.
 
 Use Node.js ≥ 22.12 and the pinned pnpm 10.34.5. Install dependencies from the repository root:
 

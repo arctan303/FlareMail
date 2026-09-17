@@ -1,6 +1,5 @@
 <h1 align="center">
-  <img src="./apps/web/public/mail-logo.svg" width="36" height="36" align="middle" alt="" />
-  FlareMail
+  <img src="./assets/flaremail-wordmark.svg" width="205" height="48" alt="FlareMail" />
 </h1>
 
 <p align="center">
@@ -21,7 +20,7 @@
 
 FlareMail 是部署在自己 Cloudflare 账号上的**私有域名邮箱**。使用自己的域名收发邮件，以邀请制与家人或小团队共享；管理员添加受邀成员，每个人独立访问自己的邮件。
 
-正在准备正式首版 **v1.0.0**。建议先在线体验，再部署给自己或少量受邀成员试用。
+正式首版 **[v1.0.0](https://github.com/arctan303/FlareMail/releases/tag/v1.0.0)**。建议先在线体验，再部署给自己或少量受邀成员使用。
 
 <p align="center">
   <a href="https://flaremail-demo.pages.dev/inbox">在线体验</a> ·
@@ -48,6 +47,8 @@ FlareMail 是部署在自己 Cloudflare 账号上的**私有域名邮箱**。使
 从[部署指南](https://flaremail-demo.pages.dev/docs/zh/deployment)开始。更多说明见[使用指南](https://flaremail-demo.pages.dev/docs/zh/usage)、[配置说明](https://flaremail-demo.pages.dev/docs/zh/configuration)、[CLI / Agent](https://flaremail-demo.pages.dev/docs/zh/cli)和[更新维护](https://flaremail-demo.pages.dev/docs/zh/updates)。文档源码位于 [apps/web/docs/zh](apps/web/docs/zh)。
 
 ## 本地开发
+
+`main` 保持最新稳定版本，`dev` 用于日常开发。参与开发请从 `dev` 创建工作分支。
 
 需要 Node.js ≥ 22.12，使用锁定的 pnpm 10.34.5。在仓库根目录安装依赖：
 

@@ -12,13 +12,24 @@ Start with a new installation. One Cloudflare Worker serves the website, APIs an
 
 ## Get the source
 
+`main` is the default stable branch; `dev` contains ongoing development. Keep the default branch when forking for deployment. Avoid deploying the development branch to production. Each formal release has a fixed version tag and a [Release](https://github.com/arctan303/FlareMail/releases).
+
 ~~~sh
-git clone https://github.com/arctan303/FlareMail.git
+git clone --branch main --single-branch https://github.com/arctan303/FlareMail.git
 cd FlareMail
 npx --yes pnpm@10.34.5 install --frozen-lockfile
 ~~~
 
 Alternatively, download and extract the source ZIP, then install from the directory containing package.json. Run all commands below from this repository root.
+
+To pin the first release, download the [v1.0.0 source ZIP](https://github.com/arctan303/FlareMail/archive/refs/tags/v1.0.0.zip), or run after cloning and before installing dependencies:
+
+~~~sh
+git fetch origin tag v1.0.0
+git switch --detach v1.0.0
+~~~
+
+This pins the source to that tag rather than following stable branch updates. Read the next Release and [update guide](/docs/en/updates) before upgrading.
 
 ## Prepare instance configuration
 

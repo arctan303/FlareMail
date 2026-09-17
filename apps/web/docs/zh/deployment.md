@@ -12,15 +12,26 @@
 
 ## 取得源码
 
+`main` 是默认稳定分支，`dev` 是开发分支。Fork 时保留默认分支即可用于部署；请勿将开发分支直接用于生产。每次正式发布都有固定版本标签及 [Release](https://github.com/arctan303/FlareMail/releases)。
+
 在终端执行：
 
 ~~~sh
-git clone https://github.com/arctan303/FlareMail.git
+git clone --branch main --single-branch https://github.com/arctan303/FlareMail.git
 cd FlareMail
 npx --yes pnpm@10.34.5 install --frozen-lockfile
 ~~~
 
 也可下载源码 ZIP，解压后在包含 package.json 的仓库根目录执行安装命令。以下命令均从该根目录运行。
+
+需要固定在首版时，可直接下载 [v1.0.0 源码 ZIP](https://github.com/arctan303/FlareMail/archive/refs/tags/v1.0.0.zip)，或在克隆后、安装依赖前执行：
+
+~~~sh
+git fetch origin tag v1.0.0
+git switch --detach v1.0.0
+~~~
+
+此时源码固定在该标签，不会跟随稳定分支更新；升级请先阅读新版 Release 和[更新维护](/docs/zh/updates)。
 
 ## 准备实例配置
 

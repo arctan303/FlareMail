@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.0.0 — Release preparation
+## v1.0.0 — 2026-09-17
 
 First formal release of FlareMail, an invitation-based private mailbox on your own domain.
 
