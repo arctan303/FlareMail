@@ -1,0 +1,44 @@
+{
+  "$schema": "./apps/worker/node_modules/wrangler/config-schema.json",
+  // Deploy to Cloudflare uses this root configuration. Keep the resource IDs
+  // written into your own repository after installation when updating.
+  "name": "flaremail",
+  "main": "apps/worker/src/index.js",
+  "compatibility_date": "2025-06-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "keep_vars": true,
+  "observability": { "enabled": true },
+  "d1_databases": [
+    { "binding": "db", "database_name": "flaremail-db" }
+  ],
+  "kv_namespaces": [
+    { "binding": "kv" }
+  ],
+  // R2 is optional. Configure it before storing mail if you plan to use it.
+  // "r2_buckets": [{ "binding": "r2", "bucket_name": "flaremail-files" }],
+  // Optional Cloudflare Email Sending (Beta); select the provider in the Web UI.
+  // "send_email": [{ "name": "email" }],
+  "ratelimits": [
+    { "name": "LOGIN_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 15, "period": 60 } },
+    { "name": "SETUP_RATE_LIMITER", "namespace_id": "1003", "simple": { "limit": 3, "period": 60 } },
+    { "name": "SETUP_STATUS_RATE_LIMITER", "namespace_id": "1009", "simple": { "limit": 30, "period": 60 } },
+    { "name": "EMAIL_RATE_LIMITER", "namespace_id": "1004", "simple": { "limit": 60, "period": 60 } },
+    { "name": "SEND_RATE_LIMITER", "namespace_id": "1005", "simple": { "limit": 10, "period": 60 } },
+    { "name": "OAUTH_START_RATE_LIMITER", "namespace_id": "1006", "simple": { "limit": 10, "period": 60 } },
+    { "name": "OAUTH_CALLBACK_RATE_LIMITER", "namespace_id": "1007", "simple": { "limit": 10, "period": 60 } },
+    { "name": "OAUTH_BIND_RATE_LIMITER", "namespace_id": "1008", "simple": { "limit": 10, "period": 60 } },
+    { "name": "OAUTH_AUTHORIZE_RATE_LIMITER", "namespace_id": "1010", "simple": { "limit": 60, "period": 60 } },
+    { "name": "OAUTH_TOKEN_RATE_LIMITER", "namespace_id": "1011", "simple": { "limit": 60, "period": 60 } },
+    { "name": "OAUTH_USERINFO_RATE_LIMITER", "namespace_id": "1012", "simple": { "limit": 120, "period": 60 } }
+  ],
+  "assets": {
+    "binding": "assets",
+    "directory": "apps/worker/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "triggers": { "crons": ["0 16 * * *"] },
+  "secrets": { "required": ["SETUP_SECRET"] },
+  "vars": { "ORM_LOG": false },
+  "build": { "command": "npx --yes pnpm@10.34.5 -w run build" }
+}

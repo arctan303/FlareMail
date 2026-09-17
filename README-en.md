@@ -44,6 +44,10 @@ The [online experience](https://flaremail-demo.pages.dev/inbox) opens a mailbox 
 
 Your real mailbox requires your own Cloudflare account and email domain. A **single Worker** serves the frontend, APIs and email handler, backed by D1 and KV with optional R2 object storage. Registering a domain in the application also requires configuring inbound routing and an outbound sending service.
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/arctan303/FlareMail)
+
+Deploy through the Cloudflare web page without a local terminal. Create your administrator in the Web wizard, then connect mail routing and sending. Existing instances should follow the update guide and preserve their resources.
+
 Start with the [deployment guide](https://flaremail-demo.pages.dev/docs/en/deployment). See the [user guide](https://flaremail-demo.pages.dev/docs/en/usage), [configuration](https://flaremail-demo.pages.dev/docs/en/configuration), [CLI / Agent](https://flaremail-demo.pages.dev/docs/en/cli) and [updates](https://flaremail-demo.pages.dev/docs/en/updates). Documentation source is in [apps/web/docs/en](apps/web/docs/en).
 
 ## Local development

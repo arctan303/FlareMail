@@ -1,7 +1,7 @@
 {
   "name": "flaremail",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "packageManager": "pnpm@10.34.5",
   "engines": {
     "node": ">=22.12.0"
@@ -13,11 +13,21 @@
     "test": "pnpm run test:worker && pnpm run test:web",
     "test:worker": "pnpm --filter worker test",
     "test:web": "pnpm --filter web test",
+    "test:deploy": "node --test scripts/test/*.spec.mjs",
     "build": "pnpm --filter web build",
     "deploy": "pnpm --filter worker run deploy",
     "deploy:test": "pnpm --filter worker run deploy:test",
     "dev:pages": "pnpm --filter web run dev:pages",
     "build:pages": "pnpm --filter web run build:pages",
     "preview:pages": "pnpm --filter web run preview:pages"
+  },
+  "cloudflare": {
+    "bindings": {
+      "SETUP_SECRET": {
+        "description": "Installation and maintenance secret / 安装与维护凭据。Use your password manager to generate a unique random password of at least 32 characters, and save it. You will enter the same value in the Web installation wizard. This is separate from your mailbox password. / 用密码管理器生成并保存至少 32 字符的独立随机密码，稍后在网页安装向导输入相同值；它与邮箱登录密码不同。"
+      },
+      "db": { "description": "Stores accounts, mail and application settings / 保存账号、邮件和应用设置。Keep this database when updating / 更新时保留此数据库。" },
+      "kv": { "description": "Stores application cache and objects when R2 is not configured / 保存应用缓存及未配置 R2 时的对象。Keep this namespace when updating / 更新时保留此命名空间。" }
+    }
   }
 }

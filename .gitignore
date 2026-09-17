@@ -9,6 +9,7 @@
 ## Runtime and private deployment files
 **/wrangler.toml
 **/.dev.vars*
+!/.dev.vars.example
 **/backup_*.sql
 **/node_modules/
 **/dist/

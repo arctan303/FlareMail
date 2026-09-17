@@ -25,6 +25,7 @@ jobs:
           package-manager-cache: false
       - run: npx --yes pnpm@10.34.5 install --frozen-lockfile
       - run: npx --yes pnpm@10.34.5 test:worker
+      - run: npx --yes pnpm@10.34.5 test:deploy
 
   frontend:
     runs-on: ubuntu-latest

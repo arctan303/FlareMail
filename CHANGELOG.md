@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.0.2 — 2026-09-18
+
+### Added
+
+- Deploy to Cloudflare entry in the bilingual README and Docs, with a public root Worker configuration and installation-secret guidance.
+- Deployment-launcher regression tests covering existing instance configuration, explicit configuration and local development protection.
+
+### Improved
+
+- New-installation guides prioritize the browser deployment flow and Web setup; command-line deployment remains available as an advanced route.
+- Update guides explain how to preserve the existing database, storage bindings and customized configuration when updating a deploy-button instance.
+
+### Validation scope
+
+- Local builds and Worker packaging were verified. Cloudflare deployment-form secret collection, remote resource provisioning and repository ID writeback still require an end-to-end platform check.
+
 ## v1.0.1 — 2026-09-18
 
 ### Optimized

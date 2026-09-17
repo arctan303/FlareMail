@@ -44,6 +44,10 @@ FlareMail 是部署在自己 Cloudflare 账号上的**私有域名邮箱**。使
 
 部署正式邮箱需要自己的 Cloudflare 账号与邮箱域名。前端、API 和邮件处理统一由**单个 Worker** 提供服务，使用 D1 和 KV，R2 为可选对象存储。应用内登记域名后，还需配置收信路由和发信服务。
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/arctan303/FlareMail)
+
+推荐使用 Cloudflare 网页一键部署，无需本机命令行。部署后在 Web 向导创建管理员，再接通收发信；已有实例按更新指南保留原资源。
+
 从[部署指南](https://flaremail-demo.pages.dev/docs/zh/deployment)开始。更多说明见[使用指南](https://flaremail-demo.pages.dev/docs/zh/usage)、[配置说明](https://flaremail-demo.pages.dev/docs/zh/configuration)、[CLI / Agent](https://flaremail-demo.pages.dev/docs/zh/cli)和[更新维护](https://flaremail-demo.pages.dev/docs/zh/updates)。文档源码位于 [apps/web/docs/zh](apps/web/docs/zh)。
 
 ## 本地开发

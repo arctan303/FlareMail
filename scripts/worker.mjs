@@ -5,19 +5,24 @@ import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 
 const workerDir = fileURLToPath(new URL('../apps/worker/', import.meta.url));
+const repositoryDir = fileURLToPath(new URL('../', import.meta.url));
 const [command, ...args] = process.argv.slice(2);
 if (!['dev', 'deploy'].includes(command)) {
     console.error('Usage: node scripts/worker.mjs <dev|deploy> [Wrangler options]');
     process.exit(1);
 }
 const hasConfig = args.some(arg => arg === '--config' || arg === '-c' || arg.startsWith('--config='));
+let workingDir = workerDir;
 if (!hasConfig) {
     const instanceExists = existsSync(join(workerDir, 'wrangler.toml'));
     if (command === 'deploy' && !instanceExists) {
-        console.error('Create apps/worker/wrangler.toml from wrangler.example.toml before deploying. See README.md.');
-        process.exit(1);
+        // The deploy button updates this file in the user's repository.
+        // Existing CLI installations retain priority over the public template.
+        args.unshift('--config', join(repositoryDir, 'wrangler.jsonc'));
+        workingDir = repositoryDir;
+    } else {
+        args.unshift('--config', instanceExists ? 'wrangler.toml' : 'wrangler-dev.toml');
     }
-    args.unshift('--config', instanceExists ? 'wrangler.toml' : 'wrangler-dev.toml');
 }
 if (command === 'dev') {
     if (args.some(arg => ['-r', '--remote', '--tunnel', '--tunnel-name', '--local=false'].includes(arg)
@@ -29,7 +34,7 @@ if (command === 'dev') {
 }
 const require = createRequire(new URL('../apps/worker/package.json', import.meta.url));
 const wrangler = join(dirname(require.resolve('wrangler/package.json')), 'bin', 'wrangler.js');
-const child = spawn(process.execPath, [wrangler, command, ...args], {cwd: workerDir, stdio: 'inherit'});
+const child = spawn(process.execPath, [wrangler, command, ...args], {cwd: workingDir, stdio: 'inherit'});
 child.on('error', error => {
     console.error(error.message);
     process.exitCode = 1;

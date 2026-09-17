@@ -2,6 +2,18 @@
 
 更新顺序：备份资源与配置 → 更新代码和锁定依赖 → 部署 → 检查数据库版本 → 验证收发。
 
+## 一键部署实例如何更新
+
+一键部署会在你自己的 GitHub 账号创建源码仓库，并通过 Workers Builds 部署它。更新时使用这个仓库和已有 Worker；不要再次点击部署按钮。
+
+1. 先阅读目标版本的 [Release](https://github.com/arctan303/FlareMail/releases)，备份数据库、对象存储和配置。
+2. 在 Cloudflare 查看原 Worker 的 db、kv 及可选 R2 绑定；在自己的 GitHub 仓库打开根目录 wrangler.jsonc，确认 Worker 名称、D1 database_id、KV id 和可选 R2 桶名对应现有资源。缺失时填入原资源 ID，保留安装 Secret。
+3. 将目标稳定版本的应用代码更新到自己的仓库，保留已定制的 wrangler.jsonc。Cloudflare 创建的仓库可能是源码副本，未必显示 GitHub 的 Sync fork；此时不能照搬 Fork 同步教程，也不要覆盖整个仓库的实例配置。
+4. 推送到绑定的生产分支会触发 Workers Builds；在 Cloudflare 构建日志检查成功，再核对部署后的资源绑定。更新代码前先关闭不需要的非生产分支构建，避免预览连接正式邮箱资源。
+5. 按下方说明登录管理员，在系统维护页面处理数据库补丁，并验证历史邮件和外部收发。
+
+目前没有应用内一键版本更新。若不熟悉合并版本代码，可使用下方命令行方式；从控制台记录原绑定到自己的实例配置后，再进行更新，切勿创建新数据库替代旧数据库。[Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/)
+
 ## 更新前保留什么
 
 - 保留 apps/worker/wrangler.toml 中的 Worker 名称、D1/KV 资源 ID、R2 桶名及已有绑定；不要重新复制空白模板。

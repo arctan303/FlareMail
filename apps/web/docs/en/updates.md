@@ -2,6 +2,18 @@
 
 Update in this order: back up resources and configuration → update code and locked dependencies → deploy → check database version → verify mail.
 
+## Update an instance created with the deploy button
+
+The button creates a source repository in your GitHub account and connects it to Workers Builds. Update that repository and the existing Worker; do not click the deployment button again.
+
+1. Read the target [Release](https://github.com/arctan303/FlareMail/releases), then back up the database, stored objects and configuration.
+2. Inspect db, kv and optional R2 bindings on the existing Worker. In your GitHub repository, check that the root wrangler.jsonc keeps the existing Worker name, D1 database_id, KV id and optional R2 bucket name. Fill missing IDs from the existing dashboard resources and preserve the installation Secret.
+3. Update application code to the target stable version in your repository, preserving your customized wrangler.jsonc. The created repository may be a source copy without GitHub's Sync fork action; do not assume fork synchronization is available or overwrite instance configuration with the entire upstream repository.
+4. Pushing to the connected production branch triggers Workers Builds. Check the build logs for success and verify resource bindings afterward. Disable unneeded non-production branch builds before updating code to avoid connecting previews to your real mailbox resources.
+5. Follow the database upgrade steps below, then verify historical mail and external delivery.
+
+There is no in-app one-click version updater. If merging code versions is unfamiliar, use the command-line route below after recording your existing bindings in your own instance configuration. Do not replace the existing database with a new one. [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/)
+
 ## Preserve before updating
 
 - Keep the Worker name, D1/KV resource IDs, R2 bucket name and existing bindings in apps/worker/wrangler.toml. Do not replace it with a fresh template.
