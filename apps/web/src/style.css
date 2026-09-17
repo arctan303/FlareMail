@@ -1,0 +1,462 @@
+/* 邮件富文本与 TinyMCE 基础修复 */
+.mail-content-html {
+    color: var(--text-strong);
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.mail-content-html img {
+    max-width: 100% !important;
+    height: auto !important;
+    border-radius: 6px;
+}
+
+.mail-content-html a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.mail-content-html pre, .mail-content-html code {
+    font-family: var(--font-mono);
+    background-color: var(--paper-soft);
+    border-radius: 4px;
+    padding: 2px 5px;
+    font-size: 0.9em;
+}
+
+.mail-content-html blockquote {
+    margin: 12px 0;
+    padding: 6px 14px;
+    border-left: 3px solid var(--line-strong);
+    color: var(--muted);
+    background-color: var(--paper-soft);
+    border-radius: 0 6px 6px 0;
+}
+
+/* 全局 macOS 极简悬浮细滚动条体系 */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text) 24%, transparent) transparent;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+    background-color: transparent;
+}
+
+::-webkit-scrollbar-track {
+    background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--text) 22%, transparent);
+    border-radius: 9999px;
+    transition: background-color var(--duration-fast, 150ms) ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--text) 48%, transparent);
+}
+
+::-webkit-scrollbar-corner {
+    background-color: transparent;
+}
+
+/* Element Plus 内部 el-scrollbar 统一悬浮极简化 */
+.el-scrollbar__bar {
+    z-index: 20 !important;
+}
+
+.el-scrollbar__bar.is-vertical {
+    width: 6px !important;
+    right: 2px !important;
+}
+
+.el-scrollbar__bar.is-horizontal {
+    height: 6px !important;
+    bottom: 2px !important;
+}
+
+.el-scrollbar__thumb {
+    background-color: color-mix(in srgb, var(--text) 22%, transparent) !important;
+    border-radius: 9999px !important;
+    opacity: 0.8 !important;
+    transition: background-color var(--duration-fast, 150ms) ease !important;
+}
+
+.el-scrollbar__thumb:hover {
+    background-color: color-mix(in srgb, var(--text) 48%, transparent) !important;
+}
+
+/* TinyMCE 弹窗层级 */
+.tox-tinymce-aux {
+    z-index: 999999 !important;
+}
+
+.tox .tox-dialog {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.15) !important;
+    border: 1px solid var(--line) !important;
+}
+
+.tox .tox-toolbar-overlord {
+    background: var(--surface) !important;
+    border-bottom: 1px solid var(--line) !important;
+}
+
+.tox .tox-toolbar, .tox .tox-toolbar__overflow, .tox .tox-toolbar__primary {
+    background: transparent !important;
+}
+
+.tox .tox-tbtn {
+    border-radius: 6px !important;
+    margin: 2px 1px !important;
+}
+
+.tox .tox-tbtn:hover {
+    background: var(--paper-soft) !important;
+}
+
+.tox .tox-tbtn--enabled, .tox .tox-tbtn--active {
+    background: color-mix(in srgb, var(--accent) 15%, var(--surface)) !important;
+}
+
+.tox .tox-statusbar {
+    border-top: 1px solid var(--line) !important;
+    background: var(--surface) !important;
+}
+
+.tox .tox-collection--grid .tox-collection__group {
+    max-height: 220px !important;
+}
+
+:root {
+    /* 统一 Design System Tokens (见字如面 · 纸墨雅致风) */
+    --paper: #f0f4f9;
+    --paper-soft: #e8eef6;
+    --surface: #ffffff;
+    --surface-elevated: #ffffff;
+    --ink: #1b365d;
+    --text-strong: #1b263b;
+    --text: #334155;
+    --muted: #64748b;
+    --faint: #94a3b8;
+    --line: #e2e8f0;
+    --line-strong: #cbd5e1;
+    --line-subtle: rgba(226, 232, 240, 0.6);
+    --accent: #1b456f;
+    --accent-hover: #143354;
+    --accent-light: #eaf1f8;
+    --focus-ring: color-mix(in srgb, var(--accent) 30%, transparent);
+    --font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif;
+    --font-sans: "Inter", "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    
+    /* 圆角阶梯规范 (严格遵循同心圆嵌套几何律) */
+    --radius-xs: 4px;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 14px;
+    --radius-2xl: 16px;
+    --radius-full: 9999px;
+
+    /* 多层环境光弥散阴影体系 */
+    --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+    --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02);
+    --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+    --shadow-lg: 0 10px 18px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.03);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.09), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+    --shadow-modal: 0 25px 50px -12px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04);
+
+    /* 物理动效系统 */
+    --duration-instant: 100ms;
+    --duration-fast: 150ms;
+    --duration-base: 220ms;
+    --duration-slow: 320ms;
+    --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Element Plus 适配映射 (必须加 !important 保证全局 100% 覆盖) */
+    --el-color-primary: var(--accent) !important;
+    --el-color-primary-dark-2: #143354 !important;
+    --el-color-primary-light-3: #2d5b8c !important;
+    --el-color-primary-light-5: #4b78aa !important;
+    --el-color-primary-light-7: #7a9ec6 !important;
+    --el-color-primary-light-9: #eaf1f8 !important;
+
+    --extra-light-fill: var(--paper-soft);
+    --light-ill: var(--paper-soft);
+    --light-border: var(--line);
+    --header-actions-border: none;
+    --aside-backgound: var(--paper);
+    --loadding-background: rgba(240, 244, 249, 0.85);
+    --dark-border: var(--line);
+    --base-fill: var(--paper-soft);
+    --regular-text-color: var(--muted);
+    --light-border-color: var(--line);
+    --aside-right-border: none;
+    --choose-account-background: var(--el-color-primary-light-9);
+    --email-scroll-content-color: var(--muted);
+    --email-hover-background: var(--paper-soft);
+    --login-border: none;
+    --form-desc-color: var(--muted);
+    --login-switch-color: var(--accent);
+    --scrollbar-track-color: var(--muted);
+    --base-border-color: var(--line);
+    --secondary-text-color: var(--faint);
+    --message-block-color: rgba(0, 0, 0, 0);
+    --loading-hide-transition: all 200ms;
+    --vt-x: 50%;
+    --vt-y: 50%;
+    --vt-duration: 520ms;
+    --vt-easing: ease-out;
+
+    --el-bg-color: var(--surface) !important;
+    --el-bg-color-page: var(--paper) !important;
+    --el-bg-color-overlay: var(--surface) !important;
+    --el-text-color-primary: var(--text-strong) !important;
+    --el-text-color-regular: var(--text) !important;
+    --el-text-color-secondary: var(--muted) !important;
+    --el-border-color: var(--line) !important;
+    --el-border-color-light: var(--line) !important;
+    --el-border-color-lighter: var(--line-subtle) !important;
+    --el-fill-color: var(--paper-soft) !important;
+    --el-fill-color-light: var(--paper-soft) !important;
+    --el-fill-color-lighter: var(--paper) !important;
+    --el-fill-color-extra-light: var(--paper-soft) !important;
+    --el-fill-color-blank: var(--surface) !important;
+    --el-fill-color-dark: var(--line) !important;
+    --el-fill-color-darker: var(--line-strong) !important;
+}
+
+.dark {
+    --paper: #101216;
+    --paper-soft: #181b22;
+    --surface: #1e222b;
+    --surface-elevated: #242934;
+    --ink: #a6b6cc;
+    --text-strong: #f1f5f9;
+    --text: #cbd5e1;
+    --muted: #94a3b8;
+    --faint: #64748b;
+    --line: #292e3a;
+    --line-strong: #3b4353;
+    --line-subtle: rgba(41, 46, 58, 0.6);
+    --accent: #4f8ff7;
+    --accent-hover: #6ea4f9;
+    --accent-light: #16294a;
+    --focus-ring: color-mix(in srgb, var(--accent) 38%, transparent);
+
+    --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+    --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3), inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+    --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+    --shadow-lg: 0 10px 18px -3px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+    --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.8), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+
+    --el-color-primary: var(--accent) !important;
+    --el-color-primary-dark-2: #2e6ad0 !important;
+    --el-color-primary-light-3: #5490ec !important;
+    --el-color-primary-light-5: #6fa2f0 !important;
+    --el-color-primary-light-7: #92b8f5 !important;
+    --el-color-primary-light-9: #16294a !important;
+
+    --extra-light-fill: var(--paper-soft);
+    --light-ill: var(--paper-soft);
+    --light-border: var(--line);
+    --aside-backgound: var(--paper);
+    --header-actions-border: none;
+    --loadding-background: rgba(16, 18, 22, 0.85);
+    --dark-border: var(--line);
+    --base-fill: var(--paper-soft);
+    --regular-text-color: var(--muted);
+    --light-border-color: var(--line);
+    --aside-right-border: none;
+    --choose-account-background: var(--paper-soft);
+    --email-scroll-content-color: var(--muted);
+    --email-hover-background: var(--paper-soft);
+    --login-border: none;
+    --form-desc-color: var(--muted);
+    --login-switch-color: var(--accent);
+    --scrollbar-track-color: var(--muted);
+    --base-border-color: var(--line);
+    --secondary-text-color: var(--faint);
+    --message-block-color: rgba(12, 12, 14, 0.2);
+
+    --el-bg-color: var(--surface) !important;
+    --el-bg-color-page: var(--paper) !important;
+    --el-bg-color-overlay: var(--surface) !important;
+    --el-text-color-primary: var(--text-strong) !important;
+    --el-text-color-regular: var(--text) !important;
+    --el-text-color-secondary: var(--muted) !important;
+    --el-border-color: var(--line) !important;
+    --el-border-color-light: var(--line) !important;
+    --el-border-color-lighter: var(--line-subtle) !important;
+    --el-fill-color: var(--paper-soft) !important;
+    --el-fill-color-light: var(--paper-soft) !important;
+    --el-fill-color-lighter: var(--paper) !important;
+    --el-fill-color-extra-light: var(--paper-soft) !important;
+    --el-fill-color-blank: var(--surface) !important;
+    --el-fill-color-dark: var(--line) !important;
+    --el-fill-color-darker: var(--line-strong) !important;
+}
+
+/* 真实物理弹性按压微动效 */
+button:not(:disabled):active,
+.site-btn:not(:disabled):active,
+.arc-btn:not(:disabled):active {
+    transform: translateY(1px) scale(0.985);
+    transition: transform var(--duration-instant) var(--ease-spring);
+}
+
+.arc-serif-title {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+/* 全局容器卡片化 (悬浮现代卡片质感) */
+.arc-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    transition: background-color var(--duration-base) var(--ease-smooth),
+                border-color var(--duration-base) var(--ease-smooth),
+                box-shadow var(--duration-base) var(--ease-smooth);
+}
+
+.font-mono {
+    font-family: var(--font-mono);
+}
+
+.el-input {
+    --el-input-text-color: var(--el-text-color-primary) !important;
+}
+
+/* Element 组件统一质感覆盖 */
+.el-table {
+    --el-table-border-color: var(--line-subtle) !important;
+    --el-table-header-bg-color: var(--paper-soft) !important;
+    --el-table-row-hover-bg-color: var(--paper-soft) !important;
+    --el-table-tr-bg-color: transparent !important;
+    font-size: 13.5px;
+}
+.el-table th.el-table__cell {
+    background: var(--el-table-header-bg-color) !important;
+    font-weight: 600;
+    color: var(--text-strong);
+    border-bottom: 1px solid var(--line) !important;
+}
+.el-table td.el-table__cell {
+    border-bottom: 1px solid var(--line-subtle) !important;
+}
+.el-table .el-table__inner-wrapper::before {
+    background-color: var(--line-subtle);
+}
+.el-button {
+    border-radius: var(--radius-md);
+    font-weight: 500;
+}
+.el-input__wrapper,
+.el-textarea__inner {
+    border-radius: var(--radius-md);
+    box-shadow: 0 0 0 1px var(--line) inset !important;
+    transition: all var(--duration-fast) var(--ease-smooth);
+}
+.el-input__wrapper:hover,
+.el-textarea__inner:hover {
+    box-shadow: 0 0 0 1px var(--line-strong) inset !important;
+}
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus {
+    box-shadow: 0 0 0 1.5px var(--accent) inset !important;
+}
+.el-tag {
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+}
+.el-dialog {
+    border-radius: var(--radius-2xl) !important;
+    box-shadow: var(--shadow-modal) !important;
+    border: 1px solid var(--line) !important;
+    background: var(--surface) !important;
+    overflow: hidden;
+}
+.el-dropdown-menu {
+    border-radius: var(--radius-lg) !important;
+    box-shadow: var(--shadow-lg) !important;
+    border: 1px solid var(--line) !important;
+    background: var(--surface) !important;
+    padding: 4px !important;
+}
+.el-dropdown-menu__item {
+    border-radius: var(--radius-sm) !important;
+    font-size: 13px !important;
+    padding: 6px 12px !important;
+}
+
+/* 视图过渡，基于径向剪裁 */
+html.dark,
+html:not(.dark) {
+    view-transition-name: root;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+}
+
+/* 层级控制，确保对应方向动画在上层可见 */
+html[data-theme-to="dark"]::view-transition-new(root) { z-index: 2; }
+html[data-theme-to="dark"]::view-transition-old(root) { z-index: 1; }
+html[data-theme-to="light"]::view-transition-old(root) { z-index: 2; }
+html[data-theme-to="light"]::view-transition-new(root) { z-index: 1; }
+
+/* 切到暗色：新视图从点击点向外扩散 */
+html[data-theme-to="dark"]::view-transition-new(root) {
+    clip-path: circle(0px at var(--vt-x) var(--vt-y));
+    animation: vt-radial-in var(--vt-duration) var(--vt-easing) forwards;
+}
+
+/* 切到浅色：旧视图向点击点收缩 */
+html[data-theme-to="light"]::view-transition-old(root) {
+    clip-path: circle(var(--vt-end-radius, 0px) at var(--vt-x) var(--vt-y));
+    animation: vt-radial-out var(--vt-duration) var(--vt-easing) forwards;
+}
+
+@keyframes vt-radial-in {
+    from { clip-path: circle(0px at var(--vt-x) var(--vt-y)); }
+    to   { clip-path: circle(var(--vt-end-radius, 0px) at var(--vt-x) var(--vt-y)); }
+}
+
+@keyframes vt-radial-out {
+    from { clip-path: circle(var(--vt-end-radius, 0px) at var(--vt-x) var(--vt-y)); }
+    to   { clip-path: circle(0px at var(--vt-x) var(--vt-y)); }
+}
+
+/* ──────────────────────────────────────────────────
+   触控交互增强与防手势冲突规则
+   ────────────────────────────────────────────────── */
+button,
+a,
+.tool-btn,
+.tool-icon-btn,
+.batch-action-btn,
+.hover-action-btn,
+.att-opt-btn,
+.field-tool-btn,
+.mini-btn,
+.action-icon-btn,
+.group-pill,
+.contact-item {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+

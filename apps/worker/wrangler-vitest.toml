@@ -1,0 +1,46 @@
+name = "mail-worker-vitest"
+main = "src/index.js"
+compatibility_date = "2025-06-04"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "db"
+database_name = "mail-vitest"
+database_id = "00000000-0000-0000-0000-000000000001"
+
+[[kv_namespaces]]
+binding = "kv"
+id = "00000000000000000000000000000001"
+
+[[ratelimits]]
+name = "SETUP_STATUS_RATE_LIMITER"
+namespace_id = "1009"
+simple = { limit = 300, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_AUTHORIZE_RATE_LIMITER"
+namespace_id = "1010"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_TOKEN_RATE_LIMITER"
+namespace_id = "1011"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_USERINFO_RATE_LIMITER"
+namespace_id = "1012"
+simple = { limit = 120, period = 60 }
+
+[[r2_buckets]]
+binding = "r2"
+bucket_name = "mail-vitest"
+
+[vars]
+SETUP_SECRET = "setup-secret-for-vitest-only-1234567890"
+FLAREMAIL_DOMAINS = ["example.com"]
+FLAREMAIL_ADMIN_EMAIL = "admin@example.com"
+FLAREMAIL_ADMIN_PASSWORD = "vitest-only-admin-password"
+ORM_LOG = false
+FLAREMAIL_PROJECT_LINK = false
+FLAREMAIL_ALLOWED_ORIGINS = ["http://localhost:3001", "http://localhost:8787"]

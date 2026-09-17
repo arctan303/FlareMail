@@ -1,0 +1,23 @@
+{
+  "name": "flaremail",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter web --filter worker run dev",
+    "dev:web": "pnpm --filter web run dev",
+    "dev:worker": "pnpm --filter worker run dev",
+    "test": "pnpm run test:worker && pnpm run test:web",
+    "test:worker": "pnpm --filter worker test",
+    "test:web": "pnpm --filter web test",
+    "build": "pnpm --filter web build",
+    "deploy": "pnpm --filter worker run deploy",
+    "deploy:test": "pnpm --filter worker run deploy:test",
+    "dev:pages": "pnpm --filter web run dev:pages",
+    "build:pages": "pnpm --filter web run build:pages",
+    "preview:pages": "pnpm --filter web run preview:pages"
+  }
+}

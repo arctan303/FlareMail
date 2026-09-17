@@ -1,0 +1,31 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "node ../../scripts/worker.mjs dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "deploy:test": "wrangler deploy --config wrangler-test.toml",
+    "deploy": "node ../../scripts/worker.mjs deploy",
+    "start": "node ../../scripts/worker.mjs dev"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.4",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.110.0"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.13",
+    "drizzle-orm": "^0.45.2",
+    "hono": "4.12.29",
+    "i18next": "^25.3.2",
+    "linkedom": "^0.18.13",
+    "postal-mime": "^2.7.5",
+    "resend": "^6.17.2",
+    "ua-parser-js": "^2.0.10"
+  }
+}

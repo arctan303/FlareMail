@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#F1F1F1" id="theme-color-meta">
+  <meta name="description" content="FlareMail private mailbox for your domain.">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet"/>
+  <title>FlareMail</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/mail-pwa-192.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <script src="/theme-init.js"></script>
+</head>
+<style>
+  html {
+    background: #FFFFFF;
+  }
+  .dark {
+    background: #000000;
+  }
+  #loading-first {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 500;
+    background: var(--el-bg-color);
+  }
+
+  .loading-hide {
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  .loading-icon {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+  }
+
+  .loading-image {
+    width: 70px;
+    height: 70px;
+    /* theme-init.js sets --brand-logo from the cached brand before this is painted. */
+    background-image: var(--brand-logo, url("/favicon.svg"));
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+  }
+
+  .loading-progress {
+    position: relative;
+    width: 64px;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(64, 158, 255, 0.18);
+  }
+
+  .loading-progress::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    background: #409EFF;
+    transform: scaleX(0);
+    transform-origin: left center;
+    animation: loading-progress-grow 2.4s linear forwards;
+  }
+
+  .loading-progress::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 24px;
+    height: 100%;
+    border-radius: inherit;
+    background: rgba(64, 158, 255, 0.45);
+    filter: blur(4px);
+    transform: translateX(-24px);
+    animation: loading-progress-peg 2.4s linear forwards;
+  }
+
+  .loading-complete .loading-progress::before {
+    animation: none;
+    transform: scaleX(1);
+    transition: transform 200ms linear;
+  }
+
+  .loading-complete .loading-progress::after {
+    animation: none;
+    transform: translateX(60px);
+    transition: transform 200ms linear;
+  }
+
+  @keyframes loading-progress-grow {
+    0% {
+      transform: scaleX(0);
+    }
+    100% {
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes loading-progress-peg {
+    0% {
+      transform: translateX(-24px);
+    }
+    100% {
+      transform: translateX(60px);
+    }
+  }
+</style>
+<body>
+<div id="loading-first" >
+  <div class="loading-icon">
+    <div class="loading-image" aria-hidden="true"></div>
+    <div class="loading-progress" aria-hidden="true"></div>
+  </div>
+</div>
+<div id="app"></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

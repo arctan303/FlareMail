@@ -1,0 +1,36 @@
+import {createApp} from 'vue';
+import {createPinia} from 'pinia';
+import App from './App.vue';
+import router from './router.js';
+import {playground} from './http.js';
+import {useUserStore} from '@/store/user.js';
+import {useSettingStore} from '@/store/setting.js';
+import {useAccountStore} from '@/store/account.js';
+import {initialPreviewLocale} from './locale.js';
+import {applyBrandToDocument} from '@/utils/brand.js';
+import perm from '@/perm/perm.js';
+import i18n from '@/i18n/index.js';
+import '@/style.css';
+import '@/icons/index.js';
+import '@/element-services.js';
+import 'element-plus/theme-chalk/dark/css-vars.css';
+
+const app=createApp(App).use(createPinia());
+const lang=initialPreviewLocale(location.pathname,navigator);
+const settings=useSettingStore();
+settings.setLang(lang);
+playground.setLocale(lang);
+settings.settings=playground.publicConfig();
+settings.setupStatus={setupRequired:false,upgradeRequired:false,upgradeBlocking:false};
+settings.domainList=playground.userInfo().domainList;
+useUserStore().user=structuredClone(playground.userInfo());
+const accounts=useAccountStore();
+accounts.currentAccountId=1;
+accounts.currentAccount=structuredClone(playground.userInfo().account);
+accounts.accountList=structuredClone(playground.userInfo().accountList);
+applyBrandToDocument(settings.settings);
+// No persisted-state plugin or authenticated session hint is needed on the public experience.
+app.use(router).use(i18n).directive('perm',perm);
+app.mount('#app');
+document.getElementById('loading-first')?.remove();
+window.addEventListener('pagehide',event=>{if(!event.persisted)playground.dispose();});

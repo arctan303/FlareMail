@@ -1,0 +1,100 @@
+name = "test-mail"
+main = "src/index.js"
+compatibility_date = "2025-06-04"
+compatibility_flags = ["nodejs_compat"]
+keep_vars = true
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "db"			#d1数据库绑定名默认不可修改
+database_name = "test-email"		#d1数据库名字
+database_id = "<d1-database-id>"		#d1数据库id
+
+[[kv_namespaces]]
+binding = "kv"			#kv绑定名默认不可修改
+id = "<kv-namespace-id>"					#kv数据库id
+
+#(可选)
+# [[r2_buckets]]
+#binding = "r2"			#r2对象存储绑定名默认不可修改
+#bucket_name = "test-email"		#r2对象存储桶的名字
+
+[assets]
+binding = "assets"		#静态资源绑定名默认不可修改
+directory = "./dist"	#前端vue项目打包的静态资源存放位置,默认dist
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+[[ratelimits]]
+name = "LOGIN_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 5, period = 60 }
+
+[[ratelimits]]
+name = "SETUP_RATE_LIMITER"
+namespace_id = "1003"
+simple = { limit = 3, period = 60 }
+
+[[ratelimits]]
+name = "SETUP_STATUS_RATE_LIMITER"
+namespace_id = "1009"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_AUTHORIZE_RATE_LIMITER"
+namespace_id = "1010"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_TOKEN_RATE_LIMITER"
+namespace_id = "1011"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_USERINFO_RATE_LIMITER"
+namespace_id = "1012"
+simple = { limit = 120, period = 60 }
+
+[[ratelimits]]
+name = "EMAIL_RATE_LIMITER"
+namespace_id = "1004"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "SEND_RATE_LIMITER"
+namespace_id = "1005"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_START_RATE_LIMITER"
+namespace_id = "1006"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_CALLBACK_RATE_LIMITER"
+namespace_id = "1007"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_BIND_RATE_LIMITER"
+namespace_id = "1008"
+simple = { limit = 10, period = 60 }
+
+[triggers]
+crons = ["0 16 * * *"]	#每天晚上12点执行每日任务,刷新分析缓存
+
+
+[secrets]
+required = ["SETUP_SECRET"]
+
+[vars]
+# Create an ignored .dev.vars with a random SETUP_SECRET.
+# Domains, administrator credentials and feature settings belong in the Web UI.
+ORM_LOG = false
+
+
+[build]
+# Dependencies are installed once from the workspace root.
+command = "pnpm --dir ../.. build"

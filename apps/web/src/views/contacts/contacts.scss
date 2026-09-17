@@ -1,0 +1,703 @@
+.contacts-container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  padding: 8px 10px 10px 10px;
+  gap: 8px;
+  background-color: var(--paper, #f0f4f9);
+  box-sizing: border-box;
+  position: relative;
+
+  &.is-mobile {
+    padding: 0;
+    gap: 0;
+
+    .contacts-left-pane {
+      border-radius: 0;
+      border: none;
+      box-shadow: none;
+    }
+  }
+
+  &.is-resizing {
+    cursor: col-resize;
+    user-select: none;
+  }
+}
+
+.contacts-left-pane {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: width 0.05s ease-out;
+
+  .pane-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 16px 10px 18px;
+
+    .title-with-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .pane-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-strong);
+        margin: 0;
+      }
+
+      .count-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 7px;
+        border-radius: 12px;
+        background-color: var(--paper-soft);
+        color: var(--muted);
+      }
+    }
+
+    .add-btn {
+      border-radius: 8px;
+      font-weight: 500;
+    }
+  }
+
+  .group-filter-scroll {
+    display: flex;
+    gap: 6px;
+    padding: 2px 16px 8px 16px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+
+    &::-webkit-scrollbar {
+      height: 3px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: var(--line-strong);
+      border-radius: 3px;
+    }
+
+    .group-pill {
+      flex-shrink: 0;
+      font-size: 11.5px;
+      padding: 3px 9px;
+      border-radius: 14px;
+      cursor: pointer;
+      color: var(--text);
+      background-color: var(--paper-soft);
+      border: 1px solid var(--line);
+      transition: all 0.15s ease;
+      white-space: nowrap;
+
+      &:hover {
+        background-color: var(--line);
+        color: var(--text-strong);
+      }
+
+      &.active {
+        background-color: var(--accent);
+        border-color: var(--accent);
+        color: #ffffff;
+        font-weight: 500;
+      }
+    }
+  }
+
+  .contact-list-scroll {
+    flex: 1;
+
+    .loading-state,
+    .empty-list {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      gap: 10px;
+      font-size: 13px;
+
+      .empty-text {
+        margin: 0;
+      }
+    }
+
+    .contact-list {
+      padding: 4px 8px 12px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .contact-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:hover {
+        background-color: var(--paper-soft);
+      }
+
+      &.active {
+        background-color: color-mix(in srgb, var(--accent) 12%, var(--surface));
+        border-left: 3px solid var(--accent);
+      }
+
+      .contact-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        color: #ffffff;
+        font-weight: 600;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+
+      .contact-info {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+
+        .contact-top-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 6px;
+
+          .contact-name {
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--text-strong);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          .group-tag {
+            font-size: 10.5px;
+            padding: 1px 6px;
+            border-radius: 10px;
+            background-color: var(--paper-soft);
+            color: var(--muted);
+            flex-shrink: 0;
+          }
+        }
+
+        .contact-email {
+          font-size: 12px;
+          color: var(--muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+      }
+    }
+  }
+}
+
+.split-resizer {
+  width: 12px;
+  margin-left: -6px;
+  margin-right: -6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background: transparent;
+  flex-shrink: 0;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+
+  /* 隐式扩大触屏可点击热区至 28px，避免手指误触 */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -8px;
+    right: -8px;
+    z-index: 1;
+  }
+
+  .resizer-handle {
+    width: 4px;
+    height: 36px;
+    border-radius: var(--radius-full, 9999px);
+    background: var(--line-strong);
+    opacity: 0.85;
+    transform: scaleY(1);
+    pointer-events: none;
+    transition: all var(--duration-fast, 150ms) var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
+  }
+
+  &:hover .resizer-handle,
+  &.is-dragging .resizer-handle {
+    width: 4px;
+    height: 52px;
+    opacity: 1;
+    background: var(--accent);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
+.contacts-right-pane {
+  flex: 1;
+  min-width: 340px;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+
+  .contact-email-detail-wrapper {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .detail-scroll {
+    height: 100%;
+    width: 100%;
+  }
+
+  .detail-container {
+    display: flex;
+    flex-direction: column;
+    max-width: 860px;
+    padding-bottom: 30px;
+  }
+
+  /* 顶部 Hero 卡片 */
+  .detail-header-section {
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+
+    .header-main {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+
+      .detail-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        color: #ffffff;
+        font-weight: 600;
+        font-size: 19px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .header-titles {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+
+        .title-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          .detail-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-strong);
+            margin: 0;
+          }
+
+          .detail-group-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            font-size: 11px;
+            padding: 1px 7px;
+            border-radius: 10px;
+            background-color: var(--paper-soft);
+            color: var(--muted);
+          }
+        }
+
+        .meta-sub-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12.5px;
+          color: var(--muted);
+          flex-wrap: wrap;
+
+          .detail-sub-email {
+            color: var(--text);
+          }
+
+          .inline-copy-btn {
+            border: none;
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            padding: 2px;
+            display: inline-flex;
+            align-items: center;
+            border-radius: 4px;
+            transition: all 0.15s ease;
+
+            &:hover {
+              color: var(--accent);
+              background: var(--paper-soft);
+            }
+          }
+
+          .meta-dot {
+            color: var(--faint);
+          }
+
+          .detail-sub-phone {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            color: var(--muted);
+          }
+
+          .detail-remark-snippet {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            color: var(--muted);
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+        }
+      }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .send-mail-btn {
+        font-weight: 550;
+      }
+    }
+  }
+
+  /* 一体化往来邮件流区域 */
+  .timeline-main-section {
+    padding: 18px 24px;
+
+    .timeline-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      gap: 12px;
+      flex-wrap: wrap;
+
+      .section-title-wrap {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+
+        .section-title {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--text-strong);
+          margin: 0;
+        }
+
+        .timeline-total-badge {
+          font-size: 11px;
+          font-weight: 600;
+          padding: 1px 6px;
+          border-radius: 10px;
+          background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+          color: var(--accent);
+        }
+      }
+
+      .timeline-filter-chips {
+        display: flex;
+        gap: 6px;
+
+        .filter-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 11.5px;
+          padding: 3px 10px;
+          border-radius: 12px;
+          border: 1px solid var(--line);
+          background: var(--surface);
+          color: var(--muted);
+          cursor: pointer;
+          transition: all 0.15s ease;
+
+          &:hover {
+            background: var(--paper-soft);
+            color: var(--text-strong);
+          }
+
+          &.active {
+            border-color: var(--accent);
+            background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+            color: var(--accent);
+            font-weight: 600;
+          }
+        }
+      }
+    }
+
+    /* 加载与空状态 */
+    .timeline-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      color: var(--muted);
+      gap: 12px;
+      font-size: 13px;
+    }
+
+    .timeline-empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 50px 20px;
+      text-align: center;
+
+      .empty-icon-circle {
+        width: 60px;
+        height: 60px;
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 12px;
+      }
+
+      .empty-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-strong);
+        margin: 0 0 6px 0;
+      }
+
+      .empty-desc {
+        font-size: 13px;
+        color: var(--muted);
+        margin: 0 0 16px 0;
+        max-width: 320px;
+      }
+    }
+
+    /* 纯净往来邮件卡片列表 */
+    .contact-email-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+
+      .contact-email-card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px 16px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+        transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        cursor: pointer;
+
+        &:hover {
+          border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+          transform: translateY(-1px);
+          background-color: color-mix(in srgb, var(--accent) 2%, var(--surface));
+        }
+
+        .card-meta-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 11.5px;
+
+          .direction-badge {
+            font-size: 10.5px;
+            font-weight: 600;
+            padding: 1px 6px;
+            border-radius: 4px;
+
+            &.in {
+              background: color-mix(in srgb, var(--accent) 12%, transparent);
+              color: var(--accent);
+            }
+
+            &.out {
+              background: color-mix(in srgb, #10b981 12%, transparent);
+              color: #10b981;
+            }
+          }
+
+          .email-account-tag {
+            color: var(--muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+
+          .timeline-date {
+            margin-left: auto;
+            color: var(--faint);
+            font-size: 11px;
+            flex-shrink: 0;
+          }
+        }
+
+        .card-subject-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+
+          .code-pill {
+            font-size: 11px;
+            font-family: var(--font-mono, monospace);
+            font-weight: 600;
+            padding: 1px 5px;
+            border-radius: 4px;
+            background: color-mix(in srgb, var(--accent) 12%, transparent);
+            color: var(--accent);
+            flex-shrink: 0;
+          }
+
+          .email-subject-text {
+            font-size: 13.5px;
+            font-weight: 600;
+            color: var(--text-strong);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+        }
+
+        .card-snippet-text {
+          font-size: 12px;
+          color: var(--muted);
+          line-height: 1.45;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+        }
+
+        .card-footer-tags {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding-top: 4px;
+          font-size: 11px;
+
+          .att-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            color: var(--muted);
+            background: var(--paper-soft);
+            padding: 1px 6px;
+            border-radius: 4px;
+          }
+
+          .star-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            color: #d97706;
+          }
+        }
+      }
+    }
+  }
+
+  /* 默认空引导 */
+  .detail-empty {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+
+    .empty-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      max-width: 320px;
+
+      .empty-icon-wrap {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background-color: var(--paper-soft);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+      }
+
+      .empty-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-strong);
+        margin: 0 0 8px 0;
+      }
+
+      .empty-desc {
+        font-size: 13px;
+        color: var(--muted);
+        margin: 0 0 20px 0;
+        line-height: 1.5;
+      }
+    }
+  }
+}

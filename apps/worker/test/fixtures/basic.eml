@@ -1,0 +1,9 @@
+From: Sender <sender@example.net>
+To: admin@example.com
+Subject: Local Email Worker fixture
+Message-ID: <local-fixture-1@example.net>
+Date: Sat, 11 Jul 2026 05:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+This message is used only by the local Email Worker test environment.

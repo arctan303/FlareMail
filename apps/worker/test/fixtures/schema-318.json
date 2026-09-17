@@ -1,0 +1,207 @@
+{
+  "sourceRevision": "251e82e",
+  "schemaMarker": 318,
+  "description": "Frozen from an isolated pre-FlareMail database before implementation. Contains schema and default settings only; no users, mail, credentials or production data.",
+  "schema": [
+    {
+      "type": "table",
+      "name": "account",
+      "sql": "CREATE TABLE account (\n\t\taccount_id INTEGER PRIMARY KEY AUTOINCREMENT,\n\t\temail TEXT NOT NULL,\n\t\tstatus INTEGER DEFAULT 0 NOT NULL,\n\t\tlatest_email_time DATETIME,\n\t\tcreate_time DATETIME DEFAULT CURRENT_TIMESTAMP,\n\t\tuser_id INTEGER NOT NULL,\n\t\tis_del INTEGER DEFAULT 0 NOT NULL,\n\t\tall_receive INTEGER DEFAULT 0 NOT NULL,\n\t\tsort INTEGER DEFAULT 0 NOT NULL,\n\t\tis_default_send INTEGER DEFAULT 0 NOT NULL,\n\t\tforward_status INTEGER DEFAULT 0 NOT NULL\n\t  , name TEXT NOT NULL DEFAULT '')"
+    },
+    {
+      "type": "table",
+      "name": "attachments",
+      "sql": "CREATE TABLE attachments (\n\t\tatt_id INTEGER PRIMARY KEY AUTOINCREMENT,\n\t\tuser_id INTEGER NOT NULL,\n\t\temail_id INTEGER NOT NULL,\n\t\taccount_id INTEGER NOT NULL,\n\t\tkey TEXT NOT NULL,\n\t\tfilename TEXT,\n\t\tmime_type TEXT,\n\t\tsize INTEGER,\n\t\tdisposition TEXT,\n\t\trelated TEXT,\n\t\tcontent_id TEXT,\n\t\tencoding TEXT,\n\t\tcreate_time DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL\n\t  , status INTEGER NOT NULL DEFAULT 0, type INTEGER NOT NULL DEFAULT 0)"
+    },
+    {
+      "type": "table",
+      "name": "contact",
+      "sql": "CREATE TABLE contact (\n\t\tcontact_id INTEGER PRIMARY KEY AUTOINCREMENT,\n\t\tuser_id INTEGER NOT NULL,\n\t\tname TEXT NOT NULL,\n\t\temail TEXT NOT NULL,\n\t\tphone TEXT,\n\t\tremark TEXT,\n\t\tgroup_name TEXT,\n\t\tcreate_time DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,\n\t\tupdate_time DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,\n\t\tis_del INTEGER DEFAULT 0 NOT NULL\n\t  )"
+    },
+    {
+      "type": "table",
+      "name": "email",
+      "sql": "CREATE TABLE email (\n\t\temail_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\n\t\tsend_email TEXT,\n\t\tname TEXT,\n\t\taccount_id INTEGER NOT NULL,\n\t\tuser_id INTEGER NOT NULL,\n\t\tsubject TEXT,\n\t\tcontent TEXT,\n\t\ttext TEXT,\n\t\tcreate_time DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,\n\t\tis_del INTEGER DEFAULT 0 NOT NULL\n\t  , type INTEGER NOT NULL DEFAULT 0, status INTEGER NOT NULL DEFAULT 0, resend_email_id TEXT, message TEXT, recipient TEXT NOT NULL DEFAULT '[]', cc TEXT NOT NULL DEFAULT '[]', bcc TEXT NOT NULL DEFAULT '[]', message_id TEXT NOT NULL DEFAULT '', in_reply_to TEXT NOT NULL DEFAULT '', relation TEXT NOT NULL DEFAULT '', to_email TEXT NOT NULL DEFAULT '', to_name TEXT NOT NULL DEFAULT '', unread INTEGER NOT NULL DEFAULT 0, code TEXT NOT NULL DEFAULT '')"
+    },
+    {
+      "type": "table",
+      "name": "oauth",
+      "sql": "CREATE TABLE oauth (\n\t\t\t\t\toauth_id INTEGER PRIMARY KEY AUTOINCREMENT,\n\t\t\t\t\toauth_user_id TEXT,\n\t\t\t\t\tusername TEXT,\n\t\t\t\t\tname TEXT,\n\t\t\t\t\tavatar TEXT,\n\t\t\t\t\tactive INTEGER,\n\t\t\t\t\ttrust_level INTEGER,\n\t\t\t\t\tsilenced INTEGER,\n\t\t\t\t\tcreate_time DATETIME DEFAULT CURRENT_TIMESTAMP,\n\t\t\t\t\tplatform INTEGER NOT NULL DEFAULT 0,\n\t\t\t\t\tuser_id INTEGER NOT NULL DEFAULT 0\n\t\t\t\t)"
+    },
+    {
+      "type": "table",
+      "name": "oauth_authorization_code",
+      "sql": "CREATE TABLE oauth_authorization_code (\n\t\t\t\tcode_hash TEXT PRIMARY KEY,\n\t\t\t\tclient_id TEXT NOT NULL,\n\t\t\t\tredirect_uri TEXT NOT NULL,\n\t\t\t\tuser_id INTEGER NOT NULL,\n\t\t\t\tcode_challenge TEXT NOT NULL,\n\t\t\t\tcreated_at INTEGER NOT NULL,\n\t\t\t\texpires_at INTEGER NOT NULL,\n\t\t\t\tused_at INTEGER\n\t\t\t)"
+    },
+    {
+      "type": "table",
+      "name": "object_delete_queue",
+      "sql": "CREATE TABLE object_delete_queue (\n\t\t\t\t\tkey TEXT PRIMARY KEY,\n\t\t\t\t\tcreate_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\t\t\t\t\tclaim_time DATETIME\n\t\t\t\t)"
+    },
+    {
+      "type": "table",
+      "name": "schema_migrations",
+      "sql": "CREATE TABLE schema_migrations (\n\t\t\tversion INTEGER PRIMARY KEY,\n\t\t\tapplied_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP\n\t\t)"
+    },
+    {
+      "type": "table",
+      "name": "send_request",
+      "sql": "CREATE TABLE send_request (\n\t\t\t\t\tuser_id INTEGER NOT NULL,\n\t\t\t\t\trequest_id TEXT NOT NULL,\n\t\t\t\t\temail_id INTEGER,\n\t\t\t\t\tstatus TEXT NOT NULL DEFAULT 'pending',\n\t\t\t\t\tdelivery_status INTEGER,\n\t\t\t\t\twarning TEXT NOT NULL DEFAULT '',\n\t\t\t\t\trecipient_count INTEGER NOT NULL DEFAULT 0,\n\t\t\t\t\tquota_reserved INTEGER NOT NULL DEFAULT 0,\n\t\t\t\t\tcreate_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,\n\t\t\t\t\tcompleted_time DATETIME, send_account_id INTEGER,\n\t\t\t\t\tPRIMARY KEY (user_id, request_id)\n\t\t\t\t)"
+    },
+    {
+      "type": "table",
+      "name": "setting",
+      "sql": "CREATE TABLE setting (\n\t\tregister INTEGER NOT NULL,\n\t\treceive INTEGER NOT NULL,\n\t\tadd_email INTEGER NOT NULL,\n\t\tmany_email INTEGER NOT NULL,\n\t\ttitle TEXT NOT NULL,\n\t\tauto_refresh INTEGER NOT NULL,\n\t\tregister_verify INTEGER NOT NULL,\n\t\tadd_email_verify INTEGER NOT NULL\n\t  , resend_tokens TEXT NOT NULL DEFAULT '{}', send INTEGER NOT NULL DEFAULT 0, r2_domain TEXT, site_key TEXT, secret_key TEXT, background TEXT, login_opacity INTEGER NOT NULL DEFAULT 0.90, tg_bot_token TEXT NOT NULL DEFAULT '', tg_chat_id TEXT NOT NULL DEFAULT '', tg_bot_status INTEGER NOT NULL DEFAULT 1, forward_email TEXT NOT NULL DEFAULT '', forward_status INTEGER TIME NOT NULL DEFAULT 1, rule_email TEXT NOT NULL DEFAULT '', rule_type INTEGER NOT NULL DEFAULT 0, reg_key INTEGER NOT NULL DEFAULT 1, reg_verify_count INTEGER NOT NULL DEFAULT 1, add_verify_count INTEGER NOT NULL DEFAULT 1, notice_title TEXT NOT NULL DEFAULT 'Cloud Mail', notice_content TEXT NOT NULL DEFAULT '', notice_type TEXT NOT NULL DEFAULT 'none', notice_duration INTEGER NOT NULL DEFAULT 0, notice_offset INTEGER NOT NULL DEFAULT 0, notice_position TEXT NOT NULL DEFAULT 'top-right', notice_width INTEGER NOT NULL DEFAULT 340, notice INTEGER NOT NULL DEFAULT 0, no_recipient INTEGER NOT NULL DEFAULT 1, login_domain INTEGER NOT NULL DEFAULT 0, bucket TEXT NOT NULL DEFAULT '', region TEXT NOT NULL DEFAULT '', endpoint TEXT NOT NULL DEFAULT '', s3_access_key TEXT NOT NULL DEFAULT '', s3_secret_key TEXT NOT NULL DEFAULT '', force_path_style INTEGER NOT NULL DEFAULT 1, custom_domain TEXT NOT NULL DEFAULT '', tg_msg_to TEXT NOT NULL DEFAULT 'show', tg_msg_from TEXT NOT NULL DEFAULT 'only-name', tg_msg_text TEXT NOT NULL DEFAULT 'show', min_email_prefix INTEGER NOT NULL DEFAULT 1, email_prefix_filter TEXT NOT NULL DEFAULT '', ai_code INTEGER NOT NULL DEFAULT 1, ai_code_filter TEXT NOT NULL DEFAULT '', black_subject TEXT NOT NULL DEFAULT '', black_content TEXT NOT NULL DEFAULT '', black_from TEXT NOT NULL DEFAULT '', cli_token TEXT NOT NULL DEFAULT '', google_oauth_enabled INTEGER NOT NULL DEFAULT 0, google_client_id TEXT NOT NULL DEFAULT '', google_client_secret TEXT NOT NULL DEFAULT '')"
+    },
+    {
+      "type": "table",
+      "name": "star",
+      "sql": "CREATE TABLE star (\n\t\tstar_id INTEGER PRIMARY KEY AUTOINCREMENT,\n\t\tuser_id INTEGER NOT NULL,\n\t\temail_id INTEGER NOT NULL,\n\t\tcreate_time DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL\n\t  )"
+    },
+    {
+      "type": "table",
+      "name": "user",
+      "sql": "CREATE TABLE user (\n\t\tuser_id INTEGER PRIMARY KEY AUTOINCREMENT,\n\t\temail TEXT NOT NULL,\n\t\ttype INTEGER DEFAULT 1 NOT NULL,\n\t\tpassword TEXT NOT NULL,\n\t\tsalt TEXT NOT NULL,\n\t\tstatus INTEGER DEFAULT 0 NOT NULL,\n\t\tis_admin INTEGER DEFAULT 0 NOT NULL CHECK (is_admin IN (0, 1)),\n\t\tcreate_time DATETIME DEFAULT CURRENT_TIMESTAMP,\n\t\tactive_time DATETIME,\n\t\tis_del INTEGER DEFAULT 0 NOT NULL\n\t  , create_ip TEXT, active_ip TEXT, os TEXT, browser TEXT, device TEXT, sort INTEGER NOT NULL DEFAULT 0, send_count INTEGER NOT NULL DEFAULT 0, reg_key_id INTEGER NOT NULL DEFAULT 0, forward_status INTEGER NOT NULL DEFAULT 1, forward_email TEXT NOT NULL DEFAULT '', send_limit INTEGER NOT NULL DEFAULT 50, cli_token TEXT NOT NULL DEFAULT '', account_limit INTEGER NOT NULL DEFAULT 10, unmatched_policy TEXT NOT NULL DEFAULT 'reject', main_forward_status INTEGER NOT NULL DEFAULT 0, google_sub TEXT NOT NULL DEFAULT '', google_email TEXT NOT NULL DEFAULT '')"
+    },
+    {
+      "type": "index",
+      "name": "idx_account_email_nocase",
+      "sql": "CREATE UNIQUE INDEX idx_account_email_nocase ON account (email COLLATE NOCASE)"
+    },
+    {
+      "type": "index",
+      "name": "idx_attachment_account",
+      "sql": "CREATE INDEX idx_attachment_account ON attachments(account_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_attachment_email",
+      "sql": "CREATE INDEX idx_attachment_email ON attachments(email_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_attachment_key",
+      "sql": "CREATE INDEX idx_attachment_key ON attachments(key)"
+    },
+    {
+      "type": "index",
+      "name": "idx_attachment_user_key",
+      "sql": "CREATE INDEX idx_attachment_user_key ON attachments(user_id, key)"
+    },
+    {
+      "type": "index",
+      "name": "idx_contact_email",
+      "sql": "CREATE INDEX idx_contact_email ON contact(email)"
+    },
+    {
+      "type": "index",
+      "name": "idx_contact_user_id",
+      "sql": "CREATE INDEX idx_contact_user_id ON contact(user_id, is_del)"
+    },
+    {
+      "type": "index",
+      "name": "idx_email_user_id_account_id",
+      "sql": "CREATE INDEX idx_email_user_id_account_id ON email(user_id, account_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_email_user_type_del_id",
+      "sql": "CREATE INDEX idx_email_user_type_del_id ON email(user_id, type, is_del, email_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_oauth_authorization_code_expiry",
+      "sql": "CREATE INDEX idx_oauth_authorization_code_expiry ON oauth_authorization_code(expires_at, used_at)"
+    },
+    {
+      "type": "index",
+      "name": "idx_object_delete_queue_time",
+      "sql": "CREATE INDEX idx_object_delete_queue_time ON object_delete_queue(create_time)"
+    },
+    {
+      "type": "index",
+      "name": "idx_star_user_email",
+      "sql": "CREATE UNIQUE INDEX idx_star_user_email ON star(user_id, email_id)"
+    },
+    {
+      "type": "index",
+      "name": "idx_user_email_nocase",
+      "sql": "CREATE UNIQUE INDEX idx_user_email_nocase ON user (email COLLATE NOCASE)"
+    },
+    {
+      "type": "index",
+      "name": "idx_user_single_admin",
+      "sql": "CREATE UNIQUE INDEX idx_user_single_admin ON user(is_admin) WHERE is_admin = 1"
+    }
+  ],
+  "versions": [
+    308,
+    309,
+    310,
+    311,
+    312,
+    314,
+    315,
+    316,
+    317,
+    318
+  ],
+  "settings": {
+    "register": 1,
+    "receive": 0,
+    "add_email": 1,
+    "many_email": 1,
+    "title": "Cloud Mail",
+    "auto_refresh": 0,
+    "register_verify": 1,
+    "add_email_verify": 1,
+    "resend_tokens": "{}",
+    "send": 0,
+    "r2_domain": null,
+    "site_key": null,
+    "secret_key": null,
+    "background": null,
+    "login_opacity": 0.9,
+    "tg_bot_token": "",
+    "tg_chat_id": "",
+    "tg_bot_status": 1,
+    "forward_email": "",
+    "forward_status": 1,
+    "rule_email": "",
+    "rule_type": 0,
+    "reg_key": 1,
+    "reg_verify_count": 1,
+    "add_verify_count": 1,
+    "notice_title": "Cloud Mail",
+    "notice_content": "本项目仅供学习交流，禁止用于违法业务\n<br>\n请遵守当地法规，作者不承担任何法律责任",
+    "notice_type": "none",
+    "notice_duration": 0,
+    "notice_offset": 0,
+    "notice_position": "top-right",
+    "notice_width": 340,
+    "notice": 0,
+    "no_recipient": 1,
+    "login_domain": 0,
+    "bucket": "",
+    "region": "",
+    "endpoint": "",
+    "s3_access_key": "",
+    "s3_secret_key": "",
+    "force_path_style": 1,
+    "custom_domain": "",
+    "tg_msg_to": "show",
+    "tg_msg_from": "only-name",
+    "tg_msg_text": "show",
+    "min_email_prefix": 1,
+    "email_prefix_filter": "",
+    "ai_code": 1,
+    "ai_code_filter": "",
+    "black_subject": "",
+    "black_content": "",
+    "black_from": "",
+    "cli_token": "",
+    "google_oauth_enabled": 0,
+    "google_client_id": "",
+    "google_client_secret": ""
+  }
+}

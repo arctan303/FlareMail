@@ -1,0 +1,123 @@
+# New installation: copy this file once and choose your Worker name.
+# Existing installation: retain your own configuration and resource IDs.
+# Domains and administrator credentials are entered in the Web wizard.
+# Application settings are managed in the Web UI; keep secrets out of Git.
+# https://developers.cloudflare.com/workers/wrangler/configuration/#automatic-provisioning
+name = "flare-mail"
+main = "src/index.js"
+compatibility_date = "2025-06-04"
+compatibility_flags = ["nodejs_compat"]
+keep_vars = true
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "db"
+# For a new instance, Wrangler can provision D1 and write its ID here.
+# Existing instance: retain database_name and database_id.
+# database_name = "your-existing-database"
+# database_id = "your-existing-d1-id"
+
+[[kv_namespaces]]
+binding = "kv"
+# Existing instance: retain its KV namespace ID.
+# id = "your-existing-kv-id"
+
+# Optional R2 storage; without it the existing KV storage path is used.
+# Uncomment for a new R2-backed instance to let Wrangler provision a bucket.
+# Existing instances must retain their storage and objects when updating.
+# [[r2_buckets]]
+# binding = "r2"
+# bucket_name = "your-existing-bucket"
+
+[[ratelimits]]
+name = "LOGIN_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 15, period = 60 }
+
+[[ratelimits]]
+name = "SETUP_RATE_LIMITER"
+namespace_id = "1003"
+simple = { limit = 3, period = 60 }
+
+[[ratelimits]]
+name = "SETUP_STATUS_RATE_LIMITER"
+namespace_id = "1009"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "EMAIL_RATE_LIMITER"
+namespace_id = "1004"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "SEND_RATE_LIMITER"
+namespace_id = "1005"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_START_RATE_LIMITER"
+namespace_id = "1006"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_CALLBACK_RATE_LIMITER"
+namespace_id = "1007"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_BIND_RATE_LIMITER"
+namespace_id = "1008"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_AUTHORIZE_RATE_LIMITER"
+namespace_id = "1010"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_TOKEN_RATE_LIMITER"
+namespace_id = "1011"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "OAUTH_USERINFO_RATE_LIMITER"
+namespace_id = "1012"
+simple = { limit = 120, period = 60 }
+
+# Optional Cloudflare Email Sending (Beta). Configure the sending domain in Cloudflare,
+# add this binding, then select Cloudflare under System settings → Mail.
+# A binding does not automatically change the selected provider. Local dev simulates
+# delivery by default; do not use remote = true unless intending to send real mail.
+#[[send_email]]
+#name = "email"
+
+[assets]
+binding = "assets"
+directory = "./dist"
+not_found_handling = "single-page-application"
+run_worker_first = true
+
+[triggers]
+crons = ["0 16 * * *"]
+
+[secrets]
+required = ["SETUP_SECRET"]
+
+[vars]
+# Optional diagnostics; no other application variables are required.
+ORM_LOG = false
+
+# New installation: enter domains and administrator credentials in the Web wizard.
+# Put a random SETUP_SECRET in an ignored .dev.vars, then deploy it with the code:
+# npx wrangler deploy --secrets-file .dev.vars
+# Existing deployed Worker: npx wrangler secret put SETUP_SECRET
+# Later deploys retain remote secrets; ordinary updates can omit --secrets-file.
+# Keep legacy domain/admin and feature configuration until the first 321/322 upgrade.
+# After verifying the imported database settings, remove obsolete environment values.
+
+
+[build]
+# Dependencies are installed once from the workspace root.
+command = "pnpm --dir ../.. build"

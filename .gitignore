@@ -1,0 +1,38 @@
+/AGENTS.md
+/EVOLUTION.md
+/.creator-manifest.json
+/.version
+/docs/
+/.creator/
+/.codex/
+/.agents/
+## Runtime and private deployment files
+**/wrangler.toml
+**/.dev.vars*
+**/backup_*.sql
+**/node_modules/
+**/dist/
+**/dist-pages/
+**/.wrangler/
+**/.env
+**/.env.*
+!apps/web/.env.dev
+!apps/web/.env.release
+CLAUDE.md
+.claude/
+.playwright-cli/
+.pnpm-store/
+**/*.sqlite
+**/*.sqlite-*
+**/*.db
+
+output/
+**/wrangler.ui.toml
+
+## Local-only development Markdown
+/apps/worker/test/README.md
+/apps/web/public/tinymce/langs/README.md
+.workbuddy-ai/
+## Public bilingual user documentation
+!apps/web/docs/
+!apps/web/docs/**
