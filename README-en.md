@@ -1,10 +1,7 @@
-<p align="center">
-  <a href="https://github.com/arctan303/FlareMail">
-    <img src="./apps/web/public/mail-logo.svg" width="96" height="96" alt="FlareMail Logo" />
-  </a>
-</p>
-
-<h1 align="center">FlareMail</h1>
+<h1 align="center">
+  <img src="./apps/web/public/mail-logo.svg" width="36" height="36" align="middle" alt="" />
+  FlareMail
+</h1>
 
 <p align="center">
   <strong>A private mailbox on your own domain, shared by invitation.</strong><br />
