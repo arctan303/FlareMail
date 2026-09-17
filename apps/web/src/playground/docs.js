@@ -1,5 +1,5 @@
 export const DOC_GROUPS = [
-    {zh:'开始',en:'Getting started',items:[
+    {zh:'快速开始',en:'Quick start',items:[
         {slug:'introduction',zh:'项目介绍',en:'Introduction'},
         {slug:'experience',zh:'在线体验',en:'Online experience'},
         {slug:'deployment',zh:'部署邮箱',en:'Deploy your mailbox'},

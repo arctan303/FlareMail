@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.1 — 2026-09-18
+
+### Optimized
+
+- Docs page experience: refreshed documentation page design with clean white aesthetics, enlarged brand identity, streamlined navigation, and smoother page/theme/language transition animations.
+- Docs directory structure: renamed the primary documentation group to "Quick start" (快速开始) to provide a clearer initial onboarding path.
+- Code syntax highlighting: added lightweight zero-dependency token coloring for shell commands, JSON, HTTP requests, and JavaScript in documentation code blocks.
+
 ## v1.0.0 — 2026-09-17
 
 First formal release of FlareMail, an invitation-based private mailbox on your own domain.
