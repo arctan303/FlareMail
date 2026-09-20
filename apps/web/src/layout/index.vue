@@ -69,7 +69,7 @@ const brand = computed(() => normalizeBrand(settingStore.settings));
 const route = useRoute();
 const writerRef = ref({})
 const isMobile = ref(window.innerWidth < 1025)
-const isSettingsRoute = computed(() => route.name === 'sys-setting')
+const isSettingsRoute = computed(() => ['sys-setting', 'setting'].includes(route.name))
 
 let touchStartX = 0;
 let touchStartY = 0;
@@ -181,34 +181,47 @@ $ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .navigation-heading {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   min-width: 0;
-  padding: 0 8px;
+  height: 100%;
+  padding: 0 12px;
   overflow: hidden;
 
   :deep(.hamburger-btn) {
+    position: absolute;
+    left: 8px;
     width: 40px;
     height: 40px;
     flex-shrink: 0;
+    z-index: 2;
   }
 }
 
 .brand-link {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 10px;
+  max-width: calc(100% - 64px);
   min-width: 0;
   color: var(--text-strong);
   text-decoration: none;
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 700;
+  line-height: 1;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    opacity: 0.85;
+  }
 }
 
 .brand-logo {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
   flex-shrink: 0;
 }
@@ -221,7 +234,6 @@ $ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 
 .topbar-content {
   min-width: 0;
-
 }
 
 .layout-body {

@@ -100,11 +100,62 @@
     }
   }
 
+  function applyCachedThemeAccent(isDarkTheme) {
+    try {
+      const stored = localStorage.getItem('theme_accent');
+      if (!stored) return;
+      root.setAttribute('data-theme-accent', stored);
+      const isDark = isDarkTheme === 'dark';
+      if (stored === 'monochrome') {
+        if (isDark) {
+          root.style.setProperty('--accent', '#ffffff');
+          root.style.setProperty('--accent-hover', '#f1f5f9');
+          root.style.setProperty('--accent-light', 'rgba(255, 255, 255, 0.08)');
+          root.style.setProperty('--accent-contrast', '#0f172a');
+          root.style.setProperty('--el-color-primary', '#ffffff');
+          root.style.setProperty('--el-color-primary-text-color', '#0f172a');
+          root.style.setProperty('--paper', '#0c0d10');
+          root.style.setProperty('--paper-soft', '#181a20');
+          root.style.setProperty('--surface', '#15171c');
+          root.style.setProperty('--line', '#242730');
+          root.style.setProperty('--line-strong', '#363a46');
+        } else {
+          root.style.setProperty('--accent', '#0f172a');
+          root.style.setProperty('--accent-hover', '#1e293b');
+          root.style.setProperty('--accent-light', '#f1f5f9');
+          root.style.setProperty('--accent-contrast', '#ffffff');
+          root.style.setProperty('--el-color-primary', '#0f172a');
+          root.style.setProperty('--el-color-primary-text-color', '#ffffff');
+          root.style.setProperty('--paper', '#f8fafc');
+          root.style.setProperty('--paper-soft', '#edf0f4');
+          root.style.setProperty('--surface', '#ffffff');
+          root.style.setProperty('--line', '#e2e8f0');
+          root.style.setProperty('--line-strong', '#cbd5e1');
+        }
+      } else if (stored === 'sage') {
+        const accent = isDark ? '#4ade80' : '#15803d';
+        root.style.setProperty('--accent', accent);
+        root.style.setProperty('--el-color-primary', accent);
+      } else if (stored === 'iris') {
+        const accent = isDark ? '#818cf8' : '#6366f1';
+        root.style.setProperty('--accent', accent);
+        root.style.setProperty('--el-color-primary', accent);
+      } else if (stored === 'amber') {
+        const accent = isDark ? '#fb923c' : '#c2410c';
+        root.style.setProperty('--accent', accent);
+        root.style.setProperty('--el-color-primary', accent);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   const mode = getThemeMode();
   const theme = (mode === 'system')
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : mode;
   applyTheme(theme);
+  applyCachedThemeAccent(theme);
 
   root.lang = getLocale() === 'en' ? 'en' : 'zh-CN';
 

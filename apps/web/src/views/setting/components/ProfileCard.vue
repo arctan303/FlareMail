@@ -22,7 +22,7 @@
         <div class="row-action">
           <template v-if="setNameShow">
             <div class="inline-form">
-              <el-input v-model="accountName" size="default" style="width: 180px" :placeholder="$t('profileNamePlaceholder')" @keyup.enter="setName" />
+              <el-input v-model="accountName" size="default" class="profile-name-input" :placeholder="$t('profileNamePlaceholder')" @keyup.enter="setName" />
               <el-button type="primary" size="default" class="arc-btn" @click="setName">{{ $t('save') }}</el-button>
               <el-button size="default" text @click="setNameShow = false">{{ $t('cancel') }}</el-button>
             </div>
@@ -230,12 +230,34 @@ async function setName() {
 
   @media (max-width: 640px) {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    align-items: stretch;
+    gap: 12px;
+
+    .row-meta {
+      width: 100%;
+    }
 
     .row-action {
       width: 100%;
-      justify-content: flex-start;
+      justify-content: space-between;
+
+      .user-display {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .inline-form {
+        width: 100%;
+        .profile-name-input {
+          flex: 1;
+          min-width: 130px;
+          width: auto;
+        }
+      }
+
+      .mini-btn {
+        margin-left: auto;
+      }
     }
   }
 }
@@ -245,5 +267,9 @@ async function setName() {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+
+  .profile-name-input {
+    width: 200px;
+  }
 }
 </style>

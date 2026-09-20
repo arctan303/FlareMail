@@ -59,6 +59,31 @@ function getShell(isDark) {
         td, th { border-color: #334155; }
         pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13.5px; background: rgba(255,255,255,0.06); padding: 2px 5px; border-radius: 4px; }
         pre { padding: 10px 12px; overflow-x: auto; }
+        .gmail_quote_toggle {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          margin: 12px 0 6px 0;
+          padding: 2px 10px;
+          background: #334155;
+          color: #94A3B8;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: 2px;
+          user-select: none;
+          border: none;
+          line-height: 1.4;
+          transition: all 0.15s ease;
+        }
+        .gmail_quote_toggle:hover {
+          background: #475569;
+          color: #F1F5F9;
+        }
+        .gmail_quote_collapsed {
+          display: none !important;
+        }
       </style>
       <div class="shadow-content"></div>
     `
@@ -85,9 +110,75 @@ function getShell(isDark) {
       td, th { border-color: #E2E8F0; }
       pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13.5px; background: rgba(0,0,0,0.04); padding: 2px 5px; border-radius: 4px; }
       pre { padding: 10px 12px; overflow-x: auto; }
+      .gmail_quote_toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin: 12px 0 6px 0;
+        padding: 2px 10px;
+        background: #E2E8F0;
+        color: #64748B;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        user-select: none;
+        border: none;
+        line-height: 1.4;
+        transition: all 0.15s ease;
+      }
+      .gmail_quote_toggle:hover {
+        background: #CBD5E1;
+        color: #1E293B;
+      }
+      .gmail_quote_collapsed {
+        display: none !important;
+      }
     </style>
     <div class="shadow-content"></div>
   `
+}
+
+function collapseQuotes(content) {
+  const quoteSelectors = '.gmail_quote, .flaremail_quote, blockquote, .WordSection1 > blockquote';
+  const quoteElements = content.querySelectorAll(quoteSelectors);
+  if (!quoteElements.length) return;
+
+  const topQuotes = Array.from(quoteElements).filter(el => {
+    let parent = el.parentElement;
+    while (parent && parent !== content) {
+      if (parent.matches && parent.matches(quoteSelectors)) {
+        return false;
+      }
+      parent = parent.parentElement;
+    }
+    return true;
+  });
+
+  topQuotes.forEach((quoteEl) => {
+    quoteEl.classList.add('gmail_quote_collapsed');
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'gmail_quote_toggle';
+    toggleBtn.title = '···';
+    toggleBtn.setAttribute('aria-label', 'Toggle quoted text');
+    toggleBtn.textContent = '···';
+
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isCollapsed = quoteEl.classList.contains('gmail_quote_collapsed');
+      if (isCollapsed) {
+        quoteEl.classList.remove('gmail_quote_collapsed');
+      } else {
+        quoteEl.classList.add('gmail_quote_collapsed');
+      }
+      autoScale();
+    });
+
+    quoteEl.parentNode?.insertBefore(toggleBtn, quoteEl);
+  });
 }
 
 function updateContent() {
@@ -103,6 +194,7 @@ function updateContent() {
   const content = shadowRoot.querySelector('.shadow-content')
   content.innerHTML = sanitized.html
   if (sanitized.bodyStyle) content.setAttribute('style', sanitized.bodyStyle)
+  collapseQuotes(content)
 }
 
 function autoScale() {

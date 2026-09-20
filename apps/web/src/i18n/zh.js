@@ -1,6 +1,22 @@
 const zh = {
     mailboxFilter: '邮箱筛选',
     allMailboxes: '全部邮箱',
+    themeSettings: '外观与主题',
+    themeSettingsDesc: '自定义界面主色调，适配浅色与深色模式',
+    userSectionAppearance: '外观设置',
+    userSectionAppearanceDesc: '自定义界面外观模式与主题配色方案',
+    themeMode: '外观模式',
+    themeModeHint: '选择界面的亮色或暗色展示偏好',
+    themeModeLight: '浅色模式',
+    themeModeDark: '深色模式',
+    themeModeSystem: '跟随系统',
+    themeAccent: '主题配色',
+    themeAccentHint: '选择适合你视觉偏好的强调色板，点击即时生效',
+    accentMonochrome: '白灰',
+    accentOcean: '海蓝 (默认)',
+    accentSage: '鼠尾草绿',
+    accentIris: '鸢尾紫',
+    accentAmber: '落日琥珀',
     inbox: '收件箱',
     email: '收件箱',
     drafts: '草稿箱',
@@ -799,6 +815,15 @@ const zh = {
     closeDraft: '关闭草稿',
     minimizeToCorner: '最小化挂起到右下角',
     closeWindowEsc: '关闭窗口 (Esc)',
+
+    // 个人设置分区
+    userSettings: '个人设置',
+    userSectionProfile: '个人资料',
+    userSectionProfileDesc: '管理个人基本信息、登录密码与界面显示偏好。',
+    userSectionMailboxes: '邮箱与别名',
+    userSectionMailboxesDesc: '管理多邮箱别名、发件人显示名称以及自动邮件转发。',
+    userSectionSecurity: '安全与凭证',
+    userSectionSecurityDesc: '配置第三方账号绑定、开发者 CLI 访问令牌与安全设置。',
 
     // 系统设置（管理员区）
     sysSaving: '正在保存…',

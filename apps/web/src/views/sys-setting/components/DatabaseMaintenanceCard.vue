@@ -13,69 +13,81 @@
     </div>
 
     <div class="card-body db-maintenance-body">
-      <!-- 架构版本状态对比区 -->
+      <!-- 架构版本状态对比区 (3 个精致 Metric 卡片) -->
       <div class="version-overview-grid" v-loading="schemaLoading">
-        <div class="version-stat-item">
-          <span class="stat-label">{{ $t('sysDbCurrentVersion') }}</span>
-          <div class="stat-value">
-            <span v-if="schemaData?.currentVersion" class="version-chip current">
+        <div class="stat-card">
+          <div class="stat-head">
+            <Icon icon="solar:server-square-linear" width="16" height="16" class="stat-icon" />
+            <span class="stat-label">{{ $t('sysDbCurrentVersion') }}</span>
+          </div>
+          <div class="stat-body">
+            <span v-if="schemaData?.currentVersion" class="version-val">
               {{ schemaData.currentVersion.label }}
-              <small class="version-id">({{ $t('sysDbPatchTag') }} {{ schemaData.currentVersion.id }})</small>
+              <span class="version-patch-id">#{{ schemaData.currentVersion.id }}</span>
             </span>
             <span v-else class="version-empty">-</span>
           </div>
         </div>
 
-        <div class="version-stat-item">
-          <span class="stat-label">{{ $t('sysDbLatestVersion') }}</span>
-          <div class="stat-value">
-            <span v-if="schemaData?.latestVersion" class="version-chip latest">
+        <div class="stat-card">
+          <div class="stat-head">
+            <Icon icon="solar:refresh-circle-linear" width="16" height="16" class="stat-icon" />
+            <span class="stat-label">{{ $t('sysDbLatestVersion') }}</span>
+          </div>
+          <div class="stat-body">
+            <span v-if="schemaData?.latestVersion" class="version-val">
               {{ schemaData.latestVersion.label }}
-              <small class="version-id">({{ $t('sysDbPatchTag') }} {{ schemaData.latestVersion.id }})</small>
+              <span class="version-patch-id">#{{ schemaData.latestVersion.id }}</span>
             </span>
             <span v-else class="version-empty">-</span>
           </div>
         </div>
 
-        <div class="version-stat-item">
-          <span class="stat-label">{{ $t('sysDbStatus') }}</span>
-          <div class="stat-value">
-            <el-tag v-if="!isPending" type="success" size="small" effect="plain" class="status-badge">
-              <Icon icon="fluent:checkmark-circle-16-regular" width="14" height="14" class="status-badge-icon" />
+        <div class="stat-card">
+          <div class="stat-head">
+            <Icon icon="solar:shield-check-linear" width="16" height="16" class="stat-icon" />
+            <span class="stat-label">{{ $t('sysDbStatus') }}</span>
+          </div>
+          <div class="stat-body">
+            <span v-if="!isPending" class="status-chip success">
+              <Icon icon="fluent:checkmark-circle-16-regular" width="15" height="15" />
               {{ $t('sysDbStatusUpToDate') }}
-            </el-tag>
-            <el-tag v-else type="warning" size="small" effect="plain" class="status-badge">
-              <Icon icon="fluent:alert-16-regular" width="14" height="14" class="status-badge-icon" />
+            </span>
+            <span v-else class="status-chip warning">
+              <Icon icon="fluent:alert-16-regular" width="15" height="15" />
               {{ $t('sysDbStatusPending') }}
-            </el-tag>
+            </span>
           </div>
         </div>
       </div>
 
       <!-- 待升级补丁说明 (若有) -->
-      <div v-if="pendingPatches.length" class="notice-banner warning">
-        <Icon icon="solar:info-circle-linear" width="16" height="16" />
-        <div class="pending-patches-content">
-          <p class="pending-title"><strong>{{ $t('sysDbPendingPatchesTitle') }}</strong></p>
-          <ul class="pending-list">
-            <li v-for="patch in pendingPatches" :key="patch.version">
-              <strong>{{ patch.label }} ({{ $t('sysDbPatchTag') }} {{ patch.version }})</strong>: {{ $t(patch.descKey) }}
-            </li>
-          </ul>
+      <div v-if="pendingPatches.length" class="pending-patches-card">
+        <div class="pending-head">
+          <Icon icon="solar:info-circle-linear" width="18" height="18" class="pending-icon" />
+          <span class="pending-title">{{ $t('sysDbPendingPatchesTitle') }} ({{ pendingPatches.length }})</span>
+        </div>
+        <div class="pending-list">
+          <div v-for="patch in pendingPatches" :key="patch.version" class="pending-item">
+            <span class="patch-badge">{{ patch.label }} <small>#{{ patch.version }}</small></span>
+            <span class="patch-desc">{{ $t(patch.descKey) }}</span>
+          </div>
         </div>
       </div>
 
-      <div class="field-hint">
-        <Icon icon="solar:info-circle-linear" width="16" height="16" />
-        <span>{{ $t('sysDbMaintenanceHint') }}</span>
+      <!-- 安全与操作提示 -->
+      <div class="info-callout">
+        <Icon icon="solar:info-circle-linear" width="16" height="16" class="callout-icon" />
+        <div class="callout-content">
+          <p>{{ $t('sysDbMaintenanceHint') }}</p>
+        </div>
       </div>
 
       <!-- 操作与刷新按钮 -->
       <div class="actions-row">
         <el-button
-          class="arc-btn"
+          class="arc-btn upgrade-btn"
           type="primary"
-          plain
           :loading="upgradeLoading"
           @click="$emit('upgrade')"
         >
@@ -95,14 +107,16 @@
         </el-button>
       </div>
 
-      <p v-if="result || error" :class="['feedback', { success: !error }]" role="status">{{ error || result }}</p>
-      <p v-if="schemaError" class="feedback" role="status">{{ schemaError }}</p>
+      <!-- 反馈提示：使用规范的 el-alert 呈现 -->
+      <el-alert v-if="error" type="error" :closable="false" show-icon :title="error" class="feedback-alert" />
+      <el-alert v-else-if="result" type="success" :closable="false" show-icon :title="result" class="feedback-alert" />
+      <el-alert v-if="schemaError" type="warning" :closable="false" show-icon :title="schemaError" class="feedback-alert" />
 
       <!-- 折叠面板：只读历史补丁记录 -->
       <details v-if="schemaData?.history?.length" class="help-details patch-history-details">
         <summary class="history-summary">
-          <Icon icon="fluent:history-16-regular" width="15" height="15" style="margin-right: 6px;" />
-          {{ $t('sysDbPatchHistoryTitle') }} ({{ schemaData.history.length }})
+          <Icon icon="fluent:history-16-regular" width="16" height="16" style="margin-right: 8px;" />
+          <span>{{ $t('sysDbPatchHistoryTitle') }} ({{ schemaData.history.length }})</span>
         </summary>
         <div class="history-table-wrapper">
           <table class="patch-table">
@@ -195,61 +209,150 @@ onMounted(() => {
 
 .version-overview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
-  padding: 14px 16px;
-  background: var(--paper-soft);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
 
-.version-stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 500;
-}
-
-.stat-value {
-  display: flex;
-  align-items: center;
-  min-height: 24px;
-}
-
-.version-empty {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.version-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-strong);
-
-  .version-id {
-    font-size: 11px;
-    font-weight: 400;
-    color: var(--muted);
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 }
 
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 4px;
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  transition: all 0.15s ease;
 
-  .status-badge-icon {
-    margin-right: 4px;
+  .stat-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .stat-icon {
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+  }
+
+  .stat-body {
+    display: flex;
+    align-items: baseline;
+    min-height: 28px;
+  }
+
+  .version-val {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-strong);
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+
+    .version-patch-id {
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--muted);
+      font-family: var(--font-mono, monospace);
+    }
+  }
+
+  .version-empty {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+
+    &.success {
+      background: color-mix(in srgb, #10b981 12%, transparent);
+      color: #059669;
+    }
+
+    &.warning {
+      background: color-mix(in srgb, #f59e0b 15%, transparent);
+      color: #d97706;
+    }
+  }
+}
+
+.pending-patches-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--el-color-warning) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--el-color-warning) 25%, transparent);
+
+  .pending-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--el-color-warning);
+
+    .pending-icon {
+      flex-shrink: 0;
+    }
+
+    .pending-title {
+      font-size: 13.5px;
+      font-weight: 600;
+    }
+  }
+
+  .pending-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    .pending-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 12.5px;
+      line-height: 1.5;
+
+      .patch-badge {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 7px;
+        border-radius: 5px;
+        background: var(--surface);
+        border: 1px solid color-mix(in srgb, var(--el-color-warning) 30%, transparent);
+        font-weight: 600;
+        font-size: 11.5px;
+        color: var(--text-strong);
+
+        small {
+          color: var(--muted);
+          font-family: var(--font-mono, monospace);
+        }
+      }
+
+      .patch-desc {
+        color: var(--text);
+      }
+    }
   }
 }
 
@@ -257,47 +360,59 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 16px;
-}
+  padding-top: 4px;
 
-.reload-btn {
-  font-size: 12px;
-  color: var(--muted);
-  display: inline-flex;
-  align-items: center;
-  &:hover {
-    color: var(--text);
+  .upgrade-btn {
+    min-height: 38px;
+    padding: 0 20px;
+    font-weight: 600;
+  }
+
+  .reload-btn {
+    font-size: 12.5px;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+
+    &:hover {
+      color: var(--accent);
+    }
+  }
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+    align-items: stretch;
+
+    .upgrade-btn {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .reload-btn {
+      justify-content: center;
+    }
   }
 }
 
-.pending-patches-content {
-  flex: 1;
-  min-width: 0;
-
-  .pending-title {
-    margin: 0 0 6px;
-    font-size: 12px;
-  }
-
-  .pending-list {
-    margin: 0;
-    padding-left: 18px;
-    font-size: 12px;
-    line-height: 1.6;
-  }
+.feedback-alert {
+  margin-top: -6px;
+  border-radius: 8px;
 }
 
 .patch-history-details {
   border-top: 1px solid var(--line);
-  padding-top: 14px;
+  padding-top: 16px;
 
   .history-summary {
     display: inline-flex;
     align-items: center;
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-strong);
     cursor: pointer;
     user-select: none;
+    padding: 4px 0;
+    transition: color 0.15s ease;
 
     &:hover {
       color: var(--accent);
@@ -306,14 +421,16 @@ onMounted(() => {
 
   .history-table-wrapper {
     margin-top: 12px;
-    max-height: 320px;
+    max-height: 360px;
+    overflow-x: auto;
     overflow-y: auto;
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: 8px;
   }
 
   .patch-table {
     width: 100%;
+    min-width: 520px;
     border-collapse: collapse;
     font-size: 12px;
     text-align: left;
@@ -321,22 +438,26 @@ onMounted(() => {
     th {
       position: sticky;
       top: 0;
-      background: var(--surface);
+      background: var(--paper-soft);
       color: var(--muted);
-      font-weight: 500;
-      padding: 8px 12px;
+      font-weight: 600;
+      padding: 10px 14px;
       border-bottom: 1px solid var(--line);
       z-index: 1;
     }
 
     td {
-      padding: 8px 12px;
+      padding: 10px 14px;
       border-bottom: 1px solid var(--line);
       color: var(--text);
     }
 
     tr:last-child td {
       border-bottom: 0;
+    }
+
+    tr:hover td {
+      background: color-mix(in srgb, var(--paper-soft) 50%, transparent);
     }
 
     .col-version {
@@ -346,8 +467,8 @@ onMounted(() => {
 
     .patch-badge {
       display: inline-block;
-      padding: 1px 6px;
-      border-radius: 4px;
+      padding: 2px 7px;
+      border-radius: 5px;
       background: var(--paper-soft);
       font-weight: 600;
       color: var(--text-strong);
@@ -358,17 +479,19 @@ onMounted(() => {
       margin-left: 6px;
       font-size: 11px;
       color: var(--muted);
+      font-family: var(--font-mono, monospace);
     }
 
     .col-desc {
       color: var(--text);
+      line-height: 1.5;
     }
 
     .col-time {
       width: 160px;
       white-space: nowrap;
       color: var(--muted);
-      font-size: 11px;
+      font-size: 11.5px;
     }
   }
 }

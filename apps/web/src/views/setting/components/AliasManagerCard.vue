@@ -30,7 +30,7 @@
       <!-- 邮箱列表与昵称配置 -->
       <div class="alias-table-wrapper" v-loading="listLoading">
         <el-table :data="accounts" style="width: 100%" class="alias-table" :empty-text="$t('noMailboxYet')">
-          <el-table-column prop="email" :label="$t('mailboxAddress')" min-width="210">
+          <el-table-column prop="email" :label="$t('mailboxAddress')" min-width="170">
             <template #default="{ row }">
               <div class="email-col">
                 <span class="email-text">{{ row.email }}</span>
@@ -41,7 +41,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column :label="$t('senderNameColumn')" min-width="180">
+          <el-table-column :label="$t('senderNameColumn')" min-width="140">
             <template #default="{ row }">
               <template v-if="editingId === row.accountId">
                 <div class="inline-edit">
@@ -69,7 +69,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column :label="$t('action')" min-width="210" align="right">
+          <el-table-column :label="$t('action')" min-width="160" align="right">
             <template #default="{ row, $index }">
               <div class="action-col">
                 <span v-if="isPrimary(row)" class="default-badge">{{ $t('primaryMailbox') }}</span>
@@ -361,11 +361,30 @@ async function promoteToPrimary(row) {
   flex-wrap: wrap;
 
   &.add-alias-row {
+    width: 100%;
     .alias-input {
+      width: 100%;
       max-width: 400px;
     }
     .add-btn {
       padding: 8px 18px;
+    }
+  }
+
+  @media (max-width: 640px) {
+    &.add-alias-row {
+      flex-direction: column;
+      align-items: stretch;
+
+      .alias-input {
+        max-width: 100%;
+        width: 100%;
+      }
+
+      .add-btn {
+        width: 100%;
+        justify-content: center;
+      }
     }
   }
 }

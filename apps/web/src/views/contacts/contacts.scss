@@ -3,7 +3,7 @@
   height: 100%;
   width: 100%;
   padding: 8px 10px 10px 10px;
-  gap: 8px;
+  gap: 12px;
   background-color: var(--paper, #f0f4f9);
   box-sizing: border-box;
   position: relative;
@@ -12,21 +12,25 @@
     padding: 0;
     gap: 0;
 
-    .contacts-left-pane {
+    .contacts-left-pane,
+    .contacts-right-pane {
       border-radius: 0;
       border: none;
       box-shadow: none;
+      width: 100%;
+      min-width: 100%;
+      max-width: 100%;
+      flex: 1;
     }
-  }
-
-  &.is-resizing {
-    cursor: col-resize;
-    user-select: none;
   }
 }
 
 .contacts-left-pane {
   height: 100%;
+  width: 340px;
+  min-width: 340px;
+  max-width: 340px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -34,7 +38,6 @@
   border-radius: 12px;
   border: 1px solid var(--line);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  transition: width 0.05s ease-out;
 
   .pane-header {
     display: flex;
@@ -216,58 +219,9 @@
   }
 }
 
-.split-resizer {
-  width: 12px;
-  margin-left: -6px;
-  margin-right: -6px;
-  height: 100%;
-  cursor: col-resize;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  background: transparent;
-  flex-shrink: 0;
-  touch-action: none;
-  -webkit-user-select: none;
-  user-select: none;
-
-  /* 隐式扩大触屏可点击热区至 28px，避免手指误触 */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -8px;
-    right: -8px;
-    z-index: 1;
-  }
-
-  .resizer-handle {
-    width: 4px;
-    height: 36px;
-    border-radius: var(--radius-full, 9999px);
-    background: var(--line-strong);
-    opacity: 0.85;
-    transform: scaleY(1);
-    pointer-events: none;
-    transition: all var(--duration-fast, 150ms) var(--ease-spring, cubic-bezier(0.16, 1, 0.3, 1));
-  }
-
-  &:hover .resizer-handle,
-  &.is-dragging .resizer-handle {
-    width: 4px;
-    height: 52px;
-    opacity: 1;
-    background: var(--accent);
-    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
-  }
-}
-
 .contacts-right-pane {
   flex: 1;
-  min-width: 340px;
+  min-width: 0;
   height: 100%;
   overflow: hidden;
   background-color: var(--surface);
@@ -276,6 +230,32 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
   display: flex;
   flex-direction: column;
+
+  .mobile-back-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text-strong);
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-right: 6px;
+    transition: all 0.15s ease;
+
+    .back-icon {
+      transform: rotate(90deg);
+    }
+
+    &:hover, &:active {
+      background: var(--paper-soft);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+  }
 
   .contact-email-detail-wrapper {
     height: 100%;

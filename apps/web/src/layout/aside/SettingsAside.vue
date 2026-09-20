@@ -11,7 +11,7 @@
 
         <div class="aside-nav-group">
           <div class="nav-section-header">
-            <span>{{ $t('SystemSettings') }}</span>
+            <span>{{ $t(titleKey) }}</span>
           </div>
 
           <div
@@ -41,6 +41,10 @@ import {
   SYS_SETTING_SECTIONS,
   resolveSysSettingSection,
 } from "@/views/sys-setting/sections.js";
+import {
+  USER_SETTING_SECTIONS,
+  resolveUserSettingSection,
+} from "@/views/setting/sections.js";
 
 defineOptions({ name: 'SettingsAside' })
 
@@ -48,8 +52,15 @@ const route = useRoute();
 const router = useRouter();
 const uiStore = useUiStore();
 
-const sections = SYS_SETTING_SECTIONS;
-const activeSection = computed(() => resolveSysSettingSection(route.query.tab));
+const isSysSetting = computed(() => route.name === 'sys-setting');
+const titleKey = computed(() => isSysSetting.value ? 'SystemSettings' : 'userSettings');
+const sections = computed(() => isSysSetting.value ? SYS_SETTING_SECTIONS : USER_SETTING_SECTIONS);
+const activeSection = computed(() => {
+  if (isSysSetting.value) {
+    return resolveSysSettingSection(route.query.tab);
+  }
+  return resolveUserSettingSection(route.query.tab);
+});
 
 function closeAsideIfMobile() {
   if (window.innerWidth < 1025) {
@@ -60,7 +71,8 @@ function closeAsideIfMobile() {
 function selectSection(id) {
   closeAsideIfMobile();
   if (id === activeSection.value) return;
-  router.replace({ name: 'sys-setting', query: { ...route.query, tab: id } });
+  const targetRoute = isSysSetting.value ? 'sys-setting' : 'setting';
+  router.replace({ name: targetRoute, query: { ...route.query, tab: id } });
 }
 
 function goBack() {

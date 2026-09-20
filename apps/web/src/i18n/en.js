@@ -1,6 +1,22 @@
 const en = {
     mailboxFilter: 'Filter by mailbox',
     allMailboxes: 'All mailboxes',
+    themeSettings: 'Appearance & Theme',
+    themeSettingsDesc: 'Customise interface primary accent, adapted for light and dark modes',
+    userSectionAppearance: 'Appearance',
+    userSectionAppearanceDesc: 'Customise interface appearance mode and theme accent palette',
+    themeMode: 'Appearance Mode',
+    themeModeHint: 'Choose light, dark, or system preference for the interface',
+    themeModeLight: 'Light Mode',
+    themeModeDark: 'Dark Mode',
+    themeModeSystem: 'Sync with System',
+    themeAccent: 'Theme Accent',
+    themeAccentHint: 'Choose an accent palette that suits your visual preference, applied instantly',
+    accentMonochrome: 'Monochrome',
+    accentOcean: 'Ocean (Default)',
+    accentSage: 'Sage Green',
+    accentIris: 'Iris Violet',
+    accentAmber: 'Sunset Amber',
     // Navigation
     inbox: 'Inbox',
     message: 'Message',
@@ -627,6 +643,15 @@ const en = {
     timeoutErrorMsg: 'Request timed out. Please try again.',
     serverBusyErrorMsg: 'The server is busy. Please try again later.',
     reqFailErrorMsg: 'Request failed. Please try again later.',
+
+    // User settings sections
+    userSettings: 'User Settings',
+    userSectionProfile: 'Profile & Preferences',
+    userSectionProfileDesc: 'Manage your personal info, password, and display language.',
+    userSectionMailboxes: 'Mailboxes & Aliases',
+    userSectionMailboxesDesc: 'Manage your mailbox aliases, sender names, and forwarding.',
+    userSectionSecurity: 'Security & Access',
+    userSectionSecurityDesc: 'Configure linked accounts, CLI tokens, and security settings.',
 
     // System settings (administrator area)
     // Status words the administrator area reuses; they existed in zh.js but had no

@@ -181,13 +181,15 @@
     --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
     --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-    /* Element Plus 适配映射 (必须加 !important 保证全局 100% 覆盖) */
+    /* Element Plus 适配映射 (随主题强调色动态计算，彻底告别硬编码蓝) */
     --el-color-primary: var(--accent) !important;
-    --el-color-primary-dark-2: #143354 !important;
-    --el-color-primary-light-3: #2d5b8c !important;
-    --el-color-primary-light-5: #4b78aa !important;
-    --el-color-primary-light-7: #7a9ec6 !important;
-    --el-color-primary-light-9: #eaf1f8 !important;
+    --el-color-primary-hover: var(--accent-hover) !important;
+    --el-color-primary-dark-2: color-mix(in srgb, var(--accent) 80%, black) !important;
+    --el-color-primary-light-3: color-mix(in srgb, var(--accent) 80%, white) !important;
+    --el-color-primary-light-5: color-mix(in srgb, var(--accent) 60%, white) !important;
+    --el-color-primary-light-7: color-mix(in srgb, var(--accent) 40%, white) !important;
+    --el-color-primary-light-8: color-mix(in srgb, var(--accent) 20%, white) !important;
+    --el-color-primary-light-9: var(--accent-light) !important;
 
     --extra-light-fill: var(--paper-soft);
     --light-ill: var(--paper-soft);
@@ -259,12 +261,15 @@
     --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
     --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.8), inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
 
+    /* Element Plus 适配映射 (深色模式随主题强调色动态计算) */
     --el-color-primary: var(--accent) !important;
-    --el-color-primary-dark-2: #2e6ad0 !important;
-    --el-color-primary-light-3: #5490ec !important;
-    --el-color-primary-light-5: #6fa2f0 !important;
-    --el-color-primary-light-7: #92b8f5 !important;
-    --el-color-primary-light-9: #16294a !important;
+    --el-color-primary-hover: var(--accent-hover) !important;
+    --el-color-primary-dark-2: color-mix(in srgb, var(--accent) 85%, black) !important;
+    --el-color-primary-light-3: color-mix(in srgb, var(--accent) 85%, white) !important;
+    --el-color-primary-light-5: color-mix(in srgb, var(--accent) 65%, white) !important;
+    --el-color-primary-light-7: color-mix(in srgb, var(--accent) 45%, white) !important;
+    --el-color-primary-light-8: color-mix(in srgb, var(--accent) 25%, white) !important;
+    --el-color-primary-light-9: var(--accent-light) !important;
 
     --extra-light-fill: var(--paper-soft);
     --light-ill: var(--paper-soft);
@@ -459,4 +464,96 @@ a,
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
 }
+
+/* ──────────────────────────────────────────────────
+   主题配色系统增强与白灰 (Monochrome) 质感定制
+   ────────────────────────────────────────────────── */
+html[data-theme-accent="monochrome"] .write-btn {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid var(--line) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+html[data-theme-accent="monochrome"] .write-btn:hover {
+    background: #f8fafc !important;
+    border-color: var(--line-strong) !important;
+}
+
+html[data-theme-accent="monochrome"] .write-btn .shortcut-tip {
+    background: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+    color: #475569 !important;
+}
+
+html[data-theme-accent="monochrome"].dark .write-btn {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid transparent !important;
+    box-shadow: 0 2px 14px rgba(255, 255, 255, 0.18) !important;
+}
+
+html[data-theme-accent="monochrome"].dark .write-btn:hover {
+    background: #f1f5f9 !important;
+}
+
+html[data-theme-accent="monochrome"].dark .write-btn .shortcut-tip {
+    background: rgba(15, 23, 42, 0.1) !important;
+    border-color: rgba(15, 23, 42, 0.15) !important;
+    color: #0f172a !important;
+}
+
+html[data-theme-accent="monochrome"].dark .el-button--primary {
+    background: #ffffff !important;
+    border-color: #ffffff !important;
+    color: #0f172a !important;
+}
+
+html[data-theme-accent="monochrome"].dark .el-button--primary:hover {
+    background: #f1f5f9 !important;
+    border-color: #f1f5f9 !important;
+    color: #0f172a !important;
+}
+
+html[data-theme-accent="monochrome"] {
+    --choose-account-background: var(--paper-soft);
+    --email-hover-background: var(--paper-soft);
+}
+
+html[data-theme-accent="monochrome"].dark {
+    --choose-account-background: var(--paper-soft);
+    --email-hover-background: var(--paper-soft);
+    --focus-ring: rgba(255, 255, 255, 0.25);
+}
+
+/* ──────────────────────────────────────────────────
+   按钮 Hover 态随主题强调色自适应
+   ────────────────────────────────────────────────── */
+.el-button--primary:hover,
+.el-button--primary:focus-visible {
+    background-color: var(--accent-hover) !important;
+    border-color: var(--accent-hover) !important;
+    color: var(--accent-contrast, #ffffff) !important;
+}
+
+.el-button--primary:active {
+    background-color: color-mix(in srgb, var(--accent-hover) 85%, black) !important;
+    border-color: color-mix(in srgb, var(--accent-hover) 85%, black) !important;
+    color: var(--accent-contrast, #ffffff) !important;
+}
+
+.el-button:not(.el-button--primary):not(.el-button--danger):hover,
+.el-button:not(.el-button--primary):not(.el-button--danger):focus-visible {
+    color: var(--accent) !important;
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent) !important;
+    background-color: var(--accent-light) !important;
+}
+
+.tool-icon-btn:hover,
+.batch-action-btn:hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+    color: var(--accent) !important;
+}
+
+
 

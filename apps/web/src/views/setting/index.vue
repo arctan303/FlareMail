@@ -1,31 +1,36 @@
 <template>
   <el-scrollbar class="setting-scroll">
     <div class="setting-page">
-      <!-- 页面头部 -->
+      <!-- 页面头部：跟随当前分区 -->
       <div class="page-header">
         <div class="page-title-group">
-          <h2 class="page-title arc-serif-title">{{ $t('settings') }}</h2>
-          <p class="page-desc">{{ $t('settingPageDesc') }}</p>
+          <h2 class="page-title arc-serif-title">{{ $t(activeSectionMeta.label) }}</h2>
+          <p class="page-desc">{{ $t(activeSectionMeta.desc) }}</p>
         </div>
       </div>
 
-      <!-- 卡片 1: 个人基本信息 -->
-      <ProfileCard :password-loading="passwordGateLoading" @open-pwd="openPasswordDialog" />
+      <!-- 分区 1: 个人资料与偏好 -->
+      <div v-show="activeSection === 'profile'" class="section-panel">
+        <ProfileCard :password-loading="passwordGateLoading" @open-pwd="openPasswordDialog" />
+        <LanguageCard />
+      </div>
 
-      <!-- 界面语言 -->
-      <LanguageCard />
+      <!-- 分区 2: 外观设置 -->
+      <div v-show="activeSection === 'appearance'" class="section-panel">
+        <ThemeCard />
+      </div>
 
-      <!-- 卡片 2: 多邮箱别名管理 -->
-      <AliasManagerCard :run-sensitive="runSensitive" />
+      <!-- 分区 3: 邮箱与别名管理 -->
+      <div v-show="activeSection === 'mailboxes'" class="section-panel">
+        <AliasManagerCard :run-sensitive="runSensitive" />
+        <EmailForwardingCard />
+      </div>
 
-      <!-- 卡片 3: 邮件转发 -->
-      <EmailForwardingCard />
-
-      <!-- 卡片 4: CLI Token -->
-      <CliTokenCard :run-sensitive="runSensitive" />
-
-      <!-- 卡片 5: 登录方式 -->
-      <GoogleOauthCard :run-sensitive="runSensitive" />
+      <!-- 分区 3: 安全与凭证 -->
+      <div v-show="activeSection === 'security'" class="section-panel">
+        <GoogleOauthCard :run-sensitive="runSensitive" />
+        <CliTokenCard :run-sensitive="runSensitive" />
+      </div>
 
       <!-- 密码修改独立弹窗 -->
       <PasswordChangeDialog v-model="pwdShow" :run-sensitive="runSensitive" />
@@ -46,11 +51,13 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import ProfileCard from './components/ProfileCard.vue'
 import LanguageCard from './components/LanguageCard.vue'
+import ThemeCard from './components/ThemeCard.vue'
 import AliasManagerCard from './components/AliasManagerCard.vue'
 import EmailForwardingCard from './components/EmailForwardingCard.vue'
 import CliTokenCard from './components/CliTokenCard.vue'
@@ -59,8 +66,12 @@ import PasswordChangeDialog from './components/PasswordChangeDialog.vue'
 import RecentAuthDialog from './components/RecentAuthDialog.vue'
 import { recentAuthPassword, recentAuthStatus } from '@/request/my.js'
 import { createRecentAuthCoordinator } from '@/utils/recent-auth.js'
+import { getUserSettingSection, resolveUserSettingSection } from './sections.js'
 
 const { t } = useI18n()
+const route = useRoute()
+const activeSection = computed(() => resolveUserSettingSection(route.query.tab))
+const activeSectionMeta = computed(() => getUserSettingSection(activeSection.value))
 const pwdShow = ref(false)
 const passwordGateLoading = ref(false)
 const recentAuthDialog = ref()
@@ -210,5 +221,15 @@ onBeforeUnmount(() => {
 
 .arc-serif-title {
   font-family: "Noto Serif SC", "Songti SC", "SimSun", "STSong", serif, -apple-system, sans-serif;
+}
+
+.section-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+
+  @media (max-width: 767px) {
+    gap: 16px;
+  }
 }
 </style>

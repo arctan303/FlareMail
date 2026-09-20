@@ -1,4 +1,5 @@
 import { useUiStore } from '@/store/ui.js'
+import { applyThemeAccent } from './theme-accent.js'
 
 export const THEME_STORAGE_KEY = 'theme_pref'
 export const THEME_TTL = 365 * 24 * 60 * 60 * 1000
@@ -85,4 +86,5 @@ export function switchDark(nextIsDark, root = document.documentElement, mode = n
     uiStore.themeMode = mode
   }
   uiStore.dark = nextIsDark
+  applyThemeAccent(null, nextIsDark)
 }

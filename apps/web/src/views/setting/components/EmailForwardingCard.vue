@@ -276,5 +276,40 @@ async function doDeleteAccount(accountId) {
       }
     }
   }
+
+  @media (max-width: 640px) {
+    .alias-forward-item {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+
+      .alias-info {
+        width: 100%;
+        word-break: break-all;
+      }
+
+      .alias-action {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .forward-target-block .inline-form {
+    flex-direction: column;
+    align-items: stretch;
+
+    .el-input {
+      max-width: 100% !important;
+      width: 100%;
+    }
+
+    .arc-btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
 }
 </style>

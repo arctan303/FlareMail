@@ -17,8 +17,10 @@ import {
 import {runAfterSetupGate} from "@/utils/setup-gate.js";
 import {shouldProbeAuthenticatedSession} from "@/utils/oauth-return.js";
 import {DEFAULT_BRAND, applyBrandToDocument, cacheBrand, getCachedBrand, normalizeBrand} from "@/utils/brand.js";
+import { applyThemeAccent } from "@/utils/theme-accent.js";
 
 export async function init() {
+    applyThemeAccent();
     installUserScopedStateSync();
     // The brand only arrives with /setting/websiteConfig, two round trips from here.
     // Reapplying the cached one keeps the tab title and the splash logo from snapping

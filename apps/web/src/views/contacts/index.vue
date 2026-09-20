@@ -1,7 +1,7 @@
 <template>
-  <div class="contacts-container" :class="{ 'is-resizing': isDragging, 'is-mobile': isMobile }">
+  <div class="contacts-container" :class="{ 'is-mobile': isMobile }">
     <!-- 左侧联系人列表栏 (独立圆角卡片) -->
-    <div class="contacts-left-pane" :style="listStyle">
+    <div class="contacts-left-pane" v-if="!isMobile || !activeContact">
       <!-- 头部：标题与新增按钮 -->
       <div class="pane-header">
         <div class="title-with-badge">
@@ -74,19 +74,8 @@
       </el-scrollbar>
     </div>
 
-    <!-- 可拖拽分割线 (支持鼠标与触屏手势) -->
-    <div
-      v-if="!isMobile"
-      class="split-resizer"
-      :class="{ 'is-dragging': isDragging }"
-      @pointerdown="startResize"
-      :title="$t('dragToResize')"
-    >
-      <div class="resizer-handle"></div>
-    </div>
-
     <!-- 右侧联系人工作台与往来中枢 (独立圆角卡片) -->
-    <div class="contacts-right-pane">
+    <div class="contacts-right-pane" v-if="!isMobile || activeContact">
       <!-- 模式 A：就地展开查看某一封邮件全文详情 -->
       <div v-if="selectedTimelineEmail" class="contact-email-detail-wrapper">
         <MailDetailPane
@@ -107,6 +96,17 @@
           <!-- 顶部 Hero 身份与快捷行动区 -->
           <div class="detail-header-section">
             <div class="header-main">
+              <!-- 手机端返回列表按钮 -->
+              <button
+                v-if="isMobile"
+                type="button"
+                class="mobile-back-btn"
+                :title="$t('backToPrevious')"
+                @click="activeContact = null"
+              >
+                <Icon icon="solar:alt-arrow-down-linear" width="18" height="18" class="back-icon" />
+              </button>
+
               <div class="detail-avatar" :style="{ backgroundColor: getAvatarColor(activeContact.name) }">
                 {{ getInitials(activeContact.name) }}
               </div>
@@ -346,7 +346,9 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, defineOptions, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+
+defineOptions({ name: 'contact' });
 import { Icon } from '@iconify/vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessage, ElMessageBox } from 'element-plus';
@@ -388,83 +390,10 @@ const timelineLoading = ref(false);
 const selectedTimelineEmail = ref(null);
 
 const isMobile = ref(window.innerWidth < 1024);
-const isDragging = ref(false);
-let startX = 0;
-let startWidth = 0;
-let activePointerId = null;
 
 const handleResize = () => {
   isMobile.value = window.innerWidth < 1024;
 };
-
-const listStyle = computed(() => {
-  if (isMobile.value) {
-    return {
-      width: '100%',
-      maxWidth: '100%',
-      flex: '1'
-    };
-  }
-  return {
-    width: `${uiStore.contactSplitWidth || 350}px`,
-    minWidth: '280px',
-    maxWidth: '700px',
-    flex: 'none'
-  };
-});
-
-function startResize(e) {
-  // 仅响应鼠标主键或触屏/触控笔事件
-  if (e.pointerType === 'mouse' && e.button !== 0) return;
-
-  e.preventDefault();
-  isDragging.value = true;
-  startX = e.clientX;
-  startWidth = uiStore.contactSplitWidth || 350;
-  activePointerId = e.pointerId;
-
-  // 捕获指针，手指或光标滑出边界也能平稳持续追踪
-  try {
-    e.currentTarget?.setPointerCapture?.(e.pointerId);
-  } catch (_) {
-    // 降级忽略
-  }
-
-  document.body.style.cursor = 'col-resize';
-  document.body.style.userSelect = 'none';
-
-  window.addEventListener('pointermove', onPointerMove);
-  window.addEventListener('pointerup', onPointerUp);
-  window.addEventListener('pointercancel', onPointerUp);
-}
-
-function onPointerMove(e) {
-  if (!isDragging.value) return;
-  const delta = e.clientX - startX;
-  const maxAllowedWidth = Math.min(700, window.innerWidth - 360);
-  const newWidth = Math.max(280, Math.min(startWidth + delta, maxAllowedWidth));
-  uiStore.setContactSplitWidth(newWidth);
-}
-
-function onPointerUp(e) {
-  if (!isDragging.value) return;
-  isDragging.value = false;
-  document.body.style.cursor = '';
-  document.body.style.userSelect = '';
-
-  if (activePointerId !== null) {
-    try {
-      e?.currentTarget?.releasePointerCapture?.(activePointerId);
-    } catch (_) {
-      // 忽略
-    }
-    activePointerId = null;
-  }
-
-  window.removeEventListener('pointermove', onPointerMove);
-  window.removeEventListener('pointerup', onPointerUp);
-  window.removeEventListener('pointercancel', onPointerUp);
-}
 
 function handleGroupWheel(e) {
   if (groupScrollRef.value) {
@@ -741,11 +670,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
-  window.removeEventListener('pointermove', onPointerMove);
-  window.removeEventListener('pointerup', onPointerUp);
-  window.removeEventListener('pointercancel', onPointerUp);
-  document.body.style.cursor = '';
-  document.body.style.userSelect = '';
 });
 </script>
 

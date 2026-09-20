@@ -2,7 +2,7 @@
   <el-dialog
     v-model="isShortcutsHelpVisible"
     :title="$t('shortcutsTitle')"
-    width="540px"
+    width="min(540px, 92vw)"
     class="shortcuts-dialog arc-card"
     :append-to-body="true"
   >
@@ -53,6 +53,13 @@ const shortcutList = computed(() => [
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px 20px;
+}
+
+@media (max-width: 520px) {
+  .shortcuts-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
 }
 
 .shortcut-item {

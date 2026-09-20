@@ -10,6 +10,7 @@ import {initialPreviewLocale} from './locale.js';
 import {applyBrandToDocument} from '@/utils/brand.js';
 import perm from '@/perm/perm.js';
 import i18n from '@/i18n/index.js';
+import { applyThemeAccent } from '@/utils/theme-accent.js';
 import '@/style.css';
 import '@/icons/index.js';
 import '@/element-services.js';
@@ -29,6 +30,7 @@ accounts.currentAccountId=1;
 accounts.currentAccount=structuredClone(playground.userInfo().account);
 accounts.accountList=structuredClone(playground.userInfo().accountList);
 applyBrandToDocument(settings.settings);
+applyThemeAccent();
 // No persisted-state plugin or authenticated session hint is needed on the public experience.
 app.use(router).use(i18n).directive('perm',perm);
 app.mount('#app');
