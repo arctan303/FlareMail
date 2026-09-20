@@ -1,9 +1,11 @@
 <template>
   <div class="main-box-hide">
-    <router-view class="main-view" v-slot="{ Component,route }">
-      <keep-alive :include="['email','send','sys-setting','star','user','draft']">
-        <component :is="Component" :key="route.name"/>
-      </keep-alive>
+    <router-view class="main-view" v-slot="{ Component, route }">
+      <transition name="page-fade-slide" mode="out-in">
+        <keep-alive :include="['email','send','sys-setting','star','user','draft']">
+          <component :is="Component" :key="route.name"/>
+        </keep-alive>
+      </transition>
     </router-view>
   </div>
 </template>

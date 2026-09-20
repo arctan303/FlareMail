@@ -16,65 +16,77 @@
       </el-alert>
       <p v-if="loadError" class="load-error" role="alert">{{ loadError }} <el-button link @click="load">{{ $t('sysReload') }}</el-button></p>
       <div class="setting-cards-grid" :inert="!initialized || savingGroup ? '' : null">
-        <div v-show="activeSection === 'core'" class="section-panel">
-          <CoreSwitchesCard :form="form">
-            <template #footer><SettingsSaveBar v-bind="saveBar('core')" @save="save('core')" @reset="resetGroup('core')" /></template>
-          </CoreSwitchesCard>
-        </div>
+        <transition name="tab-fade">
+          <div v-show="activeSection === 'core'" class="section-panel">
+            <CoreSwitchesCard :form="form">
+              <template #footer><SettingsSaveBar v-bind="saveBar('core')" @save="save('core')" @reset="resetGroup('core')" /></template>
+            </CoreSwitchesCard>
+          </div>
+        </transition>
 
-        <div v-show="activeSection === 'brand'" class="section-panel">
-          <BrandSettingsCard ref="brandCardRef" :form="brandForm" :saving="savingGroup === 'brand'" :dirty="saveBar('brand').dirty" @saved="onAssetSaved" @busy="brandUploading = $event">
-            <template #footer><SettingsSaveBar v-bind="saveBar('brand')" :disabled="!initialized || brandUploading" @save="save('brand')" @reset="resetGroup('brand')" /></template>
-          </BrandSettingsCard>
-        </div>
+        <transition name="tab-fade">
+          <div v-show="activeSection === 'brand'" class="section-panel">
+            <BrandSettingsCard ref="brandCardRef" :form="brandForm" :saving="savingGroup === 'brand'" :dirty="saveBar('brand').dirty" @saved="onAssetSaved" @busy="brandUploading = $event">
+              <template #footer><SettingsSaveBar v-bind="saveBar('brand')" :disabled="!initialized || brandUploading" @save="save('brand')" @reset="resetGroup('brand')" /></template>
+            </BrandSettingsCard>
+          </div>
+        </transition>
 
-        <div v-show="activeSection === 'domains'" class="section-panel">
-          <ManagedDomainsCard :domains="managedDomains" :loading="domainsLoading" :saving="domainsSaving" :error="domainsError" @add="addManagedDomain" />
-          <UnmatchedPolicyCard
-            :unmatched-policy="unmatchedPolicy"
-            :policy-loading="policyLoading"
-            :policy-error="policyError"
-            :policy-saving="policySaving"
-            @change="onUnmatchedPolicyChange"
-            @reload="loadUnmatchedPolicy"
-          />
-        </div>
+        <transition name="tab-fade">
+          <div v-show="activeSection === 'domains'" class="section-panel">
+            <ManagedDomainsCard :domains="managedDomains" :loading="domainsLoading" :saving="domainsSaving" :error="domainsError" @add="addManagedDomain" />
+            <UnmatchedPolicyCard
+              :unmatched-policy="unmatchedPolicy"
+              :policy-loading="policyLoading"
+              :policy-error="policyError"
+              :policy-saving="policySaving"
+              @change="onUnmatchedPolicyChange"
+              @reload="loadUnmatchedPolicy"
+            />
+          </div>
+        </transition>
 
-        <div v-show="activeSection === 'mail'" class="section-panel">
-          <BlacklistFilterCard :form="form">
-            <template #footer><SettingsSaveBar v-bind="saveBar('filters')" @save="save('filters')" @reset="resetGroup('filters')" /></template>
-          </BlacklistFilterCard>
-          <ResendChannelsCard
-            :has-cf-email="form.hasCfEmail"
-            v-model:provider="form.mailProvider"
-            :upgrade-required="form.mailProviderUpgradeRequired"
-            :domains="domains"
-            :resend-tokens="resendTokens"
-            :existing-tokens="form.resendTokens"
-          >
-            <template #footer><SettingsSaveBar v-bind="saveBar('channels')" @save="save('channels')" @reset="resetGroup('channels')" /></template>
-          </ResendChannelsCard>
-        </div>
+        <transition name="tab-fade">
+          <div v-show="activeSection === 'mail'" class="section-panel">
+            <BlacklistFilterCard :form="form">
+              <template #footer><SettingsSaveBar v-bind="saveBar('filters')" @save="save('filters')" @reset="resetGroup('filters')" /></template>
+            </BlacklistFilterCard>
+            <ResendChannelsCard
+              :has-cf-email="form.hasCfEmail"
+              v-model:provider="form.mailProvider"
+              :upgrade-required="form.mailProviderUpgradeRequired"
+              :domains="domains"
+              :resend-tokens="resendTokens"
+              :existing-tokens="form.resendTokens"
+            >
+              <template #footer><SettingsSaveBar v-bind="saveBar('channels')" @save="save('channels')" @reset="resetGroup('channels')" /></template>
+            </ResendChannelsCard>
+          </div>
+        </transition>
 
-        <div v-show="activeSection === 'auth'" class="section-panel">
-          <ConfirmationSettingsCard v-if="!upgradePending" :run-sensitive="runSensitive" @dirty-change="childDirty.confirmation = $event" @busy="childBusy.confirmation = $event" />
-          <GoogleOAuthSettingCard
-            :form="form"
-            v-model:google-client-secret="googleClientSecret"
-          >
-            <template #footer><SettingsSaveBar v-bind="saveBar('google')" @save="save('google')" @reset="resetGroup('google')" /></template>
-          </GoogleOAuthSettingCard>
-          <RuntimeConfigCard :run-sensitive="runSensitive" @dirty-change="childDirty.runtime = $event" @busy="childBusy.runtime = $event" />
-        </div>
+        <transition name="tab-fade">
+          <div v-show="activeSection === 'auth'" class="section-panel">
+            <ConfirmationSettingsCard v-if="!upgradePending" :run-sensitive="runSensitive" @dirty-change="childDirty.confirmation = $event" @busy="childBusy.confirmation = $event" />
+            <GoogleOAuthSettingCard
+              :form="form"
+              v-model:google-client-secret="googleClientSecret"
+            >
+              <template #footer><SettingsSaveBar v-bind="saveBar('google')" @save="save('google')" @reset="resetGroup('google')" /></template>
+            </GoogleOAuthSettingCard>
+            <RuntimeConfigCard :run-sensitive="runSensitive" @dirty-change="childDirty.runtime = $event" @busy="childBusy.runtime = $event" />
+          </div>
+        </transition>
 
-        <div v-show="activeSection === 'maintenance'" class="section-panel">
-          <DatabaseMaintenanceCard
-            :upgrade-loading="upgradeLoading"
-            :upgrade-pending="upgradePending"
-            :result="upgradeResult" :error="upgradeError"
-            @upgrade="runUpgrade"
-          />
-        </div>
+        <transition name="tab-fade">
+          <div v-show="activeSection === 'maintenance'" class="section-panel">
+            <DatabaseMaintenanceCard
+              :upgrade-loading="upgradeLoading"
+              :upgrade-pending="upgradePending"
+              :result="upgradeResult" :error="upgradeError"
+              @upgrade="runUpgrade"
+            />
+          </div>
+        </transition>
       </div>
       <RecentAuthDialog
         ref="recentAuthDialog"

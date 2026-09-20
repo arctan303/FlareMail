@@ -11,7 +11,7 @@
       </button>
       <span v-if="email && email.emailId" class="toolbar-divider" aria-hidden="true"></span>
       <div class="tool-actions" v-if="email && email.emailId">
-        <button type="button" class="tool-btn" :class="{ 'is-starred': email.isStar }" @click="toggleStar" v-if="showStar"
+        <button type="button" class="tool-btn" :class="{ 'is-starred': email.isStar, 'is-starring': isStarAnimating }" @click="toggleStar" v-if="showStar"
           :title="email.isStar ? $t('cancelStar') : $t('starMail')" :aria-label="email.isStar ? $t('cancelStar') : $t('starMail')" :aria-pressed="!!email.isStar">
           <Icon :icon="email.isStar ? 'solar:star-bold' : 'solar:star-linear'" width="20" height="20" />
           <span class="tool-label">{{ email.isStar ? $t('starredFlag') : $t('star') }}</span>
@@ -63,10 +63,10 @@
             <time class="meta-time-text" :title="formatDetailDate(email.createTime)">{{ formatMailListTime(email.createTime) }}</time>
           </div>
           <div class="reading-aligned" v-if="email.code">
-            <button type="button" class="verification-code-chip" @click="copyVerificationCode(email.code)" :title="$t('copyCode')" :aria-label="$t('copyCode')">
-              <span class="code-label">{{ $t('verificationCode') }}</span>
+            <button type="button" class="verification-code-chip" :class="{ 'is-copied': isCodeCopied }" @click="copyVerificationCode(email.code)" :title="$t('copyCode')" :aria-label="$t('copyCode')">
+              <span class="code-label">{{ isCodeCopied ? $t('copySuccessMsg') : $t('verificationCode') }}</span>
               <span class="code-value">{{ email.code }}</span>
-              <Icon icon="solar:copy-linear" width="16" height="16" />
+              <Icon :icon="isCodeCopied ? 'solar:check-circle-linear' : 'solar:copy-linear'" width="16" height="16" />
             </button>
           </div>
           <div class="alert-block reading-aligned" v-if="email.status === 3 || email.status === 4 || email.status === 5">
@@ -180,6 +180,8 @@ const contactStore = useContactStore();
 const showPreview = ref(false);
 const srcList = reactive([]);
 const forceLightView = ref(false);
+const isCodeCopied = ref(false);
+const isStarAnimating = ref(false);
 
 function getSenderAvatarText(name, sendEmail) {
   const str = (name || sendEmail || '').trim();
@@ -191,6 +193,8 @@ function copyVerificationCode(code) {
   if (!code) return;
   if (navigator?.clipboard?.writeText) {
     navigator.clipboard.writeText(code).then(() => {
+      isCodeCopied.value = true;
+      setTimeout(() => { isCodeCopied.value = false; }, 1500);
       ElMessage.success(t('codeCopiedMsg'));
     }).catch(() => {
       ElMessage.warning(t('copyCodeManualMsg'));
@@ -249,6 +253,8 @@ function openForward() {
 
 function toggleStar() {
   if (!props.email?.emailId) return;
+  isStarAnimating.value = true;
+  setTimeout(() => { isStarAnimating.value = false; }, 280);
   if (props.email.isStar) {
     props.email.isStar = 0;
     starCancel(props.email.emailId).then(() => {

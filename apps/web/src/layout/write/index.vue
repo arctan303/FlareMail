@@ -1,5 +1,6 @@
 <template>
-  <div class="send" v-show="show" :class="{ 'is-minimized': isMinimized }">
+  <transition name="modal-scale">
+    <div class="send" v-show="show" :class="{ 'is-minimized': isMinimized }">
     <div class="write-box arc-card">
       <!-- 顶栏组件（支持全屏和最小化挂起胶囊两种形态） -->
       <ComposeHeader
@@ -131,6 +132,7 @@
       @clear-recent="onClearRecentRecipients"
     />
   </div>
+  </transition>
 </template>
 
 <script setup>

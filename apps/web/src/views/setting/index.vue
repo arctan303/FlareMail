@@ -10,27 +10,35 @@
       </div>
 
       <!-- 分区 1: 个人资料与偏好 -->
-      <div v-show="activeSection === 'profile'" class="section-panel">
-        <ProfileCard :password-loading="passwordGateLoading" @open-pwd="openPasswordDialog" />
-        <LanguageCard />
-      </div>
+      <transition name="tab-fade">
+        <div v-show="activeSection === 'profile'" class="section-panel">
+          <ProfileCard :password-loading="passwordGateLoading" @open-pwd="openPasswordDialog" />
+          <LanguageCard />
+        </div>
+      </transition>
 
       <!-- 分区 2: 外观设置 -->
-      <div v-show="activeSection === 'appearance'" class="section-panel">
-        <ThemeCard />
-      </div>
+      <transition name="tab-fade">
+        <div v-show="activeSection === 'appearance'" class="section-panel">
+          <ThemeCard />
+        </div>
+      </transition>
 
       <!-- 分区 3: 邮箱与别名管理 -->
-      <div v-show="activeSection === 'mailboxes'" class="section-panel">
-        <AliasManagerCard :run-sensitive="runSensitive" />
-        <EmailForwardingCard />
-      </div>
+      <transition name="tab-fade">
+        <div v-show="activeSection === 'mailboxes'" class="section-panel">
+          <AliasManagerCard :run-sensitive="runSensitive" />
+          <EmailForwardingCard />
+        </div>
+      </transition>
 
-      <!-- 分区 3: 安全与凭证 -->
-      <div v-show="activeSection === 'security'" class="section-panel">
-        <GoogleOauthCard :run-sensitive="runSensitive" />
-        <CliTokenCard :run-sensitive="runSensitive" />
-      </div>
+      <!-- 分区 4: 安全与凭证 -->
+      <transition name="tab-fade">
+        <div v-show="activeSection === 'security'" class="section-panel">
+          <GoogleOauthCard :run-sensitive="runSensitive" />
+          <CliTokenCard :run-sensitive="runSensitive" />
+        </div>
+      </transition>
 
       <!-- 密码修改独立弹窗 -->
       <PasswordChangeDialog v-model="pwdShow" :run-sensitive="runSensitive" />

@@ -217,7 +217,10 @@ function removeLoading() {
         return;
     }
 
-    doc.remove()
+    doc.classList.add('loading-hide');
+    setTimeout(() => {
+        doc.remove();
+    }, 240);
 }
 
 export default router

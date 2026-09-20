@@ -68,7 +68,7 @@
               <el-checkbox class="row-checkbox" :model-value="item.checked" :aria-label="$t('selectMailLabel', { subject: item.subject || $t('noSubjectParens') })"
                            @click.stop="handleRowCheckboxClick($event, index, item)" />
               <button v-if="showStar && props.type !== 'draft'" class="row-star" type="button"
-                      :class="{ 'is-starred': item.isStar }" :aria-pressed="!!item.isStar"
+                      :class="{ 'is-starred': item.isStar, 'is-starring': starringId === item.emailId }" :aria-pressed="!!item.isStar"
                       :title="item.isStar ? $t('cancelStar') : $t('starMail')" :aria-label="item.isStar ? $t('cancelStar') : $t('starMail')"
                       @click.stop="starChange(item)">
                 <Icon :icon="item.isStar ? 'solar:star-bold' : 'solar:star-linear'" width="17" height="17" />
@@ -248,6 +248,7 @@ const dropdownCloseLock = ref(false);
 const dropdownShow = ref(false);
 const rightClickEmail = ref({});
 const checkedEmailCount = ref(0);
+const starringId = ref(null);
 let timer = null;
 
 const position = ref(DOMRect.fromRect({ x: 0, y: 0 }));
@@ -460,6 +461,10 @@ function formatToEmailTooltip(emailItem) {
 }
 
 function starChange(email) {
+  starringId.value = email.emailId;
+  setTimeout(() => {
+    if (starringId.value === email.emailId) starringId.value = null;
+  }, 280);
   if (!email.isStar) {
     if (!props.allowStar) return;
     email.isStar = 1;
