@@ -156,7 +156,7 @@
 .danger:hover { color: var(--el-color-danger); }
 .is-spinning { animation: spin 1s linear infinite; }
 :deep(.email-row) {
-  --row-bg: var(--paper-soft);
+  --row-bg: color-mix(in srgb, var(--paper) 55%, var(--surface));
   display: grid; grid-template-columns: 24px 28px minmax(100px, 180px) minmax(0, 1fr) auto max-content;
   align-items: center; column-gap: 10px; height: var(--mail-row-height, 36px); box-sizing: border-box;
   padding: 0 18px; position: relative; color: var(--faint); background: var(--row-bg);
@@ -165,21 +165,38 @@
   &.is-unread-row {
     --row-bg: var(--surface);
     color: var(--text-strong);
-    .row-sender { font-weight: 700; color: var(--text-strong); opacity: 1; }
-    .row-subject { font-weight: 700; color: var(--text-strong); opacity: 1; }
-    .row-snippet { color: var(--text); font-weight: 450; opacity: 1; }
-    .row-time { font-weight: 650; color: var(--accent); opacity: 1; }
+    .row-sender {
+      font-weight: 750;
+      color: #0f172a;
+      opacity: 1;
+      html.dark & { color: #ffffff; }
+    }
+    .row-subject {
+      font-weight: 750;
+      color: #0f172a;
+      opacity: 1;
+      html.dark & { color: #ffffff; }
+    }
+    .row-snippet {
+      color: var(--text);
+      font-weight: 450;
+      opacity: 1;
+    }
+    .row-time {
+      font-weight: 700;
+      color: var(--text-strong);
+      opacity: 1;
+      html.dark & { color: #ffffff; }
+    }
   }
   &[data-checked="true"] { --row-bg: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
   &:hover, &:focus-within {
     box-shadow: inset 0 1px var(--line), inset 0 -1px var(--line), 0 1px 3px #00000012;
     z-index: 1;
-    --row-bg: color-mix(in srgb, var(--paper-soft) 40%, var(--surface));
     .row-sender, .row-subject { color: var(--text-strong); opacity: 1; }
     .row-snippet, .row-time { color: var(--muted); opacity: 1; }
     .hover-actions { opacity: 1; pointer-events: auto; transform: translateY(-50%) translateX(0); }
   }
-  &.is-unread-row:hover { --row-bg: var(--surface); }
   &:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .row-checkbox { margin: 0; height: 32px; }
   .row-star { border: 0; border-radius: 50%; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; width: 28px; height: 32px; padding: 0; cursor: pointer; transition: background-color var(--duration-fast, 150ms) ease, transform var(--duration-fast, 150ms) var(--ease-spring); &.is-starred { color: #d99b16; } &:hover { background: color-mix(in srgb, var(--text) 8%, transparent); } }
