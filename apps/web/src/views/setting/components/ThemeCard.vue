@@ -1,5 +1,5 @@
 <template>
-  <div class="setting-card arc-card">
+  <div class="setting-card arc-card" data-pages-appearance>
     <div class="card-header">
       <div class="header-left">
         <div class="header-icon">

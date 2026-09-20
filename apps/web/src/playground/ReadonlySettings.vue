@@ -1,6 +1,6 @@
 <template>
   <div ref="root" class="pages-readonly" @click.capture="guard" @keydown.capture="guard">
-    <p class="pages-readonly-note">{{ lang === 'en' ? 'Settings are shown for reference. Language can be changed.' : '设置仅供查看，语言可以切换。' }}</p>
+    <p class="pages-readonly-note">{{ lang === 'en' ? 'Settings are shown for reference. Language and appearance can be changed.' : '设置仅供查看，语言与外观可以切换。' }}</p>
     <component :is="view" />
   </div>
 </template>
@@ -12,7 +12,7 @@ const root=ref(), settings=useSettingStore(), lang=computed(()=>settings.lang);
 const views={setting:()=>import('@/views/setting/index.vue'),system:()=>import('@/views/sys-setting/index.vue'),users:()=>import('@/views/user/index.vue')};
 const components=Object.fromEntries(Object.entries(views).map(([key,loader])=>[key,defineAsyncComponent(loader)]));
 const view=computed(()=>components[props.kind]);
-const allowed='[data-pages-language], a[href], summary, .preview-launch-btn, .sub-action-btn';
+const allowed='[data-pages-language], [data-pages-appearance], a[href], summary, .preview-launch-btn, .sub-action-btn';
 function guard(event){
   if(event.target.closest(allowed))return;
   if(event.type==='keydown'&&!['Enter',' ','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))return;

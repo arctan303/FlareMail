@@ -20,6 +20,7 @@ export default defineConfig(async context => {
                         .replace('const uiStore = useUiStore();', "const uiStore = useUiStore();\nconst pagesSettings = useSettingStore();")
                         .replace('import { hasPerm }', "import { useSettingStore } from '@/store/setting.js';\nimport { hasPerm }");
                     if(id.split('?')[0].endsWith('/views/setting/components/LanguageCard.vue')) return source.replace('<div class="setting-card arc-card">','<div class="setting-card arc-card" data-pages-language>');
+                    if(id.split('?')[0].endsWith('/views/setting/components/ThemeCard.vue')) return source.replace('<div class="setting-card arc-card">','<div class="setting-card arc-card" data-pages-appearance>');
                     if(id.split('?')[0].endsWith('/views/UnmatchedView.vue')) return source.replace('@click="handleDelete(row)"',':disabled="true"');
                     if(id.split('?')[0].endsWith('/views/brand-preview/index.vue')) return source.replace(/\n\s*editable\n/g,'\n          :editable="false"\n').replace(':disabled="saving || !baseline || isDefault"',':disabled="true"').replace(':disabled="!baseline || !dirty"',':disabled="true"');
                 },
