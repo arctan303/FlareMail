@@ -52,7 +52,7 @@ export function createPlaygroundApi(locale='zh') {
         const d=typeof data==='string'?JSON.parse(data||'{}'):(data||{});
         const key=method+' '+path;
         if(method!=='GET' && /^\/(setting|admin|my|user|unmatched)\//.test(path) && key!=='PUT /my/locale')
-            fail('体验中的设置仅供查看，语言可以切换。','Settings are read-only in the experience. Language can be changed.');
+            fail('体验中的设置仅供查看，语言与外观可以切换。','Settings are read-only in the experience. Language and appearance can be changed.');
         switch(key){
         case 'GET /setup/status': return clone(setupStatus);
         case 'GET /login/security': return {oauthEnabled:false,turnstileRequired:false,siteKey:''};
