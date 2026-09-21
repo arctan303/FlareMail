@@ -110,12 +110,43 @@ describe.sequential('persisted administrator identity', () => {
 
 	it('grants members exactly the documented permission set', async () => {
 		const memberLogin = await login('member@example.com', MEMBER_PASSWORD);
+		const memberHeaders = {
+			Cookie: memberLogin.cookie,
+			Origin: 'http://localhost',
+			'Content-Type': 'application/json',
+		};
+		const permissive = {
+			...env,
+			EMAIL_RATE_LIMITER: { limit: async () => ({ success: true }) },
+			SEND_RATE_LIMITER: { limit: async () => ({ success: true }) },
+		};
 
-		const allowed = await request('/api/account/list?accountId=0&size=30', {
-			headers: { Cookie: memberLogin.cookie },
-		});
-		expect(allowed.status).toBe(200);
+		// The set itself is the contract: assert it element by element so that
+		// adding or removing a key cannot pass unnoticed.
+		const info = await request('/api/my/loginUserInfo', { headers: { Cookie: memberLogin.cookie } });
+		expect(info.status).toBe(200);
+		expect((await info.json()).data.permKeys).toEqual([
+			'email:delete', 'account:add', 'account:query', 'account:delete', 'email:send',
+		]);
 
+		// Every route mapped from those keys must clear the permission guard.
+		// A business-level 400 still proves the guard let the request through.
+		for (const [method, path] of [
+			['GET', '/api/account/list?accountId=0&size=30'],
+			['POST', '/api/account/add'],
+			['DELETE', '/api/account/delete'],
+			['POST', '/api/email/send'],
+			['DELETE', '/api/email/delete'],
+		]) {
+			const response = await request(path, {
+				method,
+				headers: memberHeaders,
+				body: method === 'GET' ? undefined : JSON.stringify({}),
+			}, permissive);
+			expect(response.status, `${method} ${path}`).not.toBe(403);
+		}
+
+		// Routes outside the set stay refused.
 		for (const path of [
 			'/api/user/list?num=1&size=20&status=-1&isDel=0',
 			'/api/setting/query',

@@ -536,8 +536,10 @@ export const migrations = {
 		// Legacy upstream permission/role model (perm, role, role_perm). No runtime
 		// code reads or writes these tables any more: access control is resolved by
 		// resolvePermKeys() in security/admin-identity.js. They are created and
-		// seeded only on fresh installs and never touched on upgrade, so existing
-		// instances keep their original schema.
+		// seeded here for fresh installs and dropped again by v3_2DB, which removes
+		// them from upgraded instances too. Their names stay in init.js's
+		// APPLICATION_TABLES / BOOTSTRAP_SCHEMA_TABLES lists so that an install
+		// interrupted before v3_2DB can still be detected and cleaned up.
 		await c.env.db.prepare(`
 			CREATE TABLE IF NOT EXISTS perm (
 				perm_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -711,7 +713,8 @@ export const migrations = {
 	async v1_4DB(c) {
 		// Legacy invitation-code table from the upstream self-service registration
 		// flow. FlareMail is invite-only and creates users through the admin API,
-		// so no runtime code reads or writes this table.
+		// so no runtime code reads or writes this table. Like the legacy tables
+		// above it is dropped again by v3_2DB.
 		await c.env.db.prepare(`
 			CREATE TABLE IF NOT EXISTS reg_key (
 				rege_key_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -777,7 +780,7 @@ export const migrations = {
 			`ALTER TABLE setting ADD COLUMN reg_verify_count INTEGER NOT NULL DEFAULT 1;`,
 			`ALTER TABLE setting ADD COLUMN add_verify_count INTEGER NOT NULL DEFAULT 1;`,
 			// Legacy anti-abuse counter for the upstream self-service registration
-			// flow; no runtime code reads or writes it.
+			// flow; no runtime code reads or writes it. Dropped again by v3_2DB.
 			`CREATE TABLE IF NOT EXISTS verify_record (
 				vr_id INTEGER PRIMARY KEY AUTOINCREMENT,
 				ip TEXT NOT NULL DEFAULT '',
@@ -866,7 +869,9 @@ export const migrations = {
 		try {
 			// Legacy third-party login table from the upstream multi-provider model.
 			// FlareMail binds Google through user.google_sub / user.google_email and
-			// never reads or writes this table.
+			// never reads or writes this table. Unlike the legacy tables dropped by
+			// v3_2DB, this one is left in place, so it still exists in current
+			// databases and stays listed in init.js's USER_OWNED_TABLES.
 			await c.env.db.prepare(`
 				CREATE TABLE IF NOT EXISTS oauth (
 					oauth_id INTEGER PRIMARY KEY AUTOINCREMENT,
