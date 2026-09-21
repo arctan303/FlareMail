@@ -128,6 +128,8 @@ import { setAuthenticatedSession } from '@/utils/session-state.js'
 import { invalidateUserScopedStateAcrossTabs } from '@/utils/sensitive-state.js'
 import { setThemeMode } from '@/utils/theme.js'
 import { isShortcutsHelpVisible } from '@/utils/shortcuts.js'
+import db from '@/db/db.js'
+import { clearLocalDrafts } from '@/db/draft-lifecycle.js'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -211,6 +213,11 @@ async function clickLogout() {
   } catch (e) {
     console.warn('Logout request failed, clearing local session anyway:', e)
   } finally {
+    try {
+      await clearLocalDrafts(db.value)
+    } catch (e) {
+      console.warn('Failed to clear local drafts during explicit logout:', e)
+    }
     setAuthenticatedSession(false)
     invalidateUserScopedStateAcrossTabs()
     userStore.user = {}

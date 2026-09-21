@@ -52,7 +52,7 @@ Start with the [deployment guide](https://flaremail-demo.pages.dev/docs/en/deplo
 
 ## Local development
 
-`main` contains the latest stable version; `dev` is for ongoing development. Start contribution branches from `dev`.
+`main` contains the latest stable version; `dev` is for ongoing development. Start contribution branches from `dev`; see the [release process](RELEASING.md) for the branch gate, bilingual notes, tags, and GitHub Releases.
 
 Use Node.js ≥ 22.12 and the pinned pnpm 10.34.5. Install dependencies from the repository root:
 

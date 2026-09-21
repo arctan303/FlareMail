@@ -1,5 +1,49 @@
 # Changelog
 
+## v1.0.4 — 2026-09-22
+
+### 新增 / Added
+
+- **邮件操作与撤销 / Mail actions and undo**:
+  - 邮件列表与阅读页支持将邮件重新标记为未读；已读操作提供 5 秒撤销窗口，批量操作同步反馈结果。
+  - 发信增加 5 秒“撤销发送”窗口；倒计时开始前持久化可恢复的本地草稿，发送完成前阻止打开第二封写信，并在刷新或关闭页面时提示仍有待处理邮件。
+  - Mail list and detail views can mark messages as unread. Mark-as-read actions provide a five-second undo window with clear batch feedback.
+  - Sending now has a five-second undo window. A recoverable local draft is persisted before the countdown, a second composer is blocked until sending finishes, and refresh or close warns while mail is still pending.
+- **邮件详情反馈 / Mail detail feedback**:
+  - 投递详情支持复制发件人、收件人、抄送与密送地址；附件下载显示开始提示、进行中状态并阻止重复点击。
+  - Delivery details can copy sender, recipient, CC, and BCC addresses. Attachment downloads now show start and in-progress feedback and prevent duplicate clicks.
+
+### 安全 / Security
+
+- **入站邮件资源边界 / Inbound mail resource boundaries**:
+  - 在解析和业务持久化前限制原始邮件为 25 MiB、附件数量为 50、解码后附件总量为 18 MiB；超限邮件不会写入 D1、KV、R2，也不会转发。
+  - Raw messages are capped at 25 MiB, with at most 50 attachments and 18 MiB of decoded attachment data before parsing or business persistence. Rejected messages do not write to D1, KV, or R2 and are not forwarded.
+- **公开请求体限制 / Public request-body limits**:
+  - 登录、安装验证/升级和 OAuth Token 使用 16 KiB 流式上限，完整安装提交使用 64 KiB；声明长度、分块请求和虚假偏小长度均经过实际读取上限约束。
+  - Login, setup verification/upgrade, and OAuth token requests use a 16 KiB streaming cap; full setup submissions use 64 KiB. Declared, chunked, and deceptively undersized bodies are all constrained by bytes actually read.
+- **回复与转发隐私 / Reply and forward privacy**:
+  - 引用邮件进入编辑器前转义发件人元数据与纯文本，并重新清洗富文本；远程图片默认保持阻断且不会自动请求，站内附件图片路径继续保留。
+  - Quoted sender metadata and plaintext are escaped and rich content is sanitized before entering the editor. Remote images stay blocked without automatic requests while internal attachment image paths remain available.
+- **草稿与认证生命周期 / Draft and authentication lifecycle**:
+  - 只有用户明确退出登录时才清理当前用户的浏览器本地草稿和草稿附件；刷新、401、自然过期及跨标签失效继续保留草稿。
+  - Member permissions now come from one server-side definition, and redeemed OAuth authorization codes are retained for a bounded 30-day audit window without becoming replayable.
+  - Browser-local drafts and draft attachments are cleared only on explicit logout; refreshes, 401 responses, natural expiry, and cross-tab invalidation continue to preserve them.
+  - 成员权限改为服务端单一来源；已兑换 OAuth 授权码在不可重放的前提下保留 30 天审计窗口。
+
+### 优化 / Improved
+
+- 邮件工具栏、分页计数、批量选择和复选框在窄屏下更紧凑；批量星标、复制和下载操作提供一致反馈。
+- 数据库维护卡片改为更清晰的当前版本 → 目标版本流程，集中展示待升级补丁、状态、刷新和升级操作，并改善移动端布局。
+- Mail toolbars, page counts, batch selection, and checkboxes are more compact on narrow screens, with consistent feedback for batch starring, copying, and downloading.
+- The database maintenance card now presents a clearer current-to-target version flow, pending patches, status, refresh, and upgrade actions with improved mobile layout.
+
+### 兼容性与验证 / Compatibility and validation
+
+- 数据库 schema 保持 324，不需要数据迁移。极端大邮件及超大公开请求体现在会被明确拒绝；累计邮箱容量配额仍未实现。
+- 完整 Worker/Web 测试、正式构建、Pages 构建、产物冒烟、敏感信息审计及回复/转发浏览器网络验证作为发布门禁执行；最终结果以获批的 `dev` 提交和 GitHub Release 为准。
+- Database schema remains at 324 with no data migration. Exceptionally large mail and oversized public request bodies are now rejected explicitly; cumulative mailbox storage quotas remain out of scope.
+- Full Worker/Web tests, production and Pages builds, artifact smoke checks, sensitive-information review, and browser network checks for reply/forward are release gates. Final evidence is tied to the approved `dev` commit and GitHub Release.
+
 ## v1.0.3 — 2026-09-20
 
 ### 新增 / Added

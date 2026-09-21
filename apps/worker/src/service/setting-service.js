@@ -54,7 +54,7 @@ const settingService = {
 		await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingRow));
 	},
 
-	async query(c) {
+	async query(c, { populateCache = true } = {}) {
 
 		if (c.get?.('setting')) {
 			return c.get('setting')
@@ -67,7 +67,9 @@ const settingService = {
 			const settingRow = await orm(c).select().from(setting).get();
 			if (settingRow) {
 				settingData = hydrateSettingRow(settingRow);
-				await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingData));
+				if (populateCache) {
+					await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingData));
+				}
 			}
 		}
 

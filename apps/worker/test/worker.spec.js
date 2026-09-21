@@ -12,6 +12,7 @@ import starService from '../src/service/star-service';
 import attService from '../src/service/att-service';
 import { normalizeSendParams } from '../src/utils/send-validator';
 import { markInstalled } from './installed-instance';
+import { inboundMailLimits } from '../src/utils/inbound-mail-limits';
 
 function createTestContext() {
 	const values = new Map();
@@ -145,6 +146,24 @@ describe('local Workers test environment', () => {
 describe('security regression coverage', () => {
 	let attachmentOwnerId;
 	let attachmentOwnerCookie;
+	it('bounds anonymous login and OAuth token bodies before parsing', async () => {
+		const oversizedLogin = await api('/api/login', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:8787' },
+			body: JSON.stringify({ email: 'nobody@example.com', password: 'x'.repeat(17 * 1024) }),
+		}, { ...env, LOGIN_RATE_LIMITER: { limit: async () => ({ success: true }) } });
+		expect(oversizedLogin.status).toBe(413);
+		expect((await oversizedLogin.json()).message).toMatch(/too large/i);
+
+		const oversizedToken = await api('/oauth/token', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: `client_id=main&client_secret=${'x'.repeat(17 * 1024)}`,
+		}, { ...env, OAUTH_TOKEN_RATE_LIMITER: { limit: async () => ({ success: true }) } });
+		expect(oversizedToken.status).toBe(400);
+		expect((await oversizedToken.json()).message).toBe('invalid_request');
+	});
+
 	it('does not grant credentialed CORS access to untrusted origins', async () => {
 		const read = await api('/api/setting/websiteConfig', {
 			headers: { Origin: 'https://evil.example' },
@@ -741,6 +760,81 @@ describe('outgoing mail and forwarding boundaries', () => {
 		const attachment = await env.db.prepare('SELECT key FROM attachments WHERE email_id = ?').bind(received.emailId).first();
 		const stored = await env.r2.get(attachment.key);
 		expect(Array.from(new Uint8Array(await stored.arrayBuffer()))).toEqual(Array.from(attachmentBytes));
+	});
+
+	it('rejects oversized inbound MIME before reading or persisting it', async () => {
+		const recipient = 'oversized-mime@example.com';
+		const userId = await createLegacyUser(recipient, 'oversized-mime-password');
+		const before = (await env.db.prepare('SELECT COUNT(*) AS total FROM email WHERE user_id = ?').bind(userId).first()).total;
+		const message = {
+			from: 'sender@outside.test',
+			to: recipient,
+			rawSize: inboundMailLimits.maxRawBytes + 1,
+			get raw() {
+				throw new Error('oversized raw stream must not be read');
+			},
+			setReject: vi.fn(),
+			forward: vi.fn(),
+		};
+
+		await worker.email(message, env, createExecutionContext());
+		expect(message.setReject).toHaveBeenCalledWith(expect.stringMatching(/25 MiB/));
+		expect(message.forward).not.toHaveBeenCalled();
+		expect((await env.db.prepare('SELECT COUNT(*) AS total FROM email WHERE user_id = ?').bind(userId).first()).total).toBe(before);
+	});
+
+	it('rejects more than 50 inbound attachments before database or object writes', async () => {
+		const recipient = 'attachment-count-limit@example.com';
+		const userId = await createLegacyUser(recipient, 'attachment-count-limit-password');
+		const parts = [];
+		for (let index = 0; index < 51; index++) {
+			parts.push(
+				'--count-boundary',
+				'Content-Type: application/octet-stream',
+				`Content-Disposition: attachment; filename="${index}.bin"`,
+				'Content-Transfer-Encoding: base64',
+				'',
+				'AA==',
+			);
+		}
+		const raw = [
+			'From: sender@outside.test',
+			`To: ${recipient}`,
+			'Subject: too many attachments',
+			'MIME-Version: 1.0',
+			'Content-Type: multipart/mixed; boundary="count-boundary"',
+			'',
+			...parts,
+			'--count-boundary--',
+			'',
+		].join('\r\n');
+		const bytes = new TextEncoder().encode(raw);
+		const message = {
+			from: 'sender@outside.test',
+			to: recipient,
+			rawSize: bytes.byteLength,
+			raw: new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } }),
+			setReject: vi.fn(),
+			forward: vi.fn(),
+		};
+		const cachePut = vi.fn(async () => undefined);
+		const emptyCache = {
+			get: vi.fn(async () => null),
+			put: cachePut,
+		};
+		const objectPut = vi.fn(async () => undefined);
+		const noWriteR2 = {
+			put: objectPut,
+			get: env.r2.get.bind(env.r2),
+			delete: env.r2.delete.bind(env.r2),
+		};
+
+		await worker.email(message, { ...env, kv: emptyCache, r2: noWriteR2 }, createExecutionContext());
+		expect(message.setReject).toHaveBeenCalledWith(expect.stringMatching(/50/));
+		expect(message.forward).not.toHaveBeenCalled();
+		expect(cachePut).not.toHaveBeenCalled();
+		expect(objectPut).not.toHaveBeenCalled();
+		expect((await env.db.prepare('SELECT COUNT(*) AS total FROM email WHERE user_id = ?').bind(userId).first()).total).toBe(0);
 	});
 
 	it('marks inbound mail failed and skips forwarding when attachment storage fails', async () => {

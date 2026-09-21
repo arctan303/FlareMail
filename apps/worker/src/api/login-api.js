@@ -5,10 +5,16 @@ import securityService from '../service/security-service';
 import oauthService from '../service/oauth-service';
 import BizError from '../error/biz-error';
 import { t } from '../i18n/i18n';
+import { readLimitedJson } from '../utils/req-utils';
+
+const MAX_LOGIN_BODY_BYTES = 16 * 1024;
 
 app.post('/login', async (c) => {
 	await securityService.rateLimit(c, 'LOGIN_RATE_LIMITER', 'login', 15);
-	const params = await c.req.json();
+	const params = await readLimitedJson(c, MAX_LOGIN_BODY_BYTES, {
+		tooLargeMessage: 'Login request body is too large.',
+		invalidMessage: 'Invalid login request body.',
+	});
 
 	if (await securityService.loginTurnstileRequired(c)) {
 		await securityService.verifyTurnstile(c, params.turnstileToken);

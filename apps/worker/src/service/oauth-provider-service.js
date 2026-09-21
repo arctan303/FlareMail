@@ -7,6 +7,7 @@ import securityService from './security-service';
 import oauthProviderConfigService from './oauth-provider-config-service';
 import { isDel, userConst } from '../const/entity-const';
 import { isAdmin } from '../security/admin-identity';
+import { readLimitedBytes } from '../utils/req-utils';
 
 const CODE_TTL_MS = 90 * 1000;
 const TOKEN_TTL_SECONDS = 5 * 60;
@@ -71,8 +72,15 @@ async function activeOAuthUser(c) {
 
 async function readForm(c, maxBytes = 16 * 1024) {
 	const contentType = String(c.req.header('Content-Type') || '').toLowerCase();
-	const bytes = await c.req.arrayBuffer();
-	if (bytes.byteLength > maxBytes) throw new BizError('invalid_request', 400);
+	let bytes;
+	try {
+		bytes = await readLimitedBytes(c, maxBytes, 'invalid_request');
+	} catch (error) {
+		if (error instanceof BizError && error.code === 413) {
+			throw new BizError('invalid_request', 400);
+		}
+		throw error;
+	}
 	const text = new TextDecoder().decode(bytes);
 
 	if (contentType.includes('application/json') || text.trim().startsWith('{')) {

@@ -40,4 +40,3 @@ app.put('/email/unread', async (c) => {
 	return c.json(result.ok());
 });
 
-

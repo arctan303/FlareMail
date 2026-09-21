@@ -1,6 +1,7 @@
 import BizError from '../error/biz-error';
 import settingService from './setting-service';
 import runtimeConfigService from './runtime-config-service';
+import { readLimitedBytes } from '../utils/req-utils';
 
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_CLIENTS = 32;
@@ -139,8 +140,7 @@ function validRevision(value) {
 }
 
 export async function readLimitedJsonObject(c) {
-	const bytes = await c.req.arrayBuffer();
-	if (bytes.byteLength > MAX_BODY_BYTES) throw new BizError('OAuth provider request body is too large.', 413);
+	const bytes = await readLimitedBytes(c, MAX_BODY_BYTES, 'OAuth provider request body is too large.');
 	let value;
 	try {
 		value = JSON.parse(new TextDecoder().decode(bytes));

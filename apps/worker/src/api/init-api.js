@@ -10,6 +10,10 @@ import recentAuthService from '../service/recent-auth-service';
 import adminIdentityService from '../service/admin-identity-service';
 import setupSessionService from '../service/setup-session-service';
 import { requireSameOrigin, requireSameOriginRead } from '../service/oauth-provider-config-service';
+import { readLimitedJson } from '../utils/req-utils';
+
+const MAX_SETUP_TOKEN_BODY_BYTES = 16 * 1024;
+const MAX_SETUP_BODY_BYTES = 64 * 1024;
 
 async function requireSetupStatusRateLimit(c) {
 	const binding = c.env.SETUP_STATUS_RATE_LIMITER;
@@ -35,8 +39,13 @@ async function requireSetupStatusRateLimit(c) {
 async function readSetupToken(c) {
 	let params;
 	try {
-		params = await c.req.json();
-	} catch {
+		params = await readLimitedJson(c, MAX_SETUP_TOKEN_BODY_BYTES, {
+			tooLargeMessage: 'Setup token request body is too large.',
+			invalidMessage: 'Invalid setup token',
+			invalidCode: 403,
+		});
+	} catch (error) {
+		if (error instanceof BizError && error.code === 413) throw error;
 		throw new BizError('Invalid setup token', 403);
 	}
 	if (!params || typeof params !== 'object' || Array.isArray(params)
@@ -69,7 +78,10 @@ app.post('/setup', async (c) => {
 	requireSameOrigin(c);
 	await securityService.rateLimit(c, 'SETUP_RATE_LIMITER', 'setup', 3);
 	c.header('Cache-Control', 'no-store');
-	const params = await c.req.json();
+	const params = await readLimitedJson(c, MAX_SETUP_BODY_BYTES, {
+		tooLargeMessage: 'Setup request body is too large.',
+		invalidMessage: 'Invalid setup request body.',
+	});
 	return c.json(result.ok(await dbInit.setup(c, params)));
 });
 

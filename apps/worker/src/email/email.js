@@ -12,9 +12,16 @@ import userService from '../service/user-service';
 import sanitizeEmailHtml from '../utils/html-sanitizer';
 import codeExtractor from '../utils/code-extractor';
 import { selectPersistedAdmin } from '../security/admin-identity';
+import { inboundAttachmentLimitReason, inboundRawLimitReason } from '../utils/inbound-mail-limits';
 
 export async function email(message, env, ctx) {
 	try {
+		const rawLimitReason = inboundRawLimitReason(Number(message.rawSize));
+		if (rawLimitReason) {
+			message.setReject(rawLimitReason);
+			return;
+		}
+
 		const {
 			receive,
 			r2Domain,
@@ -22,7 +29,7 @@ export async function email(message, env, ctx) {
 			blackSubject,
 			blackContent,
 			blackFrom
-		} = await settingService.query({ env });
+		} = await settingService.query({ env }, { populateCache: false });
 
 		if (receive === settingConst.receive.CLOSE) {
 			message.setReject('Service suspended');
@@ -30,7 +37,18 @@ export async function email(message, env, ctx) {
 		}
 
 		const rawMessage = await new Response(message.raw).arrayBuffer();
+		const bufferedRawLimitReason = inboundRawLimitReason(rawMessage.byteLength);
+		if (bufferedRawLimitReason) {
+			message.setReject(bufferedRawLimitReason);
+			return;
+		}
 		const parsedEmail = await PostalMime.parse(rawMessage);
+		const parsedAttachments = parsedEmail.attachments || [];
+		const attachmentLimitReason = inboundAttachmentLimitReason(parsedAttachments);
+		if (attachmentLimitReason) {
+			message.setReject(attachmentLimitReason);
+			return;
+		}
 		if (checkBlock(blackSubject, blackContent, blackFrom, parsedEmail)) {
 			message.setReject('Message rejected');
 			return;
@@ -94,7 +112,7 @@ export async function email(message, env, ctx) {
 
 		const attachments = [];
 		const cidAttachments = [];
-		for (const item of parsedEmail.attachments) {
+		for (const item of parsedAttachments) {
 			const attachment = { ...item };
 			attachment.key = constant.ATTACHMENT_PREFIX
 				+ await fileUtils.createAttachmentKey(attachment.content, item.filename);

@@ -159,6 +159,15 @@ import {useI18n} from "vue-i18n";
 import router from "@/router/index.js";
 import {ElMessage, ElMessageBox, ElNotification} from "element-plus";
 import {useContactStore} from "@/store/contact.js";
+import {useUiStore} from "@/store/ui.js";
+import {sanitizeEmailHtml} from "@/utils/html-sanitizer.js";
+import {buildQuotedEmailHtml} from "@/utils/compose-quote.js";
+import {
+  clearPendingSendDraft,
+  createSendActivityGate,
+  guardPendingSendUnload,
+  persistPendingSendDraft,
+} from "@/db/pending-send-recovery.js";
 
 defineExpose({
   open,
@@ -172,6 +181,7 @@ const isMinimized = ref(false)
 const {t} = useI18n()
 const writerStore = useWriterStore();
 const contactStore = useContactStore();
+const uiStore = useUiStore();
 const draftStore = userDraftStore()
 const emailStore = useEmailStore();
 const accountStore = useAccountStore()
@@ -183,6 +193,7 @@ const percent = ref(0)
 let percentMessage = null
 let sending = false
 let pendingSend = null
+const sendActivity = createSendActivityGate(() => Boolean(pendingSend || sending))
 const undoCountdown = ref(5)
 const isDraftAccountInvalid = ref(false);
 
@@ -386,7 +397,7 @@ async function sendEmail() {
     return
   }
 
-  if (sending || pendingSend) {
+  if (!sendActivity.tryBeginPersistence()) {
     ElMessage({
       message: t('sendingErrorMsg'),
       type: 'error',
@@ -399,12 +410,9 @@ async function sendEmail() {
     form.requestId = crypto.randomUUID()
   }
 
-  // Hide the compose window
-  show.value = false
-  isMinimized.value = false
-
-  // Deep clone form data for pending send
-  const formCopy = {
+  // Persist a recoverable snapshot before starting the undo countdown. A page
+  // exit may cancel ordinary HTTP requests, but it must not destroy the draft.
+  let formCopy = {
     sendEmail: form.sendEmail,
     receiveEmail: [...form.receiveEmail],
     accountId: form.accountId,
@@ -418,6 +426,23 @@ async function sendEmail() {
     draftId: form.draftId,
     requestId: form.requestId
   }
+
+  try {
+    formCopy = await persistPendingSendDraft(db.value, formCopy, {
+      userId: userStore.user.userId,
+    })
+    form.draftId = formCopy.draftId
+    draftStore.refreshList++
+  } catch (error) {
+    sendActivity.endPersistence()
+    console.error('Pending send draft save failed:', error)
+    ElMessage.error(t('saveFailedMsg'))
+    return
+  }
+
+  // Hide the compose window only after recovery data is durable.
+  show.value = false
+  isMinimized.value = false
 
   undoCountdown.value = 5
 
@@ -457,6 +482,7 @@ async function sendEmail() {
     interval,
     notificationInstance
   }
+  sendActivity.endPersistence()
 }
 
 function commitSend() {
@@ -521,7 +547,7 @@ function executeSend(sendForm) {
 
   emailSend(sendForm, (e) => {
     percent.value = Math.round((e.loaded * 98) / e.total)
-  }).then(emailList => {
+  }).then(async emailList => {
     const email = emailList[0]
     emailList.forEach(item => {
       emailStore.sendScroll?.addItem(item)
@@ -538,11 +564,13 @@ function executeSend(sendForm) {
     userStore.refreshUserInfo();
     addRecipientRecord(sendForm.receiveEmail);
 
-    if (sendForm.draftId) {
-      form.subject = ''
-      form.content = ''
-      form.receiveEmail = []
-      draftStore.setDraft = {...toRaw(form)}
+    try {
+      await clearPendingSendDraft(db.value, sendForm.draftId)
+      draftStore.refreshList++
+    } catch (error) {
+      // The server accepted the idempotent send. Keep a recoverable local copy
+      // if cleanup fails instead of misreporting the delivery as failed.
+      console.error('Sent draft cleanup failed:', error)
     }
 
     show.value = false
@@ -624,6 +652,7 @@ function normalizeForwardSubject(subject) {
 }
 
 function openReply(email) {
+  if (!canOpenComposer()) return;
   resetForm();
   form.sendType = 'reply';
   form.emailId = email.emailId;
@@ -643,18 +672,7 @@ function openReply(email) {
   form.subject = normalizeReplySubject(rawSubject);
 
   setTimeout(() => {
-    defValue.value = `
-    <p><br></p>
-    <div class="gmail_quote flaremail_quote" style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; color: #64748b;">
-      <div class="flaremail_quote_header" style="font-size: 12.5px; margin-bottom: 8px; color: #64748b;">
-        ${formatDetailDate(email.createTime)} ${email.name} &lt;${email.sendEmail}&gt; ${t('wrote')}:
-      </div>
-      <blockquote class="flaremail_quote_body mceNonEditable" style="margin: 0; padding-left: 12px; border-left: 2px solid #cbd5e1; color: inherit;">
-        <article>
-          ${formatImage(email.content) || `<pre style="font-family: inherit;word-break: break-word;white-space: pre-wrap;margin: 0">${email.text}</pre>`}
-        </article>
-      </blockquote>
-    </div>`;
+    defValue.value = quotedEmailHtml(email);
     open(matchedTarget);
 
     nextTick(() => {
@@ -667,6 +685,7 @@ function openReply(email) {
 }
 
 function openForward(email) {
+  if (!canOpenComposer()) return;
   resetForm();
   form.sendType = 'forward';
   form.emailId = email.emailId;
@@ -680,18 +699,7 @@ function openForward(email) {
   form.subject = normalizeForwardSubject(rawSubject);
 
   setTimeout(() => {
-    defValue.value = `
-    <p><br></p>
-    <div class="gmail_quote flaremail_quote" style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #e2e8f0; color: #64748b;">
-      <div class="flaremail_quote_header" style="font-size: 12.5px; margin-bottom: 8px; color: #64748b;">
-        ${formatDetailDate(email.createTime)} ${email.name} &lt;${email.sendEmail}&gt; ${t('wrote')}:
-      </div>
-      <blockquote class="flaremail_quote_body mceNonEditable" style="margin: 0; padding-left: 12px; border-left: 2px solid #cbd5e1; color: inherit;">
-        <article>
-          ${formatImage(email.content) || `<pre style="font-family: inherit;word-break: break-word;white-space: pre-wrap;margin: 0">${email.text}</pre>`}
-        </article>
-      </blockquote>
-    </div>`;
+    defValue.value = quotedEmailHtml(email);
     open(matchedTarget);
 
     nextTick(() => {
@@ -708,7 +716,22 @@ function formatImage(content) {
   return content.replace(/{{domain}}/g, '/api/attachment/');
 }
 
+function quotedEmailHtml(email) {
+  return buildQuotedEmailHtml({
+    dateText: formatDetailDate(email.createTime),
+    name: email.name,
+    email: email.sendEmail,
+    wroteText: t('wrote'),
+    contentHtml: formatImage(email.content),
+    text: email.text,
+  }, html => sanitizeEmailHtml(html, {
+    allowRemoteImages: false,
+    isDark: !!uiStore.dark,
+  }).html)
+}
+
 function open(targetAccountOrOptions) {
+  if (!canOpenComposer()) return false;
   isDraftAccountInvalid.value = false;
   isMinimized.value = false;
   let target = targetAccountOrOptions;
@@ -732,9 +755,11 @@ function open(targetAccountOrOptions) {
   nextTick(() => {
     editor.value?.focus?.();
   });
+  return true;
 }
 
 function openDraft(draft) {
+  if (!canOpenComposer()) return;
   resetForm();
   Object.assign(form, { ...draft });
   defValue.value = '';
@@ -768,10 +793,18 @@ const handleKeyDown = (event) => {
   }
 };
 
-function handleBeforeUnload() {
-  if (pendingSend) {
-    flushPendingSend();
-  }
+function canOpenComposer() {
+  if (!sendActivity.isActive()) return true;
+  ElMessage({
+    message: t('sendingErrorMsg'),
+    type: 'warning',
+    plain: true,
+  });
+  return false;
+}
+
+function handleBeforeUnload(event) {
+  guardPendingSendUnload(event, sendActivity.isActive());
 }
 
 let unregisterRouterGuard = null;
@@ -780,6 +813,11 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('beforeunload', handleBeforeUnload);
   unregisterRouterGuard = router.beforeEach((to, from, next) => {
+    if (sendActivity.isActive() && !pendingSend) {
+      ElMessage.warning(t('sendingErrorMsg'));
+      next(false);
+      return;
+    }
     if (pendingSend) {
       flushPendingSend();
     }
@@ -788,9 +826,6 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  if (pendingSend) {
-    flushPendingSend();
-  }
   window.removeEventListener('keydown', handleKeyDown);
   window.removeEventListener('beforeunload', handleBeforeUnload);
   if (unregisterRouterGuard) {
@@ -798,7 +833,7 @@ onUnmounted(() => {
   }
 });
 
-function close() {
+async function close() {
   if (selectStatus) openSelect();
 
   if (!form.content) {
@@ -806,10 +841,23 @@ function close() {
   }
 
   if (form.draftId) {
-    draftStore.setDraft = {...toRaw(form)}
-    show.value = false
-    isMinimized.value = false
-    resetForm()
+    try {
+      const savedDraft = await persistPendingSendDraft(db.value, {
+        ...toRaw(form),
+        receiveEmail: [...form.receiveEmail],
+        attachments: form.attachments ? form.attachments.map(att => ({...att})) : [],
+      }, {
+        userId: userStore.user.userId,
+      })
+      draftStore.setDraft = savedDraft
+      draftStore.refreshList++
+      show.value = false
+      isMinimized.value = false
+      resetForm()
+    } catch (error) {
+      console.error('Draft update failed:', error)
+      ElMessage.error(t('saveFailedMsg'))
+    }
     return;
   }
 
@@ -854,7 +902,7 @@ function close() {
       createTime: new Date().getTime(),
       userId: userStore.user.userId
     };
-    db.draft.add(draftData).then(draftId => {
+    db.value.draft.add(draftData).then(draftId => {
       draftData.draftId = draftId
       draftStore.setDraft = draftData
       show.value = false
