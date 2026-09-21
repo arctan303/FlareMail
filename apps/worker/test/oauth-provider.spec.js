@@ -5,6 +5,7 @@ import worker from '../src';
 import { dbInit } from '../src/init/init';
 import cryptoUtils from '../src/utils/crypto-utils';
 import oauthService from '../src/service/oauth-service';
+import oauthProviderService from '../src/service/oauth-provider-service';
 import { markInstalled } from './installed-instance';
 
 const runtimeEnv = {
@@ -606,6 +607,46 @@ describe('邮件 OAuth Provider', () => {
 			expect(response.headers.get('location')).toBeNull();
 			expect((await response.json()).error).toBe('invalid_client_or_redirect');
 		}
+	});
+
+	it('keeps redeemed authorization codes for a bounded audit window', async () => {
+		const { cookie } = await createUserAndLogin('授权码审计窗口');
+		const redeemed = await issueCode(cookie);
+		const tokenResponse = await request('/oauth/token', {
+			method: 'POST',
+			body: tokenForm(redeemed.code, redeemed.verifier),
+		});
+		expect(tokenResponse.status).toBe(200);
+
+		const codeHash = await cryptoUtils.hashSecret(redeemed.code);
+		const stored = await env.db.prepare(
+			'SELECT used_at AS usedAt FROM oauth_authorization_code WHERE code_hash = ?',
+		).bind(codeHash).first();
+		expect(stored?.usedAt).toBeGreaterThan(0);
+
+		// A cleanup pass inside the window must keep the redeemed row for audit.
+		await oauthProviderService.cleanupExpiredCodes({ env });
+		expect(await env.db.prepare(
+			'SELECT 1 AS found FROM oauth_authorization_code WHERE code_hash = ?',
+		).bind(codeHash).first()).toBeTruthy();
+
+		// Once past the retention window the row is dropped.
+		await env.db.prepare('UPDATE oauth_authorization_code SET used_at = ? WHERE code_hash = ?')
+			.bind(Date.now() - 31 * 24 * 60 * 60 * 1000, codeHash).run();
+		await oauthProviderService.cleanupExpiredCodes({ env });
+		expect(await env.db.prepare(
+			'SELECT 1 AS found FROM oauth_authorization_code WHERE code_hash = ?',
+		).bind(codeHash).first()).toBeNull();
+
+		// An unredeemed code is dropped as soon as it expires.
+		const pending = await issueCode(cookie);
+		const pendingHash = await cryptoUtils.hashSecret(pending.code);
+		await env.db.prepare('UPDATE oauth_authorization_code SET expires_at = ? WHERE code_hash = ?')
+			.bind(Date.now() - 1000, pendingHash).run();
+		await oauthProviderService.cleanupExpiredCodes({ env });
+		expect(await env.db.prepare(
+			'SELECT 1 AS found FROM oauth_authorization_code WHERE code_hash = ?',
+		).bind(pendingHash).first()).toBeNull();
 	});
 
 	it('D1 未配置共享 Secret 时直接拒绝授权并忽略旧环境值', async () => {

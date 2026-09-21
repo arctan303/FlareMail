@@ -108,6 +108,24 @@ describe.sequential('persisted administrator identity', () => {
 		}
 	});
 
+	it('grants members exactly the documented permission set', async () => {
+		const memberLogin = await login('member@example.com', MEMBER_PASSWORD);
+
+		const allowed = await request('/api/account/list?accountId=0&size=30', {
+			headers: { Cookie: memberLogin.cookie },
+		});
+		expect(allowed.status).toBe(200);
+
+		for (const path of [
+			'/api/user/list?num=1&size=20&status=-1&isDel=0',
+			'/api/setting/query',
+			'/api/unmatched/list',
+		]) {
+			const denied = await request(path, { headers: { Cookie: memberLogin.cookie } });
+			expect(denied.status, path).toBe(403);
+		}
+	});
+
 	it('keeps primary-email data atomic when the D1 batch fails', async () => {
 		const admin = await env.db.prepare('SELECT user_id AS userId, email FROM user WHERE is_admin = 1').first();
 		const rollbackTarget = 'admin-rollback@example.com';

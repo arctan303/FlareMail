@@ -11,11 +11,23 @@ import { isAdmin } from '../security/admin-identity';
 const CODE_TTL_MS = 90 * 1000;
 const TOKEN_TTL_SECONDS = 5 * 60;
 const TOKEN_PREFIX = 'oauth:provider:token:';
+// Redeemed authorization codes are kept for a limited audit window. Redemption
+// always filters on `used_at IS NULL AND expires_at > ?`, so retained rows can
+// never be replayed; the window only bounds table growth.
+const CODE_AUDIT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 function randomToken() {
 	const bytes = new Uint8Array(32);
 	crypto.getRandomValues(bytes);
 	return cryptoUtils.toBase64Url(bytes);
+}
+
+async function cleanupAuthorizationCodes(c, now = Date.now()) {
+	await c.env.db.prepare(`
+		DELETE FROM oauth_authorization_code
+		WHERE (used_at IS NULL AND expires_at < ?)
+		   OR (used_at IS NOT NULL AND used_at < ?)
+	`).bind(now, now - CODE_AUDIT_RETENTION_MS).run();
 }
 
 async function issuer(c) {
@@ -145,7 +157,7 @@ const oauthProviderService = {
 
 		const code = randomToken();
 		const now = Date.now();
-		await c.env.db.prepare(`DELETE FROM oauth_authorization_code WHERE expires_at < ? OR used_at IS NOT NULL`).bind(now).run();
+		await cleanupAuthorizationCodes(c, now);
 		await c.env.db.prepare(`
 			INSERT INTO oauth_authorization_code(code_hash, client_id, redirect_uri, user_id, code_challenge, created_at, expires_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -257,8 +269,7 @@ const oauthProviderService = {
 
 	async cleanupExpiredCodes(c) {
 		try {
-			const now = Date.now();
-			await c.env.db.prepare(`DELETE FROM oauth_authorization_code WHERE expires_at < ? OR used_at IS NOT NULL`).bind(now).run();
+			await cleanupAuthorizationCodes(c);
 		} catch (e) {
 			console.error('Failed to cleanup expired oauth codes:', e);
 		}

@@ -533,6 +533,11 @@ export const migrations = {
 
 		await Promise.all(promises);
 
+		// Legacy upstream permission/role model (perm, role, role_perm). No runtime
+		// code reads or writes these tables any more: access control is resolved by
+		// resolvePermKeys() in security/admin-identity.js. They are created and
+		// seeded only on fresh installs and never touched on upgrade, so existing
+		// instances keep their original schema.
 		await c.env.db.prepare(`
 			CREATE TABLE IF NOT EXISTS perm (
 				perm_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -584,6 +589,7 @@ export const migrations = {
 		await c.env.db.prepare(`UPDATE perm SET perm_key = 'setting:clean' WHERE perm_key = 'seting:clear'`).run();
 		await c.env.db.prepare(`DELETE FROM perm WHERE perm_key = 'user:star'`).run();
 
+		// See the legacy permission-model note above v1_1DB's perm table.
 		await c.env.db.prepare(`
 			CREATE TABLE IF NOT EXISTS role (
 				role_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -611,6 +617,7 @@ export const migrations = {
 			`).run();
 		}
 
+		// See the legacy permission-model note above v1_1DB's perm table.
 		await c.env.db.prepare(`
 			CREATE TABLE IF NOT EXISTS role_perm (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -702,6 +709,9 @@ export const migrations = {
 	},
 
 	async v1_4DB(c) {
+		// Legacy invitation-code table from the upstream self-service registration
+		// flow. FlareMail is invite-only and creates users through the admin API,
+		// so no runtime code reads or writes this table.
 		await c.env.db.prepare(`
 			CREATE TABLE IF NOT EXISTS reg_key (
 				rege_key_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -766,6 +776,8 @@ export const migrations = {
 		const ADD_COLUMN_SQL_LIST = [
 			`ALTER TABLE setting ADD COLUMN reg_verify_count INTEGER NOT NULL DEFAULT 1;`,
 			`ALTER TABLE setting ADD COLUMN add_verify_count INTEGER NOT NULL DEFAULT 1;`,
+			// Legacy anti-abuse counter for the upstream self-service registration
+			// flow; no runtime code reads or writes it.
 			`CREATE TABLE IF NOT EXISTS verify_record (
 				vr_id INTEGER PRIMARY KEY AUTOINCREMENT,
 				ip TEXT NOT NULL DEFAULT '',
@@ -852,6 +864,9 @@ export const migrations = {
 
 	async v2_4DB(c) {
 		try {
+			// Legacy third-party login table from the upstream multi-provider model.
+			// FlareMail binds Google through user.google_sub / user.google_email and
+			// never reads or writes this table.
 			await c.env.db.prepare(`
 				CREATE TABLE IF NOT EXISTS oauth (
 					oauth_id INTEGER PRIMARY KEY AUTOINCREMENT,

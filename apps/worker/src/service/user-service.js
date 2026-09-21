@@ -14,7 +14,7 @@ import reqUtils from '../utils/req-utils';
 import verifyUtils from '../utils/verify-utils';
 import sessionService from './session-service';
 import { assertObjectDeleteQueue } from '../utils/delete-queue-utils';
-import { isAdmin } from '../security/admin-identity';
+import { isAdmin, resolvePermKeys } from '../security/admin-identity';
 import managedDomainService from './managed-domain-service';
 import localeService from './locale-service';
 
@@ -31,7 +31,7 @@ const userService = {
 		const account = await accountService.selectByEmailIncludeDel(c, userRow.email);
 
 		const admin = isAdmin(userRow);
-		const permKeys = admin ? ['*'] : ['email:delete', 'account:add', 'account:query', 'account:delete', 'email:send'];
+		const permKeys = resolvePermKeys(userRow);
 
 		const user = {};
 		user.userId = userRow.userId;

@@ -5,7 +5,7 @@ import sessionService from '../service/session-service';
 import { isDel, userConst } from '../const/entity-const';
 import cryptoUtils from '../utils/crypto-utils';
 import { isAllowedOrigin } from '../utils/origin-utils';
-import { isAdmin } from './admin-identity';
+import { isAdmin, resolvePermKeys } from './admin-identity';
 
 import { t } from '../i18n/i18n'
 import app from '../hono/hono';
@@ -113,7 +113,7 @@ app.use('*', async (c, next) => {
 	if (permIndex > -1) {
 
 		const admin = isAdmin(userRow);
-		const permKeys = admin ? ['*'] : ['email:delete', 'account:add', 'account:query', 'account:delete', 'email:send'];
+		const permKeys = resolvePermKeys(userRow);
 
 		const userPaths = permKeyToPaths(permKeys);
 
