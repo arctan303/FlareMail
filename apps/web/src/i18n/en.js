@@ -76,6 +76,18 @@ const en = {
     setSuccess: 'Saved',
     addSuccessMsg: 'Added',
     delSuccessMsg: 'Deleted',
+    batchMarkedAsRead: 'Marked {count} emails as read',
+    markedAsReadMsg: 'Marked as read',
+    undo: 'Undo',
+    actionUndoneMsg: 'Action undone',
+    undoSend: 'Undo send',
+    sendingInSeconds: 'Sending email in {seconds}s',
+    sendCancelledMsg: 'Sending cancelled, draft restored',
+    markAsUnread: 'Mark as unread',
+    markedAsUnreadMsg: 'Marked as unread',
+    addressCopiedMsg: 'Email address copied',
+    batchStarSuccessMsg: 'Marked {count} emails as starred',
+    downloadStartedMsg: 'Downloading {name}...',
     updateSuccess: 'Updated',
 
     // Shell and navigation

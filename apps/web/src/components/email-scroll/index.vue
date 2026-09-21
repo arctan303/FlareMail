@@ -131,6 +131,7 @@
       @visible-change="visibleChange"
       @copy-code="copyCode"
       @read="emailRead"
+      @unread="emailUnread"
       @reply="openReply"
       @forward="openForward"
       @star="starChange"
@@ -141,7 +142,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onActivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, h, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { formatMailListTime } from "@/utils/mail-list-time.js";
 import { useElementSize } from '@vueuse/core';
 import { useRoute, useRouter } from 'vue-router';
@@ -156,6 +157,7 @@ import { useUserStore } from "@/store/user.js";
 import { EmailUnreadEnum } from "@/enums/index.js";
 import { Icon } from "@iconify/vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { emailUnread as apiEmailUnread } from "@/request/email.js";
 
 
 const { t } = useI18n();
@@ -164,6 +166,7 @@ const props = defineProps({
   emailList: Function,
   emailDelete: Function,
   emailRead: Function,
+  emailUnread: Function,
   starAdd: Function,
   starCancel: Function,
   starSuccess: Function,
@@ -260,9 +263,12 @@ const triggerRef = ref({
 
 const hasNextPage = computed(() => (currentPage.value + 1) * PAGE_SIZE < total.value);
 const pageRange = computed(() => {
-  if (!total.value) return t('zeroMessages');
+  if (!total.value) return isCompact.value ? '0' : t('zeroMessages');
   const start = currentPage.value * PAGE_SIZE + 1;
   const end = Math.min(currentPage.value * PAGE_SIZE + emailList.length, total.value);
+  if (isCompact.value) {
+    return `${start}–${Math.max(start, end)} / ${total.value}`;
+  }
   return t('pageRangeOfTotal', { start, end: Math.max(start, end), total: total.value });
 });
 
@@ -287,6 +293,7 @@ onActivated(() => {
 });
 
 onMounted(() => {
+  window.addEventListener('beforeunload', flushPendingRead);
   timer = setInterval(() => {
     emailList.forEach(email => {
       email.formatCreateTime = formatMailListTime(email.createTime);
@@ -294,7 +301,17 @@ onMounted(() => {
   }, 1000 * 60);
 });
 
+onBeforeUnmount(() => {
+  flushPendingRead();
+  window.removeEventListener('beforeunload', flushPendingRead);
+});
+
+onDeactivated(() => {
+  flushPendingRead();
+});
+
 onUnmounted(() => {
+  flushPendingRead();
   clearInterval(timer);
   clearTimeout(reloadTimer);
   requestVersion++;
@@ -491,30 +508,138 @@ const selectedMailsCount = computed(() => {
   return emailList.filter(item => item.checked && !item.expand).length;
 });
 
-const handleRead = async () => {
-  const emailIds = getSelectedMailsIds();
-  if (typeof props.emailRead === 'function') {
-    await props.emailRead(emailIds);
+let pendingRead = null;
+
+function commitPendingRead() {
+  if (!pendingRead) return;
+  const { emailIds, timer } = pendingRead;
+  pendingRead = null;
+  if (timer) clearTimeout(timer);
+  if (emailIds?.length && typeof props.emailRead === 'function') {
+    const res = props.emailRead(emailIds);
+    if (res && typeof res.catch === 'function') {
+      res.catch(err => console.error(err));
+    }
+    if (props.type === 'email' && activeFilter.value === 'unread') {
+      schedulePageReload();
+    }
   }
+}
+
+function flushPendingRead() {
+  if (!pendingRead) return;
+  const msg = pendingRead.messageInstance;
+  commitPendingRead();
+  if (msg && typeof msg.close === 'function') {
+    msg.close();
+  }
+}
+
+function undoRead() {
+  if (!pendingRead) return;
+  const { timer, messageInstance, savedStates } = pendingRead;
+  pendingRead = null;
+  if (timer) clearTimeout(timer);
+  if (messageInstance && typeof messageInstance.close === 'function') {
+    messageInstance.close();
+  }
+  savedStates.forEach(({ emailId, unread, checked }) => {
+    const item = emailList.find(email => email.emailId === emailId);
+    if (item) {
+      item.unread = unread;
+      item.checked = checked;
+    }
+  });
+  updateCheckStatus();
+  ElMessage({ message: t('actionUndoneMsg'), type: 'info', plain: true });
+}
+
+function triggerReadWithUndo(targetIds, isBatch = false) {
+  if (!targetIds?.length) return;
+
+  flushPendingRead();
+
+  const savedStates = [];
+  targetIds.forEach(id => {
+    const item = emailList.find(email => email.emailId === id);
+    if (item) {
+      savedStates.push({
+        emailId: item.emailId,
+        unread: item.unread,
+        checked: item.checked
+      });
+    }
+  });
+
+  if (!savedStates.length) return;
+
+  const emailIds = savedStates.map(s => s.emailId);
   localRead(emailIds);
+
+  const messageText = isBatch
+    ? t('batchMarkedAsRead', { count: emailIds.length })
+    : t('markedAsReadMsg');
+
+  const timer = setTimeout(() => {
+    commitPendingRead();
+  }, 5000);
+
+  const messageInstance = ElMessage({
+    message: h('div', { class: 'undo-toast-inner' }, [
+      h('span', { class: 'undo-toast-text' }, messageText),
+      h('button', {
+        type: 'button',
+        class: 'undo-toast-btn',
+        onClick: (e) => {
+          e.stopPropagation();
+          undoRead();
+        }
+      }, t('undo'))
+    ]),
+    type: 'info',
+    plain: true,
+    duration: 5000,
+    customClass: 'undo-toast-msg',
+    onClose: () => {
+      commitPendingRead();
+    }
+  });
+
+  pendingRead = {
+    emailIds,
+    timer,
+    messageInstance,
+    savedStates
+  };
+}
+
+const handleRead = () => {
+  const emailIds = getSelectedMailsIds();
+  if (!emailIds.length) return;
+  triggerReadWithUndo(emailIds, true);
 };
 
 const showDelete = computed(() => props.type === 'draft');
 
 const handleStar = () => {
+  if (!props.allowStar) return;
+  let count = 0;
   emailList.filter(item => item.checked).forEach(email => {
     if (!email.isStar) {
       starChange(email);
+      count++;
     }
     email.checked = false;
   });
+  if (count > 0) {
+    ElMessage({ message: t('batchStarSuccessMsg', { count }), type: 'success', plain: true });
+  }
 };
 
-async function emailRead(emailId) {
-  if (typeof props.emailRead === 'function') {
-    await props.emailRead([emailId]);
-  }
-  localRead([emailId]);
+function emailRead(emailId) {
+  const ids = Array.isArray(emailId) ? emailId : [emailId];
+  if (!ids.length) return;
+  triggerReadWithUndo(ids, false);
 }
 
 function localRead(emailIds) {
@@ -525,10 +650,44 @@ function localRead(emailIds) {
       emailList[index].checked = false;
     }
   });
-  if (props.type === 'email' && activeFilter.value === 'unread') schedulePageReload();
+  updateCheckStatus();
+}
+
+function emailUnread(emailId) {
+  const ids = Array.isArray(emailId) ? emailId : [emailId];
+  if (!ids.length) return;
+  flushPendingRead();
+  localUnread(ids);
+  const doUnread = props.emailUnread || apiEmailUnread;
+  const res = doUnread(ids);
+  if (res && typeof res.then === 'function') {
+    res.then(() => {
+      ElMessage({ message: t('markedAsUnreadMsg'), type: 'success', plain: true });
+      if (props.type === 'email' && activeFilter.value === 'unread') {
+        schedulePageReload();
+      }
+    }).catch(err => {
+      console.error(err);
+    });
+  } else {
+    ElMessage({ message: t('markedAsUnreadMsg'), type: 'success', plain: true });
+    if (props.type === 'email' && activeFilter.value === 'unread') {
+      schedulePageReload();
+    }
+  }
+}
+
+function localUnread(emailIds) {
+  emailIds.forEach(emailId => {
+    const index = emailList.findIndex(email => email.emailId === emailId);
+    if (index > -1) {
+      emailList[index].unread = EmailUnreadEnum.UNREAD;
+    }
+  });
 }
 
 function rightDelete(emailId) {
+  flushPendingRead();
   if (props.type === 'all-email') {
     ElMessageBox.confirm(t('delOneEmailConfirm'), {
       confirmButtonText: t('confirm'),
@@ -563,6 +722,7 @@ async function copyCode(code) {
 }
 
 function handleDelete() {
+  flushPendingRead();
   ElMessageBox.confirm(t('delEmailsConfirm'), {
     confirmButtonText: t('confirm'),
     cancelButtonText: t('cancel'),
@@ -582,6 +742,7 @@ function handleDelete() {
 }
 
 function deleteEmail(emailIds) {
+  flushPendingRead();
   const ids = new Set(emailIds);
   const remaining = emailList.filter(item => !ids.has(item.emailId));
   if (remaining.length === emailList.length) return;
@@ -605,6 +766,7 @@ function schedulePageReload() {
 
 function changePage(direction) {
   if (loading.value || (direction < 0 && currentPage.value === 0) || (direction > 0 && !hasNextPage.value)) return;
+  flushPendingRead();
   getEmailList(false, currentPage.value + direction);
 }
 
@@ -748,6 +910,7 @@ function handleList(list) {
 
 function refresh() {
   if (isRefreshing.value || loading.value) return;
+  flushPendingRead();
   manualRefreshTriggered = true;
   isRefreshing.value = true;
   emit('refresh-before');
@@ -755,6 +918,7 @@ function refresh() {
 }
 
 function refreshList() {
+  flushPendingRead();
   checkAll.value = false;
   isIndeterminate.value = false;
   getEmailList(true);
@@ -764,4 +928,45 @@ function refreshList() {
 
 <style lang="scss" scoped>
 @use './email-scroll.scss';
+
+:global(.undo-toast-msg) {
+  border-radius: 20px !important;
+  padding: 8px 16px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+}
+
+:global(.undo-toast-inner) {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+:global(.undo-toast-text) {
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+:global(.undo-toast-btn) {
+  border: none;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  outline: none;
+  transition: background-color var(--duration-fast, 150ms) ease, color var(--duration-fast, 150ms) ease;
+
+  &:hover {
+    background: color-mix(in srgb, var(--accent) 26%, transparent);
+    color: var(--accent);
+  }
+
+  &:active {
+    background: color-mix(in srgb, var(--accent) 36%, transparent);
+  }
+}
 </style>

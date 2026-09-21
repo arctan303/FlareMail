@@ -16,6 +16,11 @@
           <Icon :icon="email.isStar ? 'solar:star-bold' : 'solar:star-linear'" width="20" height="20" />
           <span class="tool-label">{{ email.isStar ? $t('starredFlag') : $t('star') }}</span>
         </button>
+        <button type="button" class="tool-btn" v-if="showUnread && email.unread === EmailUnreadEnum.READ" @click="handleMarkUnread"
+          :title="$t('markAsUnread')" :aria-label="$t('markAsUnread')">
+          <Icon icon="solar:letter-unread-linear" width="20" height="20" />
+          <span class="tool-label">{{ $t('markAsUnread') }}</span>
+        </button>
         <button type="button" class="tool-btn danger" v-perm="'email:delete'" @click="handleDelete" :title="$t('deleteMail')" :aria-label="$t('deleteMail')">
           <Icon icon="solar:trash-bin-trash-linear" width="20" height="20" />
           <span class="tool-label">{{ $t('delete') }}</span>
@@ -47,10 +52,38 @@
                 </summary>
                 <div class="delivery-expanded">
                   <dl class="delivery-fields">
-                    <dt>{{ $t('sender') }}</dt><dd>{{ email.name ? `${email.name} <${email.sendEmail}>` : email.sendEmail }}</dd>
-                    <dt>{{ $t('recipient') }}</dt><dd>{{ formatReceive(email.recipient) || email.toEmail || $t('recipientUnavailable') }}</dd>
-                    <template v-if="formatReceive(email.cc)"><dt>{{ $t('cc') }}</dt><dd>{{ formatReceive(email.cc) }}</dd></template>
-                    <template v-if="formatReceive(email.bcc)"><dt>{{ $t('bcc') }}</dt><dd>{{ formatReceive(email.bcc) }}</dd></template>
+                    <dt>{{ $t('sender') }}</dt>
+                    <dd class="delivery-field-value">
+                      <span>{{ email.name ? `${email.name} <${email.sendEmail}>` : email.sendEmail }}</span>
+                      <button v-if="email.sendEmail" type="button" class="copy-address-btn" @click.stop="copyAddress(email.sendEmail)" :title="$t('copy')" :aria-label="$t('copy')">
+                        <Icon icon="solar:copy-linear" width="13" height="13" />
+                      </button>
+                    </dd>
+                    <dt>{{ $t('recipient') }}</dt>
+                    <dd class="delivery-field-value">
+                      <span>{{ formatReceive(email.recipient) || email.toEmail || $t('recipientUnavailable') }}</span>
+                      <button v-if="email.toEmail || email.recipient" type="button" class="copy-address-btn" @click.stop="copyAddress(formatReceive(email.recipient) || email.toEmail)" :title="$t('copy')" :aria-label="$t('copy')">
+                        <Icon icon="solar:copy-linear" width="13" height="13" />
+                      </button>
+                    </dd>
+                    <template v-if="formatReceive(email.cc)">
+                      <dt>{{ $t('cc') }}</dt>
+                      <dd class="delivery-field-value">
+                        <span>{{ formatReceive(email.cc) }}</span>
+                        <button type="button" class="copy-address-btn" @click.stop="copyAddress(formatReceive(email.cc))" :title="$t('copy')" :aria-label="$t('copy')">
+                          <Icon icon="solar:copy-linear" width="13" height="13" />
+                        </button>
+                      </dd>
+                    </template>
+                    <template v-if="formatReceive(email.bcc)">
+                      <dt>{{ $t('bcc') }}</dt>
+                      <dd class="delivery-field-value">
+                        <span>{{ formatReceive(email.bcc) }}</span>
+                        <button type="button" class="copy-address-btn" @click.stop="copyAddress(formatReceive(email.bcc))" :title="$t('copy')" :aria-label="$t('copy')">
+                          <Icon icon="solar:copy-linear" width="13" height="13" />
+                        </button>
+                      </dd>
+                    </template>
                     <dt>{{ $t('time') }}</dt><dd>{{ formatDetailDate(email.createTime) }}</dd>
                   </dl>
                   <button type="button" class="save-contact-action" :disabled="isSenderInContacts || !email.sendEmail" @click="handleQuickSaveContact">
@@ -87,9 +120,10 @@
             <span>{{ $t('attachmentCount', { count: email.attList.length }) }}</span>
           </div>
           <div class="att-grid">
-            <div class="att-card" v-for="att in email.attList" :key="att.attId">
-              <button type="button" class="att-open" @click="handleDownload(att)" :title="$t('downloadFile', { name: att.filename })">
-                <Icon class="att-file-icon" :icon="getIconByName(getExtName(att.filename))" width="24" height="24" />
+            <div class="att-card" v-for="att in email.attList" :key="att.attId" :class="{ 'is-downloading': isDownloading(att) }">
+              <button type="button" class="att-open" @click="handleDownload(att)" :title="$t('downloadFile', { name: att.filename })" :disabled="isDownloading(att)">
+                <Icon v-if="isDownloading(att)" class="att-file-icon is-spinning" icon="solar:restart-linear" width="24" height="24" />
+                <Icon v-else class="att-file-icon" :icon="getIconByName(getExtName(att.filename))" width="24" height="24" />
                 <span class="att-info">
                   <span class="att-name">{{ att.filename }}</span>
                   <span class="att-size">{{ formatBytes(att.size) }}</span>
@@ -99,8 +133,8 @@
                 <button v-if="isImage(att.filename)" type="button" class="att-opt-btn" :title="$t('previewImage')" :aria-label="$t('previewFile', { name: att.filename })" @click="showImage(att.key)">
                   <Icon icon="solar:eye-linear" width="18" height="18" />
                 </button>
-                <button type="button" class="att-opt-btn" :title="$t('downloadAttachment')" :aria-label="$t('downloadFile', { name: att.filename })" @click="handleDownload(att)">
-                  <Icon icon="solar:download-linear" width="18" height="18" />
+                <button type="button" class="att-opt-btn" :class="{ 'is-loading': isDownloading(att) }" :disabled="isDownloading(att)" :title="$t('downloadAttachment')" :aria-label="$t('downloadFile', { name: att.filename })" @click="handleDownload(att)">
+                  <Icon :icon="isDownloading(att) ? 'solar:restart-linear' : 'solar:download-linear'" :class="{ 'is-spinning': isDownloading(att) }" width="18" height="18" />
                 </button>
               </div>
             </div>
@@ -134,7 +168,7 @@ import { Icon } from '@iconify/vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import ShadowHtml from '@/components/shadow-html/index.vue';
-import { emailDelete, emailRead } from '@/request/email.js';
+import { emailDelete, emailRead, emailUnread } from '@/request/email.js';
 import { starAdd, starCancel } from '@/request/star.js';
 import { useUiStore } from '@/store/ui.js';
 import { useContactStore } from '@/store/contact.js';
@@ -172,7 +206,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['starChange', 'deleteSuccess', 'back', 'close']);
+const emit = defineEmits(['starChange', 'deleteSuccess', 'back', 'close', 'unreadChange']);
 const { t } = useI18n();
 const uiStore = useUiStore();
 const contactStore = useContactStore();
@@ -236,6 +270,39 @@ watch(() => props.email?.emailId, (newId) => {
     emailRead([props.email.emailId]);
   }
 }, { immediate: true });
+
+async function handleMarkUnread() {
+  if (!props.email?.emailId) return;
+  try {
+    await emailUnread([props.email.emailId]);
+    props.email.unread = EmailUnreadEnum.UNREAD;
+    ElMessage.success(t('markedAsUnreadMsg'));
+    emit('unreadChange', props.email);
+  } catch (err) {
+    if (err?.message) {
+      ElMessage.error(err.message);
+    }
+  }
+}
+
+async function copyAddress(address) {
+  if (!address) return;
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(address);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = address;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    ElMessage.success(t('addressCopiedMsg'));
+  } catch (err) {
+    console.error(err);
+  }
+}
 
 function openReply() {
   const target = uiStore.writerRef?.value || uiStore.writerRef;
@@ -346,12 +413,28 @@ function isImage(filename) {
   return ['png', 'jpg', 'jpeg', 'bmp', 'gif', 'jfif', 'webp', 'svg'].includes(getExtName(filename));
 }
 
+const downloadingAtts = reactive(new Set());
+
+function getAttKey(att) {
+  return att?.attId || att?.key;
+}
+
+function isDownloading(att) {
+  return downloadingAtts.has(getAttKey(att));
+}
+
 async function handleDownload(att) {
+  const attKey = getAttKey(att);
+  if (downloadingAtts.has(attKey)) return;
+  downloadingAtts.add(attKey);
+  ElMessage({ message: t('downloadStartedMsg', { name: att.filename }), type: 'info', plain: true, duration: 2500 });
   try {
     const url = toPrivateAttachmentUrl(att.key);
     await downloadFileFromUrl(url, att.filename);
   } catch (e) {
     ElMessage.error(t('downloadFailed'));
+  } finally {
+    downloadingAtts.delete(attKey);
   }
 }
 
@@ -517,6 +600,32 @@ summary:focus-visible {
   dt { color: var(--muted); }
   dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
 }
+.delivery-field-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.copy-address-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+  transition: color 150ms ease, background-color 150ms ease;
+
+  &:hover {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+}
 .save-contact-action {
   display: inline-flex;
   align-items: center;
@@ -663,5 +772,22 @@ summary:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .tool-btn, .details-chevron, .att-card { transition: none; }
+}
+
+.is-spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.att-card.is-downloading {
+  opacity: 0.85;
+}
+
+.att-opt-btn.is-loading {
+  color: var(--accent);
+  cursor: wait;
 }
 </style>

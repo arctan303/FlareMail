@@ -107,6 +107,9 @@ onMounted(load);
 .mailbox-filter :deep(.el-select__selected-item) {
   color: var(--text-strong);
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .filter-arrow {
   color: var(--muted);
@@ -119,7 +122,10 @@ onMounted(load);
 }
 @media (max-width: 767px) {
   .mailbox-filter {
-    width: 130px;
+    width: auto;
+    min-width: 75px;
+    max-width: 120px;
+    flex-shrink: 1;
   }
 }
 </style>

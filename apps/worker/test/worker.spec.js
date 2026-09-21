@@ -1513,4 +1513,39 @@ describe('outgoing mail and forwarding boundaries', () => {
 		expect((await userService.selectById({ env }, memberId)).accountLimit).toBe(3);
 		expect(await accountService.countUserAccount({ env }, memberId)).toBe(1);
 	});
+
+	it('supports marking emails as read and unread', async () => {
+		const userId = await createLegacyUser('unread-test@example.com', 'unread-test-password');
+		const userCookie = await login('unread-test@example.com', 'unread-test-password');
+		const acc = await accountService.selectByEmail({ env }, 'unread-test@example.com');
+
+		const inserted = await env.db.prepare(
+			"INSERT INTO email(user_id, account_id, type, status, unread, subject) VALUES (?, ?, 0, 0, 0, 'unread-target') RETURNING email_id AS emailId"
+		).bind(userId, acc.accountId).first();
+
+		// Initially unread = 0 (UNREAD)
+		expect(inserted.emailId).toBeDefined();
+
+		// Mark as read via PUT /api/email/read
+		const readRes = await api('/api/email/read', {
+			method: 'PUT',
+			headers: { Cookie: userCookie, Origin: 'http://localhost:8787', 'Content-Type': 'application/json' },
+			body: JSON.stringify({ emailIds: [inserted.emailId] }),
+		});
+		expect(readRes.status).toBe(200);
+
+		const readRow = await env.db.prepare('SELECT unread FROM email WHERE email_id = ?').bind(inserted.emailId).first();
+		expect(readRow.unread).toBe(1); // READ
+
+		// Mark as unread via PUT /api/email/unread
+		const unreadRes = await api('/api/email/unread', {
+			method: 'PUT',
+			headers: { Cookie: userCookie, Origin: 'http://localhost:8787', 'Content-Type': 'application/json' },
+			body: JSON.stringify({ emailIds: [inserted.emailId] }),
+		});
+		expect(unreadRes.status).toBe(200);
+
+		const unreadRow = await env.db.prepare('SELECT unread FROM email WHERE email_id = ?').bind(inserted.emailId).first();
+		expect(unreadRow.unread).toBe(0); // UNREAD
+	});
 });

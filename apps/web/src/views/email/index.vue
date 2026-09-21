@@ -1,6 +1,5 @@
 <template>
   <MailListLayout>
-
       <emailScroll ref="scroll"
                    :cancel-success="cancelStar"
                    :star-success="addStar"
@@ -10,6 +9,7 @@
                    :star-cancel="starCancel"
                    :time-sort="params.timeSort"
                    :email-read="emailRead"
+                   :email-unread="emailUnread"
                    :show-unread="true"
                    actionLeft="4px"
                    @jump="jumpContent"
@@ -34,7 +34,7 @@ import MailboxFilter from '@/components/MailboxFilter.vue';
 import { useAccountStore } from '@/store/account.js';
 import { useEmailStore } from '@/store/email.js';
 import { useSettingStore } from '@/store/setting.js';
-import { emailList, emailDelete, emailLatest, emailRead } from '@/request/email.js';
+import { emailList, emailDelete, emailLatest, emailRead, emailUnread } from '@/request/email.js';
 import { starAdd, starCancel } from '@/request/star.js';
 import { sleep } from '@/utils/time-utils.js';
 

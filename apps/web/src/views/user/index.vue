@@ -65,7 +65,6 @@
               @filter-change="tableFilter"
               :empty-text="first ? '' : null"
               :data="users"
-              :preserve-expanded-content="preserveExpanded"
               style="width: 100%;"
               ref="tableRef"
               class="user-table"
@@ -73,7 +72,7 @@
               :cell-class-name="cellClassName"
           >
             <el-table-column :width="expandWidth" type="selection" :selectable="row => row.type !== 0" />
-            <el-table-column show-overflow-tooltip :tooltip-formatter="tableRowFormatter" :label="$t('tabEmailAddress')"
+            <el-table-column show-overflow-tooltip :label="$t('tabEmailAddress')"
                              :min-width="emailWidth">
               <template #default="props">
                 <div style="display: flex;gap: 5px">

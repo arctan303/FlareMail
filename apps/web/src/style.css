@@ -421,6 +421,73 @@ button:not(:disabled):active,
     padding: 6px 12px !important;
 }
 
+/* Element Checkbox 统一现代极简质感 (细微圆角与矢量对齐勾选) */
+.el-checkbox {
+    --el-checkbox-checked-bg-color: var(--accent) !important;
+    --el-checkbox-checked-input-border-color: var(--accent) !important;
+}
+
+.el-checkbox__inner {
+    width: 16px !important;
+    height: 16px !important;
+    border-radius: var(--radius-xs, 4px) !important;
+    border: 1.5px solid var(--line-strong) !important;
+    background-color: var(--surface) !important;
+    box-sizing: border-box !important;
+    position: relative !important;
+    transition: border-color var(--duration-fast, 150ms) ease,
+                background-color var(--duration-fast, 150ms) ease,
+                box-shadow var(--duration-fast, 150ms) ease !important;
+}
+
+.el-checkbox:hover .el-checkbox__inner {
+    border-color: var(--accent) !important;
+}
+
+.el-checkbox.is-focus .el-checkbox__inner {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px var(--focus-ring, rgba(27, 69, 111, 0.2)) !important;
+}
+
+.el-checkbox.is-checked .el-checkbox__inner {
+    background-color: var(--accent) !important;
+    border-color: var(--accent) !important;
+}
+
+.el-checkbox.is-checked .el-checkbox__inner::after {
+    content: "" !important;
+    display: block !important;
+    width: 10px !important;
+    height: 10px !important;
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    border: none !important;
+    background-color: var(--accent-contrast, #ffffff) !important;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.2 8.2L6.3 11.3L12.8 4.8'/%3E%3C/svg%3E") no-repeat center / contain !important;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.2 8.2L6.3 11.3L12.8 4.8'/%3E%3C/svg%3E") no-repeat center / contain !important;
+}
+
+.el-checkbox.is-indeterminate .el-checkbox__inner {
+    background-color: var(--accent) !important;
+    border-color: var(--accent) !important;
+}
+
+.el-checkbox.is-indeterminate .el-checkbox__inner::before {
+    content: "" !important;
+    display: block !important;
+    width: 8px !important;
+    height: 2px !important;
+    border-radius: 1px !important;
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    background-color: var(--accent-contrast, #ffffff) !important;
+    border: none !important;
+}
+
 /* 视图过渡，基于径向剪裁 */
 html.dark,
 html:not(.dark) {

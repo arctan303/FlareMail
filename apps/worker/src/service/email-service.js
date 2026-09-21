@@ -540,7 +540,7 @@ const emailService = {
 	async setUnread(c, params, userId) {
 		const { emailIds } = params;
 		const emailIdList = this.parseEmailIds(emailIds);
-		await orm(c).update(email).set({ unread: emailConst.unread.READ }).where(
+		await orm(c).update(email).set({ unread: emailConst.unread.UNREAD }).where(
 			and(
 				eq(email.userId, userId),
 				inArray(email.emailId, emailIdList)

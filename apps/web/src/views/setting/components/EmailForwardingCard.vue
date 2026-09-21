@@ -37,7 +37,7 @@
           </div>
           <div class="alias-action">
             <span class="switch-label">{{ $t('enableForwarding') }}</span>
-            <el-switch v-model="forwardForm.mainForwardStatus" :active-value="0" :inactive-value="1" @change="saveMainForwardStatus"/>
+            <el-switch :model-value="forwardForm.mainForwardStatus === 0 ? 0 : 1" :active-value="0" :inactive-value="1" @update:model-value="val => { forwardForm.mainForwardStatus = val; saveMainForwardStatus() }"/>
           </div>
         </div>
 
@@ -47,7 +47,7 @@
           </div>
           <div class="alias-action">
             <span class="switch-label">{{ $t('enableForwarding') }}</span>
-            <el-switch v-model="acc.forwardStatus" :active-value="0" :inactive-value="1" @change="saveAccountForwardStatus(acc)"/>
+            <el-switch :model-value="acc.forwardStatus === 0 ? 0 : 1" :active-value="0" :inactive-value="1" @update:model-value="val => { acc.forwardStatus = val; saveAccountForwardStatus(acc) }"/>
             <el-button type="danger" text @click="doDeleteAccount(acc.accountId)" style="margin-left: 12px;">{{ $t('deleteAlias') }}</el-button>
           </div>
         </div>

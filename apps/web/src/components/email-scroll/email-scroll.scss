@@ -150,8 +150,6 @@
 .batch-action-btn { border-radius: 8px; }
 .header-actions :deep(.tool-icon-btn svg),
 .header-actions :deep(.batch-action-btn svg) { width: 20px; height: 20px; flex-shrink: 0; }
-.header-actions :deep(.el-checkbox__inner) { width: 17px; height: 17px; }
-.header-actions :deep(.el-checkbox__inner::after) { left: 5px; top: 2px; }
 .tool-icon-btn:hover, :deep(.tool-icon-btn:hover), .batch-action-btn:hover { background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text-strong); }
 .danger:hover { color: var(--el-color-danger); }
 .is-spinning { animation: spin 1s linear infinite; }
@@ -219,8 +217,35 @@
   .skeleton-summary { grid-column: 4 / 6; }
 }
 .is-compact {
-  .header-actions { min-height: 44px; gap: 6px; padding: 0 12px; }
-  .batch-action-btn { min-width: 36px; padding: 0 7px; span { display: none; } }
+  .header-actions {
+    min-height: 40px;
+    gap: 6px;
+    padding: 0 10px;
+    flex-wrap: nowrap;
+  }
+  .header-left {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 4px;
+    overflow: hidden;
+  }
+  .header-right {
+    margin-left: auto;
+    flex-shrink: 0;
+    gap: 2px;
+  }
+  .batch-action-btn { min-width: 32px; height: 32px; padding: 0 6px; span { display: none; } }
+  .tool-icon-btn, :deep(.tool-icon-btn) {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 5px;
+    svg { width: 17px; height: 17px; }
+  }
+  .email-count-badge {
+    font-size: 11px;
+    margin-right: 2px;
+    white-space: nowrap;
+  }
   :deep(.email-row) {
     padding: 8px 12px; column-gap: 8px; row-gap: 2px; grid-template-columns: 20px 24px minmax(0, 1fr) auto max-content; grid-template-rows: 22px 22px;
     .row-checkbox { grid-column: 1; grid-row: 1 / 3; }
@@ -240,4 +265,30 @@
 :deep(.el-dropdown-menu__item) { padding-right: 14px; padding-left: 14px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-@media(max-width:767px){.header-actions{flex-wrap:wrap;gap:4px 8px;padding-top:4px;padding-bottom:4px;}.header-left{flex:0 0 auto;max-width:100%;}.header-right{margin-left:auto;}}
+@media (max-width: 767px) {
+  .header-actions {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 0 10px;
+  }
+  .header-left {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .header-right {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .tool-icon-btn, :deep(.tool-icon-btn) {
+    min-width: 30px;
+    height: 30px;
+    padding: 0 5px;
+  }
+}
+
+@media (max-width: 360px) {
+  .email-count-badge {
+    display: none;
+  }
+}

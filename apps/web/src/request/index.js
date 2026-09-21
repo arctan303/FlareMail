@@ -89,6 +89,10 @@ export function emailRead(emailIds) {
     return http.put('/email/read', { emailIds });
 }
 
+export function emailUnread(emailIds) {
+    return http.put('/email/unread', { emailIds });
+}
+
 export function emailSend(form, progress) {
     return http.post('/email/send', form, {
         onUploadProgress: (e) => {

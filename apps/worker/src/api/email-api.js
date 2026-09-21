@@ -32,5 +32,12 @@ app.put('/email/read', async (c) => {
 	await securityService.rateLimit(c, 'EMAIL_RATE_LIMITER', 'email-read', 30);
 	await emailService.read(c, await c.req.json(), userContext.getUserId(c));
 	return c.json(result.ok());
-})
+});
+
+app.put('/email/unread', async (c) => {
+	await securityService.rateLimit(c, 'EMAIL_RATE_LIMITER', 'email-unread', 30);
+	await emailService.setUnread(c, await c.req.json(), userContext.getUserId(c));
+	return c.json(result.ok());
+});
+
 

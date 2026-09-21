@@ -1,1 +1,1 @@
-export { emailList, emailDelete, emailLatest, emailRead, emailSend } from './index.js';
+export { emailList, emailDelete, emailLatest, emailRead, emailUnread, emailSend } from './index.js';

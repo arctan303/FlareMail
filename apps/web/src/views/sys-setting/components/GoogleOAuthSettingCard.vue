@@ -18,7 +18,7 @@
           <span class="switch-title">{{ $t('sysGoogleSwitch') }}</span>
           <span class="switch-desc">{{ $t('sysGoogleSwitchDesc') }}</span>
         </div>
-        <el-switch v-model="form.googleOauthEnabled" :active-value="1" :inactive-value="0" />
+        <el-switch :model-value="Number(form.googleOauthEnabled) === 1 ? 1 : 0" :active-value="1" :inactive-value="0" @update:model-value="val => form.googleOauthEnabled = val" />
       </div>
 
       <div class="field-hint" role="status">

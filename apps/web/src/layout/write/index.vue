@@ -182,6 +182,8 @@ const show = ref(false);
 const percent = ref(0)
 let percentMessage = null
 let sending = false
+let pendingSend = null
+const undoCountdown = ref(5)
 const isDraftAccountInvalid = ref(false);
 
 const accountOptions = computed(() => {
@@ -372,7 +374,7 @@ async function sendEmail() {
   }
 
   if (!form.content) {
-    form.content = editor.value.getContent();
+    form.content = editor.value?.getContent?.() || '';
   }
 
   if (!form.content) {
@@ -384,7 +386,7 @@ async function sendEmail() {
     return
   }
 
-  if (sending) {
+  if (sending || pendingSend) {
     ElMessage({
       message: t('sendingErrorMsg'),
       type: 'error',
@@ -393,6 +395,120 @@ async function sendEmail() {
     return
   }
 
+  if (!form.requestId) {
+    form.requestId = crypto.randomUUID()
+  }
+
+  // Hide the compose window
+  show.value = false
+  isMinimized.value = false
+
+  // Deep clone form data for pending send
+  const formCopy = {
+    sendEmail: form.sendEmail,
+    receiveEmail: [...form.receiveEmail],
+    accountId: form.accountId,
+    name: form.name,
+    subject: form.subject,
+    content: form.content,
+    sendType: form.sendType,
+    text: form.text,
+    emailId: form.emailId,
+    attachments: form.attachments ? form.attachments.map(att => ({ ...att })) : [],
+    draftId: form.draftId,
+    requestId: form.requestId
+  }
+
+  undoCountdown.value = 5
+
+  const timer = setTimeout(() => {
+    commitSend()
+  }, 5000)
+
+  const interval = setInterval(() => {
+    if (undoCountdown.value > 1) {
+      undoCountdown.value--
+    } else {
+      clearInterval(interval)
+    }
+  }, 1000)
+
+  const notificationInstance = ElNotification({
+    message: () => h('div', { class: 'undo-send-notification-inner' }, [
+      h('span', { class: 'undo-send-text' }, t('sendingInSeconds', { seconds: undoCountdown.value })),
+      h('button', {
+        type: 'button',
+        class: 'undo-send-btn',
+        onClick: (e) => {
+          e.stopPropagation()
+          undoSend()
+        }
+      }, t('undoSend'))
+    ]),
+    position: 'bottom-right',
+    duration: 5200,
+    showClose: false,
+    customClass: 'undo-send-notification'
+  })
+
+  pendingSend = {
+    data: formCopy,
+    timer,
+    interval,
+    notificationInstance
+  }
+}
+
+function commitSend() {
+  if (!pendingSend) return
+  const { data, timer, interval, notificationInstance } = pendingSend
+  pendingSend = null
+  if (timer) clearTimeout(timer)
+  if (interval) clearInterval(interval)
+  if (notificationInstance && typeof notificationInstance.close === 'function') {
+    notificationInstance.close()
+  }
+  executeSend(data)
+}
+
+function flushPendingSend() {
+  if (!pendingSend) return
+  commitSend()
+}
+
+function undoSend() {
+  if (!pendingSend) return
+  const { data, timer, interval, notificationInstance } = pendingSend
+  pendingSend = null
+  if (timer) clearTimeout(timer)
+  if (interval) clearInterval(interval)
+  if (notificationInstance && typeof notificationInstance.close === 'function') {
+    notificationInstance.close()
+  }
+
+  // Restore form
+  Object.assign(form, data)
+  form.attachments = data.attachments ? [...data.attachments.map(a => ({ ...a }))] : []
+  form.receiveEmail = [...(data.receiveEmail || [])]
+
+  show.value = true
+  isMinimized.value = false
+  defValue.value = ''
+  setTimeout(() => {
+    defValue.value = form.content
+    nextTick(() => {
+      editor.value?.focus?.()
+    })
+  })
+
+  ElMessage({
+    message: t('sendCancelledMsg'),
+    type: 'info',
+    plain: true
+  })
+}
+
+function executeSend(sendForm) {
   percentMessage = ElMessage({
     message: () => h(sendPercent, {value: percent.value, desc: t('sending')}),
     dangerouslyUseHTMLString: true,
@@ -403,13 +519,7 @@ async function sendEmail() {
 
   sending = true
 
-  if (!form.requestId) {
-    form.requestId = crypto.randomUUID()
-  }
-
-  show.value = false
-
-  emailSend(form, (e) => {
+  emailSend(sendForm, (e) => {
     percent.value = Math.round((e.loaded * 98) / e.total)
   }).then(emailList => {
     const email = emailList[0]
@@ -426,9 +536,9 @@ async function sendEmail() {
     })
 
     userStore.refreshUserInfo();
-    addRecipientRecord();
+    addRecipientRecord(sendForm.receiveEmail);
 
-    if (form.draftId) {
+    if (sendForm.draftId) {
       form.subject = ''
       form.content = ''
       form.receiveEmail = []
@@ -448,8 +558,16 @@ async function sendEmail() {
     if (e.code === 401) {
       router.replace('/login');
     }
+    // Restore form on failure
+    Object.assign(form, sendForm);
+    form.attachments = sendForm.attachments ? [...sendForm.attachments.map(a => ({ ...a }))] : [];
+    form.receiveEmail = [...(sendForm.receiveEmail || [])];
+    defValue.value = '';
+    setTimeout(() => {
+      defValue.value = form.content;
+    });
     show.value = true
-    addRecipientRecord();
+    addRecipientRecord(sendForm.receiveEmail);
   }).finally(() => {
     percentMessage?.close()
     percent.value = 0
@@ -457,12 +575,13 @@ async function sendEmail() {
   })
 }
 
-function addRecipientRecord() {
+function addRecipientRecord(emails = form.receiveEmail) {
+  const targetEmails = Array.isArray(emails) ? emails : [];
   writerStore.sendRecipientRecord = writerStore.sendRecipientRecord.filter(
-      email => !form.receiveEmail.includes(email)
+      email => !targetEmails.includes(email)
   );
 
-  writerStore.sendRecipientRecord.unshift(...form.receiveEmail);
+  writerStore.sendRecipientRecord.unshift(...targetEmails);
   writerStore.sendRecipientRecord = writerStore.sendRecipientRecord.slice(0, 500);
 }
 
@@ -649,12 +768,34 @@ const handleKeyDown = (event) => {
   }
 };
 
+function handleBeforeUnload() {
+  if (pendingSend) {
+    flushPendingSend();
+  }
+}
+
+let unregisterRouterGuard = null;
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown);
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  unregisterRouterGuard = router.beforeEach((to, from, next) => {
+    if (pendingSend) {
+      flushPendingSend();
+    }
+    next();
+  });
 });
 
 onUnmounted(() => {
+  if (pendingSend) {
+    flushPendingSend();
+  }
   window.removeEventListener('keydown', handleKeyDown);
+  window.removeEventListener('beforeunload', handleBeforeUnload);
+  if (unregisterRouterGuard) {
+    unregisterRouterGuard();
+  }
 });
 
 function close() {
@@ -745,4 +886,48 @@ function close() {
 
 <style scoped lang="scss">
 @use './write.scss';
+
+:global(.undo-send-notification) {
+  border-radius: 12px !important;
+  padding: 12px 16px !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15) !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+}
+
+:global(.undo-send-notification-inner) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+:global(.undo-send-text) {
+  font-size: 13.5px;
+  color: var(--text-strong);
+  font-weight: 500;
+}
+
+:global(.undo-send-btn) {
+  border: none;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+  transition: background-color var(--duration-fast, 150ms) ease, color var(--duration-fast, 150ms) ease;
+
+  &:hover {
+    background: color-mix(in srgb, var(--accent) 26%, transparent);
+  }
+
+  &:active {
+    background: color-mix(in srgb, var(--accent) 36%, transparent);
+  }
+}
 </style>

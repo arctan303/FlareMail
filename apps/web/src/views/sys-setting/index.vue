@@ -9,10 +9,10 @@
         </div>
       </div>
 
-      <el-alert v-if="upgradePending" type="info" :closable="false" show-icon>
+      <el-alert v-if="upgradePending && activeSection !== 'maintenance'" type="info" :closable="false" show-icon>
         <template #title>{{ $t('sysUpgradePendingTitle') }}</template>
         <span>{{ $t('sysUpgradePendingDesc') }}</span>
-        <el-button v-if="activeSection !== 'maintenance'" link type="primary" @click="router.push({ query: { tab: 'maintenance' } })">{{ $t('sysGoToMaintenance') }}</el-button>
+        <el-button link type="primary" @click="router.push({ query: { tab: 'maintenance' } })">{{ $t('sysGoToMaintenance') }}</el-button>
       </el-alert>
       <p v-if="loadError" class="load-error" role="alert">{{ loadError }} <el-button link @click="load">{{ $t('sysReload') }}</el-button></p>
       <div class="setting-cards-grid" :inert="!initialized || savingGroup ? '' : null">
@@ -156,7 +156,7 @@ const unmatchedPolicy = ref('')
 const policyLoading = ref(false)
 const policyError = ref(false)
 const policySaving = ref(false)
-const form = reactive({ receive: 0, send: 0, loginDomain: 0 })
+const form = reactive({ receive: 0, send: 0, loginDomain: 0, googleOauthEnabled: 0 })
 const brandForm = reactive({ title: 'FlareMail', siteDescription: '', siteLogo: '', siteFavicon: '', sitePwaIcons: {}, loginCopy: {} })
 const brandBaseline = ref(null)
 const brandCardRef = ref()

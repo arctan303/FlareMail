@@ -20,7 +20,14 @@
           </div>
         </el-dropdown-item>
 
-        <el-dropdown-item v-if="['email'].includes(type)" @click="emit('read', email.emailId)">
+        <el-dropdown-item v-if="['email'].includes(type) && email.unread === EmailUnreadEnum.READ" @click="emit('unread', email.emailId)">
+          <div class="right-dropdown-item">
+            <Icon icon="solar:letter-unread-linear" width="16" height="16" />
+            <span>{{ t('markAsUnread') }}</span>
+          </div>
+        </el-dropdown-item>
+
+        <el-dropdown-item v-else-if="['email'].includes(type) && email.unread === EmailUnreadEnum.UNREAD" @click="emit('read', email.emailId)">
           <div class="right-dropdown-item">
             <Icon icon="solar:letter-opened-linear" width="16" height="16" />
             <span>{{ t('markAsRead') }}</span>
@@ -84,6 +91,7 @@
 import { ref } from 'vue';
 import { Icon } from '@iconify/vue';
 import { useI18n } from 'vue-i18n';
+import { EmailUnreadEnum } from '@/enums/email-enum.js';
 
 const props = defineProps({
   type: String,
@@ -98,6 +106,7 @@ const emit = defineEmits([
   'visible-change',
   'copy-code',
   'read',
+  'unread',
   'reply',
   'forward',
   'star',
