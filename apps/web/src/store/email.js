@@ -8,6 +8,7 @@ export const useEmailStore = defineStore('email', {
         cancelStarEmailId: 0,
         addStarEmailId: 0,
         searchKeyword: '',
+        conversationRevision: 0,
         contentData: {
             email: null,
             delType: null,

@@ -2,6 +2,11 @@
   <div class="editor-box" :class="showLoading ? 'editor-box-loading' : ''">
     <loading class="loading" v-if="showLoading"/>
     <textarea v-else style="outline: none" :id="editorId" ref="editorRef"></textarea>
+    <div v-if="hasQuotedHistory" class="quote-controls">
+      <button type="button" class="quote-history-toggle" :aria-expanded="showQuotedHistory" @click="toggleQuotedHistory">
+        ··· {{ $t(showQuotedHistory ? 'hideQuotedText' : 'showQuotedText') }}
+      </button>
+    </div>
   </div>
 </template>
 
@@ -11,6 +16,8 @@ import loading from "@/components/loading/index.vue";
 import {useI18n} from 'vue-i18n'
 import {useUiStore} from '@/store/ui.js'
 import {useSettingStore} from '@/store/setting.js'
+import {createEditorLifecycle} from './editor-lifecycle.js'
+import {QUOTE_SELECTOR, MAIL_QUOTE_CSS} from '@/utils/mail-quotes.js'
 
 defineExpose({
   clearEditor,
@@ -38,6 +45,21 @@ const editorRef = ref(null);
 const showLoading = ref(false);
 const uiStore = useUiStore();
 const settingStore = useSettingStore();
+const lifecycle = createEditorLifecycle(props.defValue);
+const hasQuotedHistory = ref(false);
+const showQuotedHistory = ref(false);
+
+function updateQuotePresentation() {
+  const body = editor.value?.getBody?.();
+  if (!body) return;
+  hasQuotedHistory.value = !!body.querySelector(QUOTE_SELECTOR);
+  body.classList.toggle('mail-history-hidden', !showQuotedHistory.value);
+}
+
+function toggleQuotedHistory() {
+  showQuotedHistory.value = !showQuotedHistory.value;
+  updateQuotePresentation();
+}
 
 onMounted(() => {
   initTinyMCE();
@@ -48,9 +70,9 @@ onBeforeUnmount(() => {
 });
 
 watch(() => props.defValue, (newValue) => {
-  if (editor.value && editor.value.getContent() !== newValue) {
-    editor.value.setContent(newValue);
-  }
+  showQuotedHistory.value = false;
+  lifecycle.setExternalContent(newValue);
+  updateQuotePresentation();
 });
 
 watch(() => [uiStore.dark, settingStore.lang], () => {
@@ -67,9 +89,9 @@ const language = computed(() => {
 })
 
 function clearEditor() {
-  if (editor.value) {
-    editor.value.setContent('');
-  }
+  lifecycle.clear();
+  hasQuotedHistory.value = false;
+  showQuotedHistory.value = false;
 }
 
 function initTinyMCE() {
@@ -96,7 +118,9 @@ function initEditor() {
     forced_root_block: 'div',
     skin: `${uiStore.dark ? 'oxide-dark' : 'oxide'}`,
     content_css: `/tinymce/css/index.css,${uiStore.dark ? 'dark' : 'default'}`,
-    content_style: `:root {
+    content_style: `${MAIL_QUOTE_CSS}
+      body.mail-history-hidden :is(.gmail_quote, .flaremail_quote, blockquote[type="cite"]) { display: none !important; }
+      :root {
          --scrollbar-track-color: ${uiStore.dark ? '#141414' : '#FFFFFF'};
          --scrollbar-thumb-color: ${uiStore.dark ? '#8D9095' : '#A8ABB2'};
     }`,
@@ -112,16 +136,24 @@ function initEditor() {
     noneditable_class: 'mceNonEditable',
     setup: (ed) => {
       editor.value = ed;
+      lifecycle.attach(ed);
       ed.on('init', () => {
-        ed.setContent(props.defValue);
-        isInitialized.value = true;
+        if (lifecycle.markReady(ed)) {
+          isInitialized.value = true;
+          updateQuotePresentation();
+        }
       });
+      ed.on('SetContent', () => { if (lifecycle.isAttached(ed)) updateQuotePresentation(); });
       ed.on('input change', () => {
+        if (!lifecycle.isAttached(ed)) return;
         const content = ed.getContent();
         const text = ed.getContent({format: 'text'});
+        lifecycle.recordEdit(content);
+        updateQuotePresentation();
         emit('change', content, text);
       });
       ed.on('focus', () => {
+        if (!lifecycle.isAttached(ed)) return;
         emit('focus', focus);
       })
     },
@@ -159,20 +191,19 @@ function initEditor() {
 
 function focus() {
   nextTick(() => {
-    editor.value.focus()
+    lifecycle.focus()
   })
 }
 
 function getContent() {
-  return editor.value.getContent()
+  return lifecycle.getContent()
 }
 
 
 function destroyEditor() {
-  if (editor.value) {
-    editor.value.destroy();
-    editor.value = null;
-  }
+  lifecycle.detach();
+  editor.value = null;
+  isInitialized.value = false;
 }
 </script>
 
@@ -180,7 +211,19 @@ function destroyEditor() {
 .editor-box {
   height: 100%;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
+
+.quote-controls { flex: 0 0 auto; padding: 5px 10px; }
+.quote-history-toggle {
+  border: 0; border-radius: 5px; padding: 5px 10px;
+  background: var(--el-fill-color-light); color: var(--el-text-color-regular);
+  font: inherit; font-size: 12px; cursor: pointer;
+}
+.quote-history-toggle:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+:deep(.tox-tinymce:not(.tox-fullscreen)) { flex: 1 1 0; min-height: 0; }
 
 .loading {
   margin: auto;

@@ -7,6 +7,7 @@ import email from '../entity/email';
 import { isDel } from '../const/entity-const';
 import attService from "./att-service";
 import { t } from '../i18n/i18n'
+import accountService from './account-service';
 const starService = {
 
 	async add(c, params, userId) {
@@ -45,6 +46,11 @@ const starService = {
 		if (!Number.isSafeInteger(offset) || offset < 0) throw new BizError('Invalid mail offset.', 400);
 		emailId = Number(emailId);
 		size = Math.min(50, Math.max(1, Number(size) || 20));
+		if (params.view === 'conversation') {
+			const accountId = params.accountId ? Number(params.accountId) : 0;
+			if (accountId && !await accountService.selectOwnedById(c, accountId, userId)) throw new BizError('Email account not found.',404);
+			return emailService.listConversations(c, { ...params, starred: true, size, offset, accountId }, userId);
+		}
 
 		if (!emailId) {
 			emailId = 9999999999;

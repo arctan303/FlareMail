@@ -11,6 +11,8 @@ Choose an instance-wide provider under System settings → Mail delivery. New in
 
 Each sender domain needs valid credentials and verification. Leaving an existing secret field empty generally keeps its value rather than removing it. Keep keys out of source and documentation. Resend's test domain and recipient restrictions are not a replacement for your production domain. [Domain verification](https://resend.com/docs/dashboard/domains/introduction) · [API keys](https://resend.com/docs/dashboard/api-keys/introduction)
 
+After an accepted send, FlareMail attempts to retrieve the actual Message-ID for subsequent replies. If the key cannot read emails or retrieval fails, the send remains accepted and the interface warns that the Message-ID was unavailable. A later reply to that sent message may not join the original conversation in external clients. This warning does not require resending the message. [Resend threading details](https://resend.com/changelog/message-id-for-sent-emails)
+
 ## Cloudflare Email Sending (Beta)
 
 Sending to arbitrary external recipients requires Workers Paid and onboarding each sender domain in your account. Free sends to already verified destination addresses are a separate exception, rather than a general mailbox sending setup. [Pricing and requirements](https://developers.cloudflare.com/email-service/platform/pricing/)

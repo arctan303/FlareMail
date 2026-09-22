@@ -3,6 +3,34 @@ import assert from 'node:assert/strict';
 import {browserPreviewLocale,initialPreviewLocale} from '../src/playground/locale.js';
 import {createPlaygroundApi} from '../src/playground/api.js';
 import {createMemoryDb} from '../src/playground/memory-db.js';
+
+test('conversation preview keeps originals, paginates replies and includes a newly sent reply once',async()=>{
+  const api=createPlaygroundApi('en');
+  const before=api.state.emails.find(e=>e.emailId===999).content;
+  const first=await api.handle('GET','/email/conversation',{}, {emailId:999,size:2});
+  assert.deepEqual(first.messages.map(e=>e.emailId),[999,1100]);
+  assert.equal(first.anchor.emailId,999);
+  const older=await api.handle('GET','/email/conversation',{}, {emailId:999,size:2,before:first.nextCursor});
+  assert.deepEqual(older.messages.map(e=>e.emailId),[983,991]);
+  assert.equal(older.hasMore,false);
+  assert.ok(older.messages.every(e=>e.type===0));
+  assert.equal(first.messages.at(-1).type,1);
+  const payload={requestId:'conversation-sample-reply',accountId:1,receiveEmail:['maya@example.net'],subject:'Re: Re: A few ideas for our next project',content:'<p>NEW_REPLY</p>'+before,text:'NEW_REPLY',sendType:'reply',emailId:999};
+  const [sent]=await api.handle('POST','/email/send',payload);
+  await api.handle('POST','/email/send',payload);
+  const conversation=await api.handle('GET','/email/conversation',{}, {emailId:999});
+  assert.equal(conversation.messages.length,5);
+  assert.equal(conversation.messages.at(-1).emailId,sent.emailId);
+  assert.equal(conversation.messages.filter(e=>e.emailId===sent.emailId).length,1);
+  assert.equal(api.state.emails.find(e=>e.emailId===999).content,before);
+  assert.ok(conversation.messages.at(-1).content.includes(before));
+  const unrelated=await api.handle('GET','/email/conversation',{}, {emailId:1000});
+  assert.equal(unrelated.messages.length,1);
+  await api.handle('DELETE','/email/delete',{}, {emailIds:'991'});
+  const after=await api.handle('GET','/email/conversation',{}, {emailId:999});
+  assert.ok(!after.messages.some(e=>e.emailId===991));
+  assert.ok(after.messages.some(e=>e.emailId===983));
+});
 import {renderMarkdown} from '../src/playground/markdown.js';
 
 test('mail paging, filters, search and account scope reflect sample data',async()=>{

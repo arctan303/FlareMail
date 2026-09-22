@@ -60,6 +60,7 @@ const zh = {
 	cloudflareRecipientSuppressed: "Cloudflare 拒绝向被抑制的收件人发信，请检查 Cloudflare 中的抑制列表。",
 	cloudflareEmailRateLimited: "已达到 Cloudflare 发信频率或每日额度限制，请稍后重试。",
 	cloudflareEmailRejected: "Cloudflare 拒绝了邮件，请检查邮件内容及发信配置。",
+	conversationViewLimit: "会话视图最多支持每位用户 10,000 封有效邮件。",
 };
 
 export default zh;

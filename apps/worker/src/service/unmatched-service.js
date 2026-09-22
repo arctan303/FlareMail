@@ -1,5 +1,6 @@
 import BizError from '../error/biz-error';
 import { assertObjectDeleteQueue } from '../utils/delete-queue-utils';
+import emailService from './email-service';
 
 const UNMATCHED_USER_ID = 0;
 const UNMATCHED_ACCOUNT_ID = 0;
@@ -25,8 +26,10 @@ const unmatchedService = {
 			WHERE user_id = ? AND account_id = ? AND is_del = 0
 		`).bind(UNMATCHED_USER_ID, UNMATCHED_ACCOUNT_ID).first();
 
+		const rows = list.results || [];
+		await emailService.emailAddReplyTo(c, rows);
 		return {
-			list: list.results || [],
+			list: rows,
 			total: total || 0,
 			page,
 			size
@@ -46,6 +49,7 @@ const unmatchedService = {
 		`).bind(id, UNMATCHED_USER_ID, UNMATCHED_ACCOUNT_ID).first();
 
 		if (!detail) throw new BizError('Unmatched email not found', 404);
+		await emailService.emailAddReplyTo(c, [detail]);
 
 		const attachments = await c.env.db.prepare(`
 			SELECT attachment_id AS attachmentId, key, name, size, type

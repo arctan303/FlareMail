@@ -19,6 +19,8 @@ import { isAdmin } from '../security/admin-identity';
 import emailSendService from './email-send-service';
 import mailProviderService, { hasCloudflareEmail } from './mail-provider-service';
 import { cloudflareRejection } from '../utils/cloudflare-mail';
+import verifyUtils from '../utils/verify-utils';
+import { conversationLimits, findConversation, groupConversations } from '../utils/mail-conversation';
 
 const emailService = {
 	...emailSendService,
@@ -49,6 +51,9 @@ const emailService = {
 		}
 
 		if (![0, 1].includes(allReceive)) allReceive = accountRow.allReceive;
+		if (params.view === 'conversation') {
+			return this.listConversations(c, { ...params, accountId, type, size, offset, allReceive }, userId);
+		}
 
 		const searchKw = (keyword || q || '').trim();
 		if (searchKw && new TextEncoder().encode(searchKw).length > 64) {
@@ -137,11 +142,11 @@ const emailService = {
 		const { total } = await orm(c)
 			.select({ total: count() })
 			.from(email)
-			.leftJoin(account, eq(account.accountId, email.accountId))
+			.leftJoin(account, and(eq(account.accountId, email.accountId), eq(account.userId, email.userId)))
 			.where(and(...baseConditions))
 			.get();
 
-		const latestEmail = await orm(c)
+		const latestResult = await orm(c)
 			.select()
 			.from(email)
 			.leftJoin(account, eq(account.accountId, email.accountId))
@@ -149,6 +154,8 @@ const emailService = {
 			.orderBy(desc(email.emailId))
 			.limit(1)
 			.get();
+		const latestEmail = latestResult?.email || latestResult;
+		if (latestEmail) await this.emailAddReplyTo(c, [latestEmail]);
 
 		const emailList = list.map(item => {
 			let isStar = 0;
@@ -164,8 +171,93 @@ const emailService = {
 		return {
 			list: emailList,
 			total,
-			latestEmail: latestEmail?.email || latestEmail
+			latestEmail
 		};
+	},
+
+	async loadConversationMetadata(c, userId) {
+		const rows = await c.env.db.prepare(`SELECT e.email_id AS emailId,e.create_time AS createTime,e.type,e.account_id AS accountId,e.unread,substr(e.subject,1,513) AS subject,
+			substr(e.message_id,1,513) AS messageId,substr(e.in_reply_to,1,513) AS inReplyTo,substr(e.relation,1,2049) AS relation
+			FROM email e JOIN account a ON a.account_id=e.account_id AND a.user_id=e.user_id
+			WHERE e.user_id=? AND e.is_del=0 AND a.is_del=0 ORDER BY e.create_time DESC,e.email_id DESC LIMIT 10001`).bind(userId).all();
+		if ((rows.results || []).length > 10000) throw new BizError(t('conversationViewLimit'), 413);
+		return rows.results || [];
+	},
+
+	async listConversations(c, params, userId) {
+		const metadata = await this.loadConversationMetadata(c, userId);
+		const starred = params.starred === true || params.starred === '1';
+		let scope = metadata.filter(row => starred || (row.type === params.type && (params.allReceive || row.accountId === params.accountId)));
+		const stars = await c.env.db.prepare('SELECT email_id AS emailId FROM star WHERE user_id=?').bind(userId).all();
+		let starIds = new Set(stars.results.map(row => row.emailId));
+		if (starred) {
+			scope = scope.filter(row => starIds.has(row.emailId) && (!params.accountId || row.accountId === Number(params.accountId)));
+		}
+		const filter = params.filter || 'all';
+		const keyword = String(params.keyword || params.q || '').trim();
+		if (new TextEncoder().encode(keyword).length > 64) throw new BizError('Search keyword is too long.', 400);
+		let matched = new Set(scope.map(row => row.emailId));
+		if (filter === 'unread') matched = new Set(scope.filter(row => row.unread === emailConst.unread.UNREAD).map(row => row.emailId));
+		else if (filter === 'has_att') {
+			const result = await c.env.db.prepare(`SELECT DISTINCT email_id AS emailId FROM attachments WHERE user_id=? AND type=0 AND status=0`).bind(userId).all();
+			const attached = new Set(result.results.map(row => row.emailId)); matched = new Set(scope.filter(row => attached.has(row.emailId)).map(row => row.emailId));
+		} else if (filter !== 'all') throw new BizError('Invalid mail filter.', 400);
+		if (keyword) {
+			const emailMatch=keyword.match(/^([^@+]+)(?:\+[^@]*)?@([^@]+)$/i);const patterns=[`%${keyword}%`];
+			if(emailMatch){patterns.push(`%${emailMatch[1]}@${emailMatch[2]}%`,`%${emailMatch[1]}+%@${emailMatch[2]}%`);}
+			const clauses=patterns.flatMap(()=>['send_email LIKE ?','to_email LIKE ?']);
+			const binds=patterns.flatMap(pattern=>[pattern,pattern]);
+			const result = await c.env.db.prepare(`SELECT email_id AS emailId FROM email WHERE user_id=? AND is_del=0 AND
+				(subject LIKE ? OR name LIKE ? OR text LIKE ? OR code LIKE ? OR ${clauses.join(' OR ')})`)
+				.bind(userId,...Array(4).fill(`%${keyword}%`),...binds).all();
+			const hits = new Set(result.results.map(row => row.emailId)); matched = new Set([...matched].filter(id => hits.has(id)));
+		}
+		const scopeIds = new Set(scope.map(row => row.emailId)); const byId = new Map(metadata.map(row => [row.emailId,row]));
+		const grouped = groupConversations(metadata);
+		const groups = grouped.groups.map(globalIds => ({globalIds,memberIds:globalIds.filter(id => scopeIds.has(id))})).filter(item => item.memberIds.length && item.memberIds.some(id => matched.has(id)));
+		const summaries = groups.map(({globalIds,memberIds}) => {
+			const members = memberIds.map(id => byId.get(id)).sort((a,b) => b.createTime.localeCompare(a.createTime) || b.emailId-a.emailId);
+			return { representative: members[0], memberIds, globalIds, unreadIds: members.filter(row => row.type===emailConst.type.RECEIVE&&row.unread === emailConst.unread.UNREAD).map(row => row.emailId) };
+		}).sort((a,b) => b.representative.createTime.localeCompare(a.representative.createTime) || b.representative.emailId-a.representative.emailId);
+		if (Number(params.timeSort)) summaries.reverse();
+		const page = summaries.slice(params.offset, params.offset + params.size); const repIds = page.map(item => item.representative.emailId);
+		let rows = repIds.length ? await orm(c).select({ ...email, starId: star.starId }).from(email)
+			.leftJoin(star,and(eq(star.emailId,email.emailId),eq(star.userId,userId))).where(and(eq(email.userId,userId),inArray(email.emailId,repIds))).all() : [];
+		await this.emailAddAtt(c, rows); const rowMap = new Map(rows.map(row => [row.emailId,row]));
+		const list = page.map(item => ({ ...rowMap.get(item.representative.emailId), unread:item.unreadIds.length?emailConst.unread.UNREAD:emailConst.unread.READ, isStar: item.memberIds.some(id=>starIds.has(id)) ? 1 : 0,
+			conversationId: Math.min(...item.globalIds), conversationCount:item.globalIds.length, scopeCount:item.memberIds.length, memberIds:item.memberIds, unreadIds:item.unreadIds }));
+		return { list, total:summaries.length, latestEmail:list[0] || null, truncated:grouped.truncated };
+	},
+
+	async conversationState(c, body, userId) {
+		if (!Array.isArray(body?.emailIds)) throw new BizError('Invalid email IDs.',400);
+		const emailIds = [...new Set(body.emailIds.map(Number))];
+		if (!emailIds.length || emailIds.length > 50 || emailIds.some(id => !Number.isSafeInteger(id) || id <= 0)) throw new BizError('Invalid email IDs.',400);
+		const action = body.action; if (!['read','unread','delete','star','unstar'].includes(action)) throw new BizError('Invalid conversation action.',400);
+		const metadata = await this.loadConversationMetadata(c,userId); const metadataById=new Map(metadata.map(row=>[row.emailId,row])); const grouped=groupConversations(metadata).groups; const groupById=new Map();
+		for(const group of grouped) for(const id of group) groupById.set(id,group);
+		const view=body.view||{}; const type=Number(view.type); const accountId=Number(view.accountId); const allReceive=Number(view.allReceive)===1;
+		if(!view.starred){if(![0,1].includes(type)||!Number.isSafeInteger(accountId)||accountId<=0)throw new BizError('Invalid conversation view.',400);if(!await accountService.selectOwnedById(c,accountId,userId))throw new BizError('Email account not found.',404);}
+		else if(view.accountId&&(!Number.isSafeInteger(accountId)||accountId<=0||!await accountService.selectOwnedById(c,accountId,userId)))throw new BizError('Email account not found.',404);
+		let starredIds=new Set(); if(view.starred){const result=await c.env.db.prepare('SELECT email_id AS emailId FROM star WHERE user_id=?').bind(userId).all();starredIds=new Set(result.results.map(row=>row.emailId));}
+		const selected=new Set();
+		for(const anchor of emailIds){ const group=groupById.get(anchor); if(!group) throw new BizError('Email not found.',404); for(const id of group){ const row=metadataById.get(id); if(view.starred ? starredIds.has(id) && (!view.accountId || row.accountId===accountId) : row.type===type && (allReceive||row.accountId===accountId)) selected.add(id); } }
+		const ids=[...selected]; if(!ids.length) return {emailIds:[],updatedCount:0};
+		const chunks=[];for(let i=0;i<ids.length;i+=90)chunks.push(ids.slice(i,i+90));let statements=[];
+		if(action==='read'||action==='unread') statements=chunks.map(chunk=>c.env.db.prepare(`UPDATE email SET unread=? WHERE user_id=? AND email_id IN (${chunk.map(()=>'?').join(',')})`).bind(action==='read'?1:0,userId,...chunk));
+		else if(action==='delete') statements=chunks.map(chunk=>c.env.db.prepare(`UPDATE email SET is_del=1 WHERE user_id=? AND email_id IN (${chunk.map(()=>'?').join(',')})`).bind(userId,...chunk));
+		else if(action==='unstar') statements=chunks.map(chunk=>c.env.db.prepare(`DELETE FROM star WHERE user_id=? AND email_id IN (${chunk.map(()=>'?').join(',')})`).bind(userId,...chunk));
+		else {statements=[];for(let i=0;i<ids.length;i+=45){const chunk=ids.slice(i,i+45);statements.push(c.env.db.prepare(`INSERT OR IGNORE INTO star(user_id,email_id) VALUES ${chunk.map(()=>'(?,?)').join(',')}`).bind(...chunk.flatMap(id=>[userId,id])));}}
+		await c.env.db.batch(statements);
+		return {emailIds:ids,updatedCount:ids.length};
+	},
+
+	async readConversation(c, emailId, readThroughEmailId, userId) {
+		const boundary=Number(readThroughEmailId); if(!Number.isSafeInteger(boundary)||boundary<=0) throw new BizError('Invalid read boundary.',400);
+		const metadata=await this.loadConversationMetadata(c,userId); const component=findConversation(metadata,Number(emailId),{...conversationLimits,maxMessages:10000});
+		if(!component.emailIds.length) throw new BizError('Email not found.',404); const metadataById=new Map(metadata.map(row=>[row.emailId,row])); const ids=component.emailIds.filter(id=>metadataById.get(id)?.type===emailConst.type.RECEIVE);
+		const bounded=ids.filter(id=>id<=boundary); if(bounded.length){const statements=[];for(let i=0;i<bounded.length;i+=90){const chunk=bounded.slice(i,i+90);statements.push(c.env.db.prepare(`UPDATE email SET unread=1 WHERE user_id=? AND email_id IN (${chunk.map(()=>'?').join(',')})`).bind(userId,...chunk));}await c.env.db.batch(statements);}
+		return {emailIds:bounded,updatedCount:bounded.length};
 	},
 
 	async delete(c, params, userId) {
@@ -178,9 +270,26 @@ const emailService = {
 			.run();
 	},
 
-	receive(c, params, cidAttList, r2domain) {
-		params.content = sanitizeEmailHtml(this.imgReplace(params.content, cidAttList, r2domain));
-		return orm(c).insert(email).values({ ...params }).returning().get();
+	async receive(c, params, cidAttList, r2domain) {
+		const { replyTo, ...emailParams } = params;
+		emailParams.content = sanitizeEmailHtml(this.imgReplace(emailParams.content, cidAttList, r2domain));
+		const normalizedReplyTo = this.normalizeReplyTo(replyTo);
+		let row;
+		if (await this.hasReplyToColumn(c)) {
+			const statement = orm(c).insert(email).values(emailParams).toSQL();
+			const results = await c.env.db.batch([
+				c.env.db.prepare(statement.sql).bind(...statement.params),
+				c.env.db.prepare('UPDATE email SET reply_to = ? WHERE email_id = last_insert_rowid()')
+					.bind(JSON.stringify(normalizedReplyTo)),
+			]);
+			const emailId = Number(results[0]?.meta?.last_row_id);
+			if (!Number.isSafeInteger(emailId) || emailId <= 0) throw new Error('Inbound email insert did not return an ID.');
+			row = await orm(c).select().from(email).where(eq(email.emailId, emailId)).get();
+		} else {
+			row = await orm(c).insert(email).values(emailParams).returning().get();
+		}
+		row.replyTo = normalizedReplyTo;
+		return row;
 	},
 
 	// 邮件发送
@@ -199,7 +308,7 @@ const emailService = {
 		if (accountRow.userId !== userId) throw new BizError(t('sendEmailNotCurUser'), 403);
 		name = (accountRow.name || '').trim() || emailUtils.getName(accountRow.email);
 
-		let replyEmail = { messageId: null };
+		let replyEmail = { messageId: null, relation: '' };
 		if (sendType === 'reply') {
 			replyEmail = await this.selectById(c, emailId, userId);
 			if (!replyEmail) throw new BizError(t('notExistEmailReply'), 404);
@@ -241,7 +350,7 @@ const emailService = {
 		};
 		if (sendType === 'reply') {
 			emailData.inReplyTo = replyEmail.messageId;
-			emailData.relation = replyEmail.messageId;
+			emailData.relation = emailSendService.buildReplyHeaders(replyEmail.messageId, replyEmail.relation)?.references || '';
 		}
 		const deliveryParams = {
 			name,
@@ -253,6 +362,7 @@ const emailService = {
 			attachments: [...imageDataList, ...attachments],
 			sendType,
 			messageId: replyEmail.messageId,
+			references: replyEmail.relation,
 		};
 		const preparedCloudflareEmail = useCloudflareEmail ? await emailSendService.prepareCloudflareEmail(deliveryParams) : null;
 		const previousSend = await emailSendService.claimSendRequest(c, userId, requestId);
@@ -307,8 +417,15 @@ const emailService = {
 					if (sendResult?.error) throw new BizError(sendResult.error.message || 'Mail provider rejected the message.', 502);
 					providerAccepted = true;
 					providerId = sendResult?.data?.id || null;
+					const providerMessageId = String(sendResult?.data?.messageId || '').trim();
+					if (providerMessageId) emailResult.messageId = providerMessageId;
+					addDeliveryWarning(sendResult?.data?.messageIdWarning);
 					finalStatus = emailConst.status.SENT;
 				}
+			}
+			if (!emailResult.messageId && externalRecipients.length === 0) {
+				const localMessageId = `<${crypto.randomUUID()}@${domain}>`;
+				emailResult.messageId = localMessageId;
 			}
 
 			let message = '';
@@ -337,6 +454,7 @@ const emailService = {
 				status: finalStatus,
 				message,
 				resendEmailId: providerId,
+				messageId: emailResult.messageId || '',
 			}).where(eq(email.emailId, emailResult.emailId)).returning().get();
 			emailResult.requestId = requestId;
 			emailResult.attList = await attService.selectByEmailIds(c, [emailResult.emailId]);
@@ -357,6 +475,7 @@ const emailService = {
 					await orm(c).update(email).set({
 						status: finalStatus,
 						resendEmailId: providerId,
+						messageId: emailResult.messageId || '',
 						message: JSON.stringify({ message: deliveryWarning }),
 					}).where(eq(email.emailId, emailResult.emailId)).run();
 				} catch (updateError) {
@@ -421,10 +540,12 @@ const emailService = {
 		return document.toString();
 	},
 
-	selectById(c, emailId, userId) {
+	async selectById(c, emailId, userId) {
 		const conditions = [eq(email.emailId, emailId), eq(email.isDel, isDel.NORMAL)];
 		if (userId !== undefined) conditions.push(eq(email.userId, userId));
-		return orm(c).select().from(email).where(and(...conditions)).get();
+		const row = await orm(c).select().from(email).where(and(...conditions)).get();
+		if (row) await this.emailAddReplyTo(c, [row]);
+		return row;
 	},
 
 	async latest(c, params, userId) {
@@ -455,6 +576,67 @@ const emailService = {
 		return list;
 	},
 
+	async conversation(c, params, userId) {
+		const anchorEmailId = Number(params.emailId);
+		const size = params.size === undefined ? 20 : Number(params.size);
+		if (!Number.isSafeInteger(anchorEmailId) || anchorEmailId <= 0) throw new BizError('Invalid email ID.', 400);
+		if (!Number.isSafeInteger(size) || size < 1 || size > 50) throw new BizError('Invalid page size.', 400);
+		let before = null;
+		if (params.before) {
+			try {
+				before = JSON.parse(atob(String(params.before).replace(/-/g, '+').replace(/_/g, '/')));
+			} catch { throw new BizError('Invalid conversation cursor.', 400); }
+			if (typeof before?.createTime !== 'string' || !Number.isSafeInteger(before?.emailId)) throw new BizError('Invalid conversation cursor.', 400);
+		}
+		const anchor = await orm(c).select({ ...email, starId: star.starId }).from(email)
+			.leftJoin(account, and(eq(account.accountId, email.accountId), eq(account.userId, email.userId)))
+			.leftJoin(star, and(eq(star.emailId, email.emailId), eq(star.userId, userId)))
+			.where(and(eq(email.emailId, anchorEmailId), eq(email.userId, userId), eq(email.isDel, isDel.NORMAL), eq(account.isDel, isDel.NORMAL))).get();
+		if (!anchor) throw new BizError('Email not found.', 404);
+		const metadataResult = await c.env.db.prepare(`
+			SELECT e.email_id AS emailId, e.create_time AS createTime, substr(e.subject, 1, 513) AS subject,
+			       substr(e.message_id, 1, 513) AS messageId,
+			       substr(e.in_reply_to, 1, 513) AS inReplyTo,
+			       substr(e.relation, 1, 2049) AS relation
+			FROM email e JOIN account a ON a.account_id = e.account_id AND a.user_id = e.user_id
+			WHERE e.user_id = ? AND e.is_del = 0 AND a.is_del = 0
+			ORDER BY e.create_time DESC, e.email_id DESC LIMIT 5001
+		`).bind(userId).all();
+		let metadata = metadataResult.results || [];
+		const scanLimited = metadata.length > 5000;
+		metadata = metadata.slice(0, 5000);
+		if (!metadata.some(row => row.emailId === anchorEmailId)) metadata.push({
+			emailId: anchor.emailId, createTime: anchor.createTime, messageId: anchor.messageId,
+			inReplyTo: anchor.inReplyTo, relation: anchor.relation, subject: anchor.subject,
+		});
+		const component = findConversation(metadata, anchorEmailId);
+		const byId = new Map(metadata.map(row => [row.emailId, row]));
+		let ordered = component.emailIds.map(id => byId.get(id)).filter(Boolean).sort((a, b) =>
+			b.createTime.localeCompare(a.createTime) || b.emailId - a.emailId);
+		if (before) ordered = ordered.filter(row => row.createTime < before.createTime || (row.createTime === before.createTime && row.emailId < before.emailId));
+		const pageRows = ordered.slice(0, size);
+		const hasMore = ordered.length > size;
+		const ids = pageRows.map(row => row.emailId);
+		let messages = [];
+		if (ids.length) {
+			messages = await orm(c).select({ ...email, starId: star.starId }).from(email)
+				.leftJoin(account, and(eq(account.accountId, email.accountId), eq(account.userId, email.userId)))
+				.leftJoin(star, and(eq(star.emailId, email.emailId), eq(star.userId, userId)))
+				.where(and(eq(email.userId, userId), eq(email.isDel, isDel.NORMAL), eq(account.isDel, isDel.NORMAL), inArray(email.emailId, ids))).all();
+			await this.emailAddAtt(c, messages);
+			messages = messages.map(row => ({ ...row, isStar: row.starId ? 1 : 0 }))
+				.sort((a, b) => a.createTime.localeCompare(b.createTime) || a.emailId - b.emailId);
+		}
+		const anchorView = { ...anchor, isStar: anchor.starId ? 1 : 0 };
+		await this.emailAddAtt(c, [anchorView]);
+		const cursorRow = pageRows.at(-1);
+		const nextCursor = hasMore && cursorRow
+			? btoa(JSON.stringify({ createTime: cursorRow.createTime, emailId: cursorRow.emailId })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+			: null;
+		return { anchorEmailId, anchor: anchorView, messages, nextCursor, hasMore, scanLimited, truncated: component.truncated,
+			readThroughEmailId: Math.max(...metadata.map(row => row.emailId)) };
+	},
+
 	async selectUserEmailCountList(c, userIds, type, del = isDel.NORMAL) {
 		const result = await orm(c)
 			.select({
@@ -473,6 +655,7 @@ const emailService = {
 	},
 
 	async emailAddAtt(c, list) {
+		await this.emailAddReplyTo(c, list);
 		for (const emailRow of list) {
 			emailRow.content = sanitizeEmailHtml(emailRow.content);
 		}
@@ -485,6 +668,51 @@ const emailService = {
 				emailRow.attList = atts;
 			});
 		}
+	},
+
+	normalizeReplyTo(value) {
+		let items = value;
+		if (typeof items === 'string') {
+			try { items = JSON.parse(items); } catch { items = []; }
+		}
+		if (!Array.isArray(items)) return [];
+		const result = [];
+		const seen = new Set();
+		const append = item => {
+			if (Array.isArray(item?.group)) {
+				item.group.forEach(append);
+				return;
+			}
+			const address = String(item?.address || '').trim();
+			if (!verifyUtils.isEmail(address)) return;
+			const key = address.toLowerCase();
+			if (seen.has(key)) return;
+			seen.add(key);
+			result.push({ name: String(item?.name || '').trim(), address });
+		};
+		items.forEach(append);
+		return result;
+	},
+
+	async hasReplyToColumn(c) {
+		const row = await c.env.db.prepare(
+			"SELECT 1 AS present FROM pragma_table_info('email') WHERE name = 'reply_to'"
+		).first();
+		return Boolean(row?.present);
+	},
+
+	async emailAddReplyTo(c, list) {
+		if (!Array.isArray(list) || list.length === 0) return;
+		for (const row of list) row.replyTo = [];
+		if (!await this.hasReplyToColumn(c)) return;
+		const ids = [...new Set(list.map(row => Number(row.emailId)).filter(Number.isSafeInteger))];
+		if (ids.length === 0) return;
+		const placeholders = ids.map(() => '?').join(',');
+		const values = await c.env.db.prepare(
+			`SELECT email_id AS emailId, reply_to AS replyTo FROM email WHERE email_id IN (${placeholders})`
+		).bind(...ids).all();
+		const byId = new Map(values.results.map(row => [row.emailId, this.normalizeReplyTo(row.replyTo)]));
+		for (const row of list) row.replyTo = byId.get(row.emailId) || [];
 	},
 
 	async restoreByUserId(c, userId) {
@@ -631,6 +859,7 @@ const emailService = {
 			.orderBy(desc(email.emailId))
 			.limit(1)
 			.get();
+		if (latestEmail) await this.emailAddReplyTo(c, [latestEmail]);
 
 		const emailList = list.map(item => {
 			let isStar = 0;
@@ -729,6 +958,7 @@ const emailService = {
 			.orderBy(desc(email.emailId))
 			.limit(1)
 			.get();
+		if (latestEmail) await this.emailAddReplyTo(c, [latestEmail]);
 
 		return {
 			list,

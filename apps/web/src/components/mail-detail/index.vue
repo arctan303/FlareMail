@@ -1,15 +1,15 @@
 <template>
-  <div class="mail-detail-container" :class="{ 'is-embedded': isEmbedded }">
+  <div class="mail-detail-container" :class="{ 'is-embedded': isEmbedded, 'is-conversation-item': conversationItem }">
     <div class="detail-toolbar" v-if="(email && email.emailId) || !isEmbedded" role="group" :aria-label="$t('mailActions')">
-      <button v-if="!isEmbedded" type="button" class="tool-btn" @click="$emit('back')" :title="$t('back')" :aria-label="$t('back')">
+      <button v-if="!isEmbedded && !conversationItem" type="button" class="tool-btn" @click="$emit('back')" :title="$t('back')" :aria-label="$t('back')">
         <Icon icon="solar:arrow-left-linear" width="20" height="20" />
         <span class="tool-label">{{ $t('back') }}</span>
       </button>
-      <button v-else type="button" class="tool-btn" @click="$emit('close')" :title="$t('closeMailDetailEsc')" :aria-label="$t('closeMailDetail')">
+      <button v-else-if="!conversationItem" type="button" class="tool-btn" @click="$emit('close')" :title="$t('closeMailDetailEsc')" :aria-label="$t('closeMailDetail')">
         <Icon icon="solar:close-circle-linear" width="20" height="20" />
         <span class="tool-label">{{ $t('close') }}</span>
       </button>
-      <span v-if="email && email.emailId" class="toolbar-divider" aria-hidden="true"></span>
+      <span v-if="email && email.emailId && !conversationItem" class="toolbar-divider" aria-hidden="true"></span>
       <div class="tool-actions" v-if="email && email.emailId">
         <button type="button" class="tool-btn" :class="{ 'is-starred': email.isStar, 'is-starring': isStarAnimating }" @click="toggleStar" v-if="showStar"
           :title="email.isStar ? $t('cancelStar') : $t('starMail')" :aria-label="email.isStar ? $t('cancelStar') : $t('starMail')" :aria-pressed="!!email.isStar">
@@ -32,12 +32,17 @@
           <span class="tool-label">{{ forceLightView ? $t('dark') : $t('originalLook') }}</span>
         </button>
       </div>
+      <button v-if="conversationItem" type="button" class="tool-btn collapse-message" :aria-expanded="true"
+        @click="$emit('collapse')" :title="$t('collapseMessage')" :aria-label="$t('collapseMessage')">
+        <Icon icon="solar:alt-arrow-up-linear" width="20" height="20" />
+        <span class="tool-label">{{ $t('collapseMessage') }}</span>
+      </button>
     </div>
 
     <el-scrollbar class="detail-scrollbar" v-if="email && email.emailId">
       <div class="detail-content-wrapper">
         <header class="email-header-meta">
-          <h1 class="email-subject-title reading-aligned">{{ email.subject || $t('noSubjectParens') }}</h1>
+          <h1 v-if="!conversationItem" class="email-subject-title reading-aligned">{{ email.subject || $t('noSubjectParens') }}</h1>
           <div class="sender-profile">
             <div class="sender-avatar" aria-hidden="true">{{ getSenderAvatarText(email.name, email.sendEmail) }}</div>
             <div class="sender-details">
@@ -52,6 +57,10 @@
                 </summary>
                 <div class="delivery-expanded">
                   <dl class="delivery-fields">
+                    <template v-if="conversationItem">
+                      <dt>{{ $t('subject') }}</dt>
+                      <dd class="original-subject">{{ email.subject || $t('noSubjectParens') }}</dd>
+                    </template>
                     <dt>{{ $t('sender') }}</dt>
                     <dd class="delivery-field-value">
                       <span>{{ email.name ? `${email.name} <${email.sendEmail}>` : email.sendEmail }}</span>
@@ -59,6 +68,15 @@
                         <Icon icon="solar:copy-linear" width="13" height="13" />
                       </button>
                     </dd>
+                    <template v-if="formatReceive(email.replyTo)">
+                      <dt>{{ $t('replyToAddress') }}</dt>
+                      <dd class="delivery-field-value">
+                        <span>{{ formatReceive(email.replyTo) }}</span>
+                        <button type="button" class="copy-address-btn" @click.stop="copyAddress(formatReceive(email.replyTo))" :title="$t('copy')" :aria-label="$t('copy')">
+                          <Icon icon="solar:copy-linear" width="13" height="13" />
+                        </button>
+                      </dd>
+                    </template>
                     <dt>{{ $t('recipient') }}</dt>
                     <dd class="delivery-field-value">
                       <span>{{ formatReceive(email.recipient) || email.toEmail || $t('recipientUnavailable') }}</span>
@@ -203,10 +221,18 @@ const props = defineProps({
   isEmbedded: {
     type: Boolean,
     default: false
+  },
+  conversationItem: {
+    type: Boolean,
+    default: false
+  },
+  autoRead: {
+    type: Boolean,
+    default: true
   }
 });
 
-const emit = defineEmits(['starChange', 'deleteSuccess', 'back', 'close', 'unreadChange']);
+const emit = defineEmits(['starChange', 'deleteSuccess', 'back', 'close', 'unreadChange', 'collapse']);
 const { t } = useI18n();
 const uiStore = useUiStore();
 const contactStore = useContactStore();
@@ -264,10 +290,17 @@ const isSenderInContacts = computed(() => {
 });
 
 // Auto mark as read when viewing an unread email
-watch(() => props.email?.emailId, (newId) => {
-  if (newId && props.showUnread && props.email.unread === EmailUnreadEnum.UNREAD) {
-    props.email.unread = EmailUnreadEnum.READ;
-    emailRead([props.email.emailId]);
+watch(() => props.email?.emailId, async (newId) => {
+  if (newId && props.autoRead && props.showUnread && props.email.unread === EmailUnreadEnum.UNREAD) {
+    const target = props.email;
+    try {
+      await emailRead([newId]);
+      target.unread = EmailUnreadEnum.READ;
+      emit('unreadChange', target);
+    } catch (err) {
+      target.unread = EmailUnreadEnum.UNREAD;
+      console.error(err);
+    }
   }
 }, { immediate: true });
 
@@ -487,6 +520,7 @@ summary:focus-visible {
 
 .tool-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .tool-label { line-height: 1; }
+.collapse-message { margin-left: auto; }
 .tool-btn svg { flex-shrink: 0; }
 .tool-btn {
   display: inline-flex;
@@ -513,6 +547,15 @@ summary:focus-visible {
 }
 
 .detail-scrollbar { flex: 1; min-height: 0; overflow: hidden; }
+.is-conversation-item {
+  height: auto;
+  min-height: 0;
+
+  .detail-toolbar { flex: none; }
+  .detail-scrollbar { flex: none; height: auto; overflow: visible; }
+  :deep(.detail-scrollbar .el-scrollbar__wrap) { max-height: none; overflow: visible; }
+  :deep(.detail-scrollbar .el-scrollbar__bar) { display: none; }
+}
 .detail-content-wrapper {
   --reading-inset: 48px;
   width: 100%;
@@ -768,6 +811,11 @@ summary:focus-visible {
 @container maildetail (max-width: 340px) {
   .tool-btn { width: 38px; padding: 0; gap: 0; border-radius: 50%; }
   .tool-label { display: none; }
+}
+
+@container maildetail (max-width: 600px) {
+  .is-conversation-item .tool-btn { width: 38px; padding: 0; gap: 0; }
+  .is-conversation-item .tool-label { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

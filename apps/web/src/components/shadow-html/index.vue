@@ -9,6 +9,8 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { collapseMailQuotes, MAIL_QUOTE_CSS } from '@/utils/mail-quotes.js'
 import { sanitizeEmailHtml } from '@/utils/html-sanitizer.js'
 import { useUiStore } from '@/store/ui.js'
 
@@ -23,6 +25,7 @@ const props = defineProps({
   }
 })
 
+const { t } = useI18n()
 const uiStore = useUiStore()
 const container = ref(null)
 const contentBox = ref(null)
@@ -39,6 +42,7 @@ function getShell(isDark) {
   if (isDark) {
     return `
       <style>
+        ${MAIL_QUOTE_CSS}
         :host {
           all: initial;
           width: 100%;
@@ -90,6 +94,7 @@ function getShell(isDark) {
   }
   return `
     <style>
+      ${MAIL_QUOTE_CSS}
       :host {
         all: initial;
         width: 100%;
@@ -140,47 +145,6 @@ function getShell(isDark) {
   `
 }
 
-function collapseQuotes(content) {
-  const quoteSelectors = '.gmail_quote, .flaremail_quote, blockquote, .WordSection1 > blockquote';
-  const quoteElements = content.querySelectorAll(quoteSelectors);
-  if (!quoteElements.length) return;
-
-  const topQuotes = Array.from(quoteElements).filter(el => {
-    let parent = el.parentElement;
-    while (parent && parent !== content) {
-      if (parent.matches && parent.matches(quoteSelectors)) {
-        return false;
-      }
-      parent = parent.parentElement;
-    }
-    return true;
-  });
-
-  topQuotes.forEach((quoteEl) => {
-    quoteEl.classList.add('gmail_quote_collapsed');
-
-    const toggleBtn = document.createElement('button');
-    toggleBtn.type = 'button';
-    toggleBtn.className = 'gmail_quote_toggle';
-    toggleBtn.title = '···';
-    toggleBtn.setAttribute('aria-label', 'Toggle quoted text');
-    toggleBtn.textContent = '···';
-
-    toggleBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isCollapsed = quoteEl.classList.contains('gmail_quote_collapsed');
-      if (isCollapsed) {
-        quoteEl.classList.remove('gmail_quote_collapsed');
-      } else {
-        quoteEl.classList.add('gmail_quote_collapsed');
-      }
-      autoScale();
-    });
-
-    quoteEl.parentNode?.insertBefore(toggleBtn, quoteEl);
-  });
-}
-
 function updateContent() {
   if (!shadowRoot) return
   const dark = isDarkMode.value
@@ -194,7 +158,7 @@ function updateContent() {
   const content = shadowRoot.querySelector('.shadow-content')
   content.innerHTML = sanitized.html
   if (sanitized.bodyStyle) content.setAttribute('style', sanitized.bodyStyle)
-  collapseQuotes(content)
+  collapseMailQuotes(content, { label: t('toggleQuotedText'), onToggle: autoScale })
 }
 
 function autoScale() {

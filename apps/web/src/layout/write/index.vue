@@ -163,6 +163,13 @@ import {useUiStore} from "@/store/ui.js";
 import {sanitizeEmailHtml} from "@/utils/html-sanitizer.js";
 import {buildQuotedEmailHtml} from "@/utils/compose-quote.js";
 import {
+  createComposeLoadGate,
+  editorSnapshot,
+  findComposeAccount,
+  normalizeReplySubject,
+  replyContext,
+} from "@/utils/compose-state.js";
+import {
   clearPendingSendDraft,
   createSendActivityGate,
   guardPendingSendUnload,
@@ -196,6 +203,7 @@ let pendingSend = null
 const sendActivity = createSendActivityGate(() => Boolean(pendingSend || sending))
 const undoCountdown = ref(5)
 const isDraftAccountInvalid = ref(false);
+const composeLoad = createComposeLoadGate();
 
 const accountOptions = computed(() => {
   const list = (accountStore.accountList?.length ? accountStore.accountList : userStore.user.accountList) || [];
@@ -384,9 +392,7 @@ async function sendEmail() {
     return
   }
 
-  if (!form.content) {
-    form.content = editor.value?.getContent?.() || '';
-  }
+  syncEditorState()
 
   if (!form.content) {
     ElMessage({
@@ -519,12 +525,10 @@ function undoSend() {
 
   show.value = true
   isMinimized.value = false
-  defValue.value = ''
-  setTimeout(() => {
-    defValue.value = form.content
-    nextTick(() => {
-      editor.value?.focus?.()
-    })
+  const loadToken = composeLoad.begin()
+  const restoredContent = data.content || ''
+  replaceEditorContent(restoredContent, loadToken).then(loaded => {
+    if (loaded) editor.value?.focus?.()
   })
 
   ElMessage({
@@ -552,6 +556,7 @@ function executeSend(sendForm) {
     emailList.forEach(item => {
       emailStore.sendScroll?.addItem(item)
     })
+    emailStore.conversationRevision++
 
     ElNotification({
       title: email?.deliveryWarning ? t('deliveryWarningTitle') : t('sendSuccessMsg'),
@@ -590,10 +595,9 @@ function executeSend(sendForm) {
     Object.assign(form, sendForm);
     form.attachments = sendForm.attachments ? [...sendForm.attachments.map(a => ({ ...a }))] : [];
     form.receiveEmail = [...(sendForm.receiveEmail || [])];
-    defValue.value = '';
-    setTimeout(() => {
-      defValue.value = form.content;
-    });
+    const loadToken = composeLoad.begin();
+    const restoredContent = sendForm.content || '';
+    replaceEditorContent(restoredContent, loadToken);
     show.value = true
     addRecipientRecord(sendForm.receiveEmail);
   }).finally(() => {
@@ -614,6 +618,7 @@ function addRecipientRecord(emails = form.receiveEmail) {
 }
 
 function resetForm() {
+  composeLoad.begin()
   form.receiveEmail = []
   form.subject = ''
   form.content = ''
@@ -627,10 +632,31 @@ function resetForm() {
   backReply.subject = ''
   backReply.receiveEmail = []
   backReply.sendType = ''
+  defValue.value = ''
   editor.value?.clearEditor?.()
 }
 
+function syncEditorState() {
+  const snapshot = editorSnapshot(editor.value, form)
+  form.content = snapshot.content
+  form.text = snapshot.text
+}
+
+async function replaceEditorContent(content, loadToken) {
+  defValue.value = ''
+  editor.value?.clearEditor?.()
+  await nextTick()
+  if (!composeLoad.isCurrent(loadToken)) return false
+  defValue.value = content || ''
+  form.content = content || ''
+  await nextTick()
+  if (!composeLoad.isCurrent(loadToken)) return false
+  syncEditorState()
+  return true
+}
+
 function change(content, text) {
+  composeLoad.begin()
   form.content = content;
   form.text = text
 }
@@ -639,76 +665,62 @@ function focusChange() {
   if (selectStatus) openSelect()
 }
 
-function normalizeReplySubject(subject) {
-  if (!subject) return 'Re: ';
-  const cleaned = subject.replace(/^((re|fwd|fw|回复|转发)\s*[:：]\s*)+/gi, '').trim();
-  return `Re: ${cleaned}`;
-}
-
 function normalizeForwardSubject(subject) {
   if (!subject) return 'Fwd: ';
   const cleaned = subject.replace(/^((re|fwd|fw|回复|转发)\s*[:：]\s*)+/gi, '').trim();
   return `Fwd: ${cleaned}`;
 }
 
-function openReply(email) {
+async function openReply(email) {
   if (!canOpenComposer()) return;
   resetForm();
+  const loadToken = composeLoad.begin();
   form.sendType = 'reply';
   form.emailId = email.emailId;
-  const replyAccount = accountOptions.value.find(item => item.email?.toLowerCase() === email.toEmail?.toLowerCase());
-  const matchedTarget = replyAccount || accountOptions.value[0];
-  form.accountId = matchedTarget.accountId;
-  form.sendEmail = matchedTarget.email;
-  form.name = matchedTarget.name;
-
-  if (email.replyTo && email.replyTo.length > 0) {
-    form.receiveEmail = email.replyTo.map(item => item.address);
-  } else {
-    form.receiveEmail = [email.sendEmail];
+  const reply = replyContext(email, accountOptions.value);
+  const matchedTarget = reply.account;
+  if (matchedTarget) {
+    form.accountId = matchedTarget.accountId;
+    form.sendEmail = matchedTarget.email;
+    form.name = matchedTarget.name;
   }
+
+  form.receiveEmail = reply.recipients;
 
   const rawSubject = (email.subject || '').replace(/{{code}}/g, email.code || '');
   form.subject = normalizeReplySubject(rawSubject);
 
-  setTimeout(() => {
-    defValue.value = quotedEmailHtml(email);
-    open(matchedTarget);
-
-    nextTick(() => {
-      backReply.content = editor.value.getContent();
-      backReply.subject = form.subject;
-      backReply.receiveEmail = form.receiveEmail;
-      backReply.sendType = form.sendType;
-    });
-  });
+  open(matchedTarget, loadToken);
+  if (!await replaceEditorContent(quotedEmailHtml(email), loadToken)) return;
+  backReply.content = form.content;
+  backReply.subject = form.subject;
+  backReply.receiveEmail = [...form.receiveEmail];
+  backReply.sendType = form.sendType;
 }
 
-function openForward(email) {
+async function openForward(email) {
   if (!canOpenComposer()) return;
   resetForm();
+  const loadToken = composeLoad.begin();
   form.sendType = 'forward';
   form.emailId = email.emailId;
-  const forwardAccount = accountOptions.value.find(item => item.email?.toLowerCase() === email.toEmail?.toLowerCase());
+  const forwardAccount = findComposeAccount(accountOptions.value, { email: email.toEmail });
   const matchedTarget = forwardAccount || accountOptions.value[0];
-  form.accountId = matchedTarget.accountId;
-  form.sendEmail = matchedTarget.email;
-  form.name = matchedTarget.name;
+  if (matchedTarget) {
+    form.accountId = matchedTarget.accountId;
+    form.sendEmail = matchedTarget.email;
+    form.name = matchedTarget.name;
+  }
 
   const rawSubject = (email.subject || '').replace(/{{code}}/g, email.code || '');
   form.subject = normalizeForwardSubject(rawSubject);
 
-  setTimeout(() => {
-    defValue.value = quotedEmailHtml(email);
-    open(matchedTarget);
-
-    nextTick(() => {
-      backReply.content = editor.value.getContent();
-      backReply.subject = form.subject;
-      backReply.receiveEmail = form.receiveEmail;
-      backReply.sendType = form.sendType;
-    });
-  });
+  open(matchedTarget, loadToken);
+  if (!await replaceEditorContent(quotedEmailHtml(email), loadToken)) return;
+  backReply.content = form.content;
+  backReply.subject = form.subject;
+  backReply.receiveEmail = [...form.receiveEmail];
+  backReply.sendType = form.sendType;
 }
 
 function formatImage(content) {
@@ -730,8 +742,9 @@ function quotedEmailHtml(email) {
   }).html)
 }
 
-function open(targetAccountOrOptions) {
+function open(targetAccountOrOptions, loadToken = null) {
   if (!canOpenComposer()) return false;
+  if (loadToken == null) composeLoad.begin();
   isDraftAccountInvalid.value = false;
   isMinimized.value = false;
   let target = targetAccountOrOptions;
@@ -758,16 +771,18 @@ function open(targetAccountOrOptions) {
   return true;
 }
 
-function openDraft(draft) {
+async function openDraft(draft) {
   if (!canOpenComposer()) return;
   resetForm();
+  const loadToken = composeLoad.begin();
   Object.assign(form, { ...draft });
-  defValue.value = '';
-  setTimeout(() => defValue.value = form.content);
+  form.receiveEmail = [...(draft.receiveEmail || [])];
+  form.attachments = (draft.attachments || []).map(attachment => ({ ...attachment }));
 
-  const matched = accountOptions.value.find(
-    acc => acc.accountId === (draft.sendAccountId || draft.accountId) || acc.email?.toLowerCase() === (draft.sendEmail || '').toLowerCase()
-  );
+  const matched = findComposeAccount(accountOptions.value, {
+    accountId: draft.sendAccountId ?? draft.accountId,
+    email: draft.sendEmail,
+  });
   if (matched) {
     form.accountId = matched.accountId;
     form.sendEmail = matched.email;
@@ -778,9 +793,8 @@ function openDraft(draft) {
   }
   show.value = true;
   isMinimized.value = false;
-  nextTick(() => {
-    editor.value?.focus?.();
-  });
+  if (!await replaceEditorContent(form.content, loadToken)) return;
+  editor.value?.focus?.();
 }
 
 const handleKeyDown = (event) => {
@@ -834,11 +848,10 @@ onUnmounted(() => {
 });
 
 async function close() {
+  composeLoad.begin()
   if (selectStatus) openSelect();
 
-  if (!form.content) {
-    form.content = editor.value?.getContent?.() || '';
-  }
+  syncEditorState()
 
   if (form.draftId) {
     try {

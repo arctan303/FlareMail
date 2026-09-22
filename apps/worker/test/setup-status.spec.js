@@ -115,6 +115,17 @@ async function makeSupportedOldSchema() {
 }
 
 async function restoreCurrentSchema() {
+	// Tests deliberately remove migration markers and columns independently.
+	// Normalize an interrupted 325 fixture before asking the production migrator
+	// to restore the current schema; production correctly requires manual
+	// recovery when a marker and its structure disagree.
+	if (await hasTable('email')) {
+		const markerTable = await hasTable('schema_migrations');
+		const replyToColumn = await hasColumn('email', 'reply_to');
+		const replyToMarker = markerTable && await hasMarker(325);
+		if (replyToColumn && !replyToMarker) await env.db.prepare('ALTER TABLE email DROP COLUMN reply_to').run();
+		if (markerTable && !replyToColumn && replyToMarker) await env.db.prepare('DELETE FROM schema_migrations WHERE version = 325').run();
+	}
 	await dbInit.migrate(createTestContext());
 }
 

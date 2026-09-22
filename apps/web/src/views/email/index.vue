@@ -11,6 +11,9 @@
                    :email-read="emailRead"
                    :email-unread="emailUnread"
                    :show-unread="true"
+                   conversation-view
+                   :conversation-action="conversationAction"
+                   :conversation-scope="conversationScope"
                    actionLeft="4px"
                    @jump="jumpContent"
       >
@@ -25,7 +28,7 @@
 </template>
 
 <script setup>
-import { defineOptions, onMounted, reactive, ref, watch } from 'vue';
+import { computed, defineOptions, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Icon } from '@iconify/vue';
 import emailScroll from '@/components/email-scroll/index.vue';
@@ -34,7 +37,7 @@ import MailboxFilter from '@/components/MailboxFilter.vue';
 import { useAccountStore } from '@/store/account.js';
 import { useEmailStore } from '@/store/email.js';
 import { useSettingStore } from '@/store/setting.js';
-import { emailList, emailDelete, emailLatest, emailRead, emailUnread } from '@/request/email.js';
+import { emailList, emailDelete, emailLatest, emailRead, emailUnread, emailConversationState } from '@/request/email.js';
 import { starAdd, starCancel } from '@/request/star.js';
 import { sleep } from '@/utils/time-utils.js';
 
@@ -82,7 +85,7 @@ async function latest() {
     let autoRefresh = settingStore.settings.autoRefresh;
     await sleep(autoRefresh > 1 ? autoRefresh * 1000 : 3000);
 
-    if (route.name !== 'email' || scroll.value.currentPage > 0) {
+    if (route.name !== 'email' || !scroll.value || scroll.value.currentPage > 0) {
       continue;
     }
 
@@ -100,18 +103,7 @@ async function latest() {
         }
 
         if (accountId === accountStore.mailboxQuery.accountId && params.timeSort === curTimeSort && allReceive === accountStore.mailboxQuery.allReceive) {
-          if (list.length > 0) {
-            for (let email of list) {
-              email.reqAccountId = accountId;
-              email.allReceive = allReceive;
-
-              if (!existIds.has(email.emailId)) {
-                existIds.add(email.emailId);
-                scroll.value.addItem(email);
-                await sleep(50);
-              }
-            }
-          }
+          if (list.length > 0) scroll.value.refreshList();
         }
       } catch (e) {
         if (e.code === 401 || e.code === 403) {
@@ -135,7 +127,7 @@ function getEmailList(emailId, size, page = 0) {
   const accountId = accountStore.mailboxQuery.accountId;
   const allReceive = accountStore.mailboxQuery.allReceive;
   const keyword = emailStore.searchKeyword;
-  return emailList(accountId, allReceive, emailId, params.timeSort, size, 0, keyword, route.query.filter, page * size).then(data => {
+  return emailList(accountId, allReceive, emailId, params.timeSort, size, 0, keyword, route.query.filter, page * size, 'conversation').then(data => {
     if (!data) {
       return { list: [], total: 0, latestEmail: { emailId: 0, reqAccountId: accountId, allReceive } };
     }
@@ -145,6 +137,9 @@ function getEmailList(emailId, size, page = 0) {
     return data;
   });
 }
+
+const conversationScope = computed(() => ({ type: 0, accountId: accountStore.mailboxQuery.accountId, allReceive: accountStore.mailboxQuery.allReceive }));
+function conversationAction(action, emailIds, scope = conversationScope.value) { return emailConversationState(emailIds, action, { ...scope }); }
 
 watch(() => emailStore.searchKeyword, () => {
   scroll.value?.refreshList();

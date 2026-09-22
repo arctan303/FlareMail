@@ -15,6 +15,9 @@
                    @jump="jumpContent"
                    :time-sort="params.timeSort"
                    :type="'send'"
+                   conversation-view
+                   :conversation-action="conversationAction"
+                   :conversation-scope="conversationScope"
       >
         <template #first>
           <button class="tool-icon-btn" :title="params.timeSort === 0 ? $t('sortByTimeDesc') : $t('sortByTimeAsc')" @click="changeTimeSort">
@@ -27,7 +30,7 @@
 </template>
 
 <script setup>
-import { defineOptions, onMounted, reactive, ref, watch } from 'vue';
+import { computed, defineOptions, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { Icon } from '@iconify/vue';
 import emailScroll from '@/components/email-scroll/index.vue';
@@ -35,7 +38,7 @@ import MailListLayout from '@/components/mail-list-layout/index.vue';
 import MailboxFilter from '@/components/MailboxFilter.vue';
 import { useAccountStore } from '@/store/account.js';
 import { useEmailStore } from '@/store/email.js';
-import { emailList, emailDelete, emailRead } from '@/request/email.js';
+import { emailList, emailDelete, emailRead, emailConversationState } from '@/request/email.js';
 import { starAdd, starCancel } from '@/request/star.js';
 
 defineOptions({
@@ -83,7 +86,7 @@ function getEmailList(emailId, size, page = 0) {
   const accountId = accountStore.mailboxQuery.accountId;
   const allReceive = accountStore.mailboxQuery.allReceive;
   const keyword = emailStore.searchKeyword;
-  return emailList(accountId, allReceive, emailId, params.timeSort, size, 1, keyword, undefined, page * size).then(data => {
+  return emailList(accountId, allReceive, emailId, params.timeSort, size, 1, keyword, undefined, page * size, 'conversation').then(data => {
     if (!data) {
       return { list: [], total: 0, latestEmail: { emailId: 0, reqAccountId: accountId, allReceive } };
     }
@@ -93,6 +96,9 @@ function getEmailList(emailId, size, page = 0) {
     return data;
   });
 }
+
+const conversationScope = computed(() => ({ type: 1, accountId: accountStore.mailboxQuery.accountId, allReceive: accountStore.mailboxQuery.allReceive }));
+function conversationAction(action, emailIds, scope = conversationScope.value) { return emailConversationState(emailIds, action, { ...scope }); }
 
 watch(() => emailStore.searchKeyword, () => {
   sendScroll.value?.refreshList();

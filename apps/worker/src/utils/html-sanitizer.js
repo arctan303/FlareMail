@@ -17,6 +17,7 @@ const REMOVE_WITH_CONTENT = new Set([
 
 const GLOBAL_ATTRIBUTES = new Set(['class', 'title', 'lang', 'dir', 'style']);
 const TAG_ATTRIBUTES = {
+	BLOCKQUOTE: new Set(['type']),
 	A: new Set(['href']),
 	IMG: new Set(['src', 'alt', 'width', 'height', 'data-remote-src']),
 	TABLE: new Set(['width', 'height', 'border', 'cellpadding', 'cellspacing', 'align', 'bgcolor']),

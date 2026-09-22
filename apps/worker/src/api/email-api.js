@@ -40,3 +40,20 @@ app.put('/email/unread', async (c) => {
 	return c.json(result.ok());
 });
 
+app.get('/email/conversation', async (c) => {
+	await securityService.rateLimit(c, 'EMAIL_RATE_LIMITER', 'email-conversation', 60);
+	const data = await emailService.conversation(c, c.req.query(), userContext.getUserId(c));
+	return c.json(result.ok(data));
+});
+
+app.put('/email/conversation/read', async (c) => {
+	await securityService.rateLimit(c, 'EMAIL_RATE_LIMITER', 'email-conversation-read', 30);
+	const body = await c.req.json();
+	return c.json(result.ok(await emailService.readConversation(c, body.emailId, body.readThroughEmailId, userContext.getUserId(c))));
+});
+
+app.put('/email/conversation/state', async (c) => {
+	await securityService.rateLimit(c, 'EMAIL_RATE_LIMITER', 'email-conversation-state', 30);
+	return c.json(result.ok(await emailService.conversationState(c, await c.req.json(), userContext.getUserId(c))));
+});
+

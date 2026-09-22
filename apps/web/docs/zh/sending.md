@@ -11,6 +11,8 @@
 
 每个发件域名都需可用的 Key 和域名验证。输入框留空通常表示保留已有密钥，不是清除。不要把 Key 写进源码或文档。Resend 的测试发件域名和测试收件限制不能代替自己的正式域名配置。[域名验证](https://resend.com/docs/dashboard/domains/introduction) · [API Key](https://resend.com/docs/dashboard/api-keys/introduction)
 
+发送成功后，FlareMail 会尝试读取真实 Message-ID，供后续回复关联原邮件。若密钥没有读取邮件的权限，或读取请求失败，发送仍然有效，但界面会提示 Message-ID 未能取得；继续回复这封已发送邮件时，外部客户端可能无法将它归入原会话。此提示不要求重新发送邮件。[Resend 邮件关联说明](https://resend.com/changelog/message-id-for-sent-emails)
+
 ## Cloudflare Email Sending（Beta）
 
 向任意外部收件人发送需要 Workers Paid，并在当前账号为每个发件域名启用 Email Sending。免费发送到账号已验证目标的例外不能代替一般邮箱发信路径。[费用与前提](https://developers.cloudflare.com/email-service/platform/pricing/)

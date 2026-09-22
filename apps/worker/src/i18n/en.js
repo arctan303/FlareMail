@@ -60,6 +60,7 @@ const en = {
 	cloudflareRecipientSuppressed: "Cloudflare rejected a suppressed recipient. Check the suppression list in Cloudflare.",
 	cloudflareEmailRateLimited: "Cloudflare’s sending rate or daily quota was exceeded. Try again later.",
 	cloudflareEmailRejected: "Cloudflare rejected the email. Check its content and sending configuration.",
+	conversationViewLimit: "Conversation view supports up to 10,000 active messages per user.",
 };
 
 export default en;

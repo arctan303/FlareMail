@@ -33,6 +33,7 @@ The first formal release is **[v1.0.0](https://github.com/arctan303/FlareMail/re
 ## Features
 
 - **Mail on your own domain**: multiple domains and addresses, incoming/outgoing mail, replies, forwarding, attachments, stars and contacts.
+- **Mail conversations**: one list entry per reply chain, conversation unread state, received and sent history, and collapsible quotes with original content preserved.
 - **Use by invitation**: administrators manage invited members, each with their own mailbox.
 - **A complete web interface**: Chinese/English, light/dark appearance, responsive layouts, keyboard shortcuts and PWA.
 - **Configure as needed**: Web setup and administration, custom branding, Google login and password confirmation for sensitive changes.

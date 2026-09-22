@@ -11,20 +11,23 @@
                    @jump="jumpContent"
                    actionLeft="6px"
                    :show-account-icon="false"
+                   conversation-view
+                   :conversation-action="conversationAction"
+                   :conversation-scope="conversationScope"
       ><template #first><MailboxFilter /></template></emailScroll>
 
   </MailListLayout>
 </template>
 
 <script setup>
-import { defineOptions, onMounted, ref, watch } from 'vue';
+import { computed, defineOptions, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { Icon } from '@iconify/vue';
 import emailScroll from '@/components/email-scroll/index.vue';
 import MailListLayout from '@/components/mail-list-layout/index.vue';
 import MailboxFilter from '@/components/MailboxFilter.vue';
 import {useAccountStore} from '@/store/account.js';
-import { emailDelete, emailRead } from '@/request/email.js';
+import { emailDelete, emailRead, emailConversationState } from '@/request/email.js';
 import { starAdd, starCancel, starList } from '@/request/star.js';
 import { useEmailStore } from '@/store/email.js';
 
@@ -52,8 +55,11 @@ function cancelStar(email) {
 }
 
 function getStarList(emailId, size, page = 0) {
-  return starList(emailId, size, emailStore.searchKeyword, page * size, accountStore.mailboxFilterId || undefined);
+  return starList(emailId, size, emailStore.searchKeyword, page * size, accountStore.mailboxFilterId || undefined, 'conversation');
 }
+
+const conversationScope = computed(() => ({ starred: true, accountId: accountStore.mailboxFilterId || 0 }));
+function conversationAction(action, emailIds, scope = conversationScope.value) { return emailConversationState(emailIds, action, { ...scope }); }
 
 watch(() => emailStore.searchKeyword, () => {
   scroll.value?.refreshList();

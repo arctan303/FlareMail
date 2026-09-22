@@ -28,9 +28,14 @@ async function login(email = ADMIN) {
   const r = await api('/login', { method: 'POST', body: { email, password: PASSWORD } });
   expect(r.status).toBe(200); return r.headers.get('set-cookie').split(';')[0];
 }
-const cf = send => ({ ...runtime, email: { send: vi.fn(send || (async () => ({ messageId: 'cf-fixture-id' }))) } });
+const cf = send => ({ ...runtime, email: { send: vi.fn(send || (async () => ({ messageId: '<cf-fixture-id@provider.test>' }))) } });
 async function select(provider) { await env.db.prepare('UPDATE mail_provider_config SET provider = ? WHERE id = 1').bind(provider).run(); }
-async function pending324() { await env.db.batch([env.db.prepare('DROP TABLE mail_provider_config'), env.db.prepare('DELETE FROM schema_migrations WHERE version = 324')]); }
+async function pending324() { await env.db.batch([
+  env.db.prepare('ALTER TABLE email DROP COLUMN reply_to'),
+  env.db.prepare('DELETE FROM schema_migrations WHERE version = 325'),
+  env.db.prepare('DROP TABLE mail_provider_config'),
+  env.db.prepare('DELETE FROM schema_migrations WHERE version = 324'),
+]); }
 let memberId, accountId, adminCookie, memberCookie;
 const body = extra => ({ accountId, receiveEmail: ['friend@outside.test'], subject: 'provider fixture', text: 'plain body', content: '<p>HTML body</p>', ...extra });
 const send = (payload, e = runtime) => api('/email/send', { method: 'POST', cookie: memberCookie, body: body(payload) }, e);
@@ -90,20 +95,56 @@ describe.sequential('selectable Cloudflare sending', () => {
     expect(resend).toHaveBeenCalledOnce(); expect(e.email.send).not.toHaveBeenCalled();
     expect((await r.json()).data[0]).toMatchObject({status:1,resendEmailId:'resend-id'});
   });
+  it('finishes internal delivery and idempotency when accepted Resend mail has no retrievable Message-ID', async () => {
+    const resend = vi.spyOn(emailSendService,'sendByResend').mockResolvedValue({data:{id:'accepted-resend-id',messageId:'',messageIdWarning:'The provider accepted the message, but its Message-ID could not be retrieved.'}});
+    const payload={receiveEmail:[ADMIN,'friend@outside.test'],subject:'resend metadata fallback',requestId:'resend_metadata_fallback_01'};
+    const first=await send(payload); expect(first.status).toBe(200);
+    const firstBody=await first.json(); expect(firstBody.data[0]).toMatchObject({status:1,resendEmailId:'accepted-resend-id',messageId:''});
+    expect(firstBody.data[0].deliveryWarning).toMatch(/Message-ID could not be retrieved/);
+    const local=await env.db.prepare("SELECT COUNT(*) AS n FROM email WHERE type = 0 AND subject = 'resend metadata fallback' AND user_id = (SELECT user_id FROM user WHERE email = ?)").bind(ADMIN).first();
+    expect(local.n).toBe(1);
+    const request=await env.db.prepare('SELECT status, warning FROM send_request WHERE user_id = ? AND request_id = ?').bind(memberId,payload.requestId).first();
+    expect(request.status).toBe('accepted'); expect(request.warning).toMatch(/Message-ID could not be retrieved/);
+    const replay=await send(payload); expect(replay.status).toBe(200); expect((await replay.json()).data[0].idempotentReplay).toBe(true);
+    expect(resend).toHaveBeenCalledOnce();
+  });
   it('sends Cloudflare HTML/text/base64/CID/reply headers and replays without sending twice', async () => {
     await select('cloudflare'); const e = cf();
     const resend = vi.spyOn(emailSendService,'sendByResend');
-    const original = await env.db.prepare("INSERT INTO email(user_id,account_id,type,status,message_id,subject,text) VALUES (?,?,0,0,'<original@outside.test>','original','old body') RETURNING email_id AS id").bind(memberId,accountId).first();
+    const original = await env.db.prepare("INSERT INTO email(user_id,account_id,type,status,message_id,in_reply_to,relation,subject,text) VALUES (?,?,0,0,'<original@outside.test>','<parent@outside.test>','<root@outside.test> <parent@outside.test>','original','old body') RETURNING email_id AS id").bind(memberId,accountId).first();
     const payload = {sendType:'reply',emailId:original.id,requestId:'cf_replay_fixture_0001',content:'<p>body<img src="data:image/png;base64,aGVsbG8=" /></p>',attachments:[{filename:'note.txt',type:'text/plain',content:'aGVsbG8='}]};
     const before = await quota(); const first = await send(payload,e); expect(first.status).toBe(200);
     expect((await first.json()).data[0].status).toBe(1);
     const form=e.email.send.mock.calls[0][0];
-    expect(form).toMatchObject({to:['friend@outside.test'],text:'plain body',headers:{'in-reply-to':'<original@outside.test>',references:'<original@outside.test>'}});
+    expect(form).toMatchObject({to:['friend@outside.test'],text:'plain body',headers:{'in-reply-to':'<original@outside.test>',references:'<root@outside.test> <parent@outside.test> <original@outside.test>'}});
     expect(form.html).toContain('cid:'); expect(form.attachments).toHaveLength(2);
     expect(form.attachments.find(a=>a.filename==='note.txt')).toMatchObject({content:'aGVsbG8=',type:'text/plain',disposition:'attachment'});
     expect(form.attachments.find(a=>a.disposition==='inline').contentId).not.toMatch(/[<>]/);
-    const replay=await send(payload,e); expect(replay.status).toBe(200); expect((await replay.json()).data[0].idempotentReplay).toBe(true);
+    const replay=await send(payload,e); expect(replay.status).toBe(200); const replayBody=await replay.json(); expect(replayBody.data[0].idempotentReplay).toBe(true);
     expect(e.email.send).toHaveBeenCalledOnce(); expect(resend).not.toHaveBeenCalled(); expect(await quota()).toBe(before+1);
+    const stored = await env.db.prepare('SELECT message_id AS messageId, in_reply_to AS inReplyTo, relation FROM email WHERE email_id = ?').bind(replayBody.data[0].emailId).first();
+    expect(stored).toEqual({messageId:'<cf-fixture-id@provider.test>',inReplyTo:'<original@outside.test>',relation:'<root@outside.test> <parent@outside.test> <original@outside.test>'});
+  });
+
+  it('keeps a complete reference chain through multiple local replies', async () => {
+    const first = await send({receiveEmail:[ADMIN],subject:'local thread',requestId:'local_thread_0001'});
+    expect(first.status).toBe(200);
+    const receivedByAdmin = await env.db.prepare("SELECT email_id AS id, message_id AS messageId, relation FROM email WHERE user_id = ? AND type = 0 AND subject = 'local thread' ORDER BY email_id DESC LIMIT 1").bind((await env.db.prepare('SELECT user_id AS id FROM user WHERE email = ?').bind(ADMIN).first()).id).first();
+    expect(receivedByAdmin.messageId).toMatch(/^<[^<>]+@example\.com>$/);
+    expect(receivedByAdmin.relation).toBe('');
+
+    const adminAccount = await env.db.prepare('SELECT account_id AS id FROM account WHERE email = ?').bind(ADMIN).first();
+    const second = await api('/email/send', {method:'POST',cookie:adminCookie,body:{accountId:adminAccount.id,receiveEmail:[MEMBER],subject:'Re: local thread',text:'second',content:'<p>second</p>',sendType:'reply',emailId:receivedByAdmin.id,requestId:'local_thread_0002'}});
+    expect(second.status).toBe(200);
+    const receivedByMember = await env.db.prepare("SELECT email_id AS id, message_id AS messageId, in_reply_to AS inReplyTo, relation FROM email WHERE user_id = ? AND type = 0 AND subject = 'Re: local thread' ORDER BY email_id DESC LIMIT 1").bind(memberId).first();
+    expect(receivedByMember.inReplyTo).toBe(receivedByAdmin.messageId);
+    expect(receivedByMember.relation).toBe(receivedByAdmin.messageId);
+
+    const third = await send({receiveEmail:[ADMIN],subject:'Re: local thread',text:'third',content:'<p>third</p>',sendType:'reply',emailId:receivedByMember.id,requestId:'local_thread_0003'});
+    expect(third.status).toBe(200);
+    const thirdRow = await env.db.prepare('SELECT in_reply_to AS inReplyTo, relation FROM email WHERE email_id = ?').bind((await third.json()).data[0].emailId).first();
+    expect(thirdRow.inReplyTo).toBe(receivedByMember.messageId);
+    expect(thirdRow.relation).toBe(`${receivedByAdmin.messageId} ${receivedByMember.messageId}`);
   });
   it('rejects an encoded oversized message before any provider call, email row, request or quota', async () => {
     await select('cloudflare'); const e=cf(); const before=[await quota(),await count('email'),await count('send_request')];
@@ -135,8 +176,14 @@ describe.sequential('selectable Cloudflare sending', () => {
   it('applies the same provider selection to CLI sending', async () => {
     const token='cf-cli-fixture-token'; await env.db.prepare('UPDATE user SET cli_token = ? WHERE user_id = ?').bind('sha256$' + await cryptoUtils.hashSecret(token),memberId).run();
     await select('cloudflare'); const e=cf();
-    const r=await api('/cli/emails/send',{method:'POST',token,body:{accountId,to:'friend@outside.test',subject:'CLI provider',body:'CLI body',requestId:'cf_cli_fixture_send01'}},e);
+    const r=await api('/cli/emails/send',{method:'POST',token,body:{accountId,to:'friend@outside.test',subject:'CLI provider',body:'CLI <b>literal</b> **markdown**',requestId:'cf_cli_fixture_send01'}},e);
     expect(r.status).toBe(200); expect(e.email.send).toHaveBeenCalledOnce();
+    expect(e.email.send.mock.calls[0][0].html).toContain('CLI &lt;b&gt;literal&lt;/b&gt; **markdown**');
+    const sentId=(await r.json()).data.id;
+    const reply=await api(`/cli/emails/${sentId}/reply`,{method:'POST',token,body:{body:'reply <tag>',requestId:'cf_cli_fixture_reply01'}},e);
+    expect(reply.status).toBe(200); expect(e.email.send).toHaveBeenCalledTimes(2);
+    expect(e.email.send.mock.calls[1][0].to).toEqual(['friend@outside.test']);
+    expect(e.email.send.mock.calls[1][0].html).toContain('reply &lt;tag&gt;');
   });
   it('keeps 323 login available, upgrades through the administrator and preserves the previous route and mail', async () => {
     await pending324(); const e=cf();
@@ -153,7 +200,7 @@ describe.sequential('selectable Cloudflare sending', () => {
       await select('resend'); await dbInit.migrate(context(e)); expect((await mailProviderService.read(context(e))).mailProvider).toBe('resend');
     } finally { await dbInit.migrate(context()); }
   });
-  it('keeps 322 with both additive patches pending compatible and imports Resend without a binding', async () => {
+  it('keeps 322 with all additive patches pending compatible and imports Resend without a binding', async () => {
     await pending324();
     await env.db.batch([env.db.prepare('DROP TABLE admin_confirmation'),env.db.prepare('DELETE FROM schema_migrations WHERE version = 323')]);
     try {
@@ -162,7 +209,7 @@ describe.sequential('selectable Cloudflare sending', () => {
       expect((await api('/login',{method:'POST',body:{email:ADMIN,password:PASSWORD}})).status).toBe(200);
       expect((await api('/admin/upgrade',{method:'POST',cookie:adminCookie})).status).toBe(200);
       expect((await mailProviderService.read(context())).mailProvider).toBe('resend');
-      expect(await dbInit.v3_23Applied(context())).toBe(true); expect(await dbInit.v3_24Applied(context())).toBe(true);
+      expect(await dbInit.v3_23Applied(context())).toBe(true); expect(await dbInit.v3_24Applied(context())).toBe(true); expect(await dbInit.v3_25Applied(context())).toBe(true);
     } finally { await dbInit.migrate(context()); }
   });
   it('rejects missing bindings before spending quota and treats quota rejections as definite failures', async () => {

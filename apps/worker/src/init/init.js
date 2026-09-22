@@ -130,10 +130,11 @@ const dbInit = {
 		const v322Applied = await migrations.v3_22Applied(c);
 		const v323Applied = await migrations.v3_23Applied(c);
 		const v324Applied = await migrations.v3_24Applied(c);
+		const v325Applied = await migrations.v3_25Applied(c);
 		const legacyModernApplied = v308Applied && v309Applied && v310Applied && v311Applied
 			&& v312Applied && v314Applied && v315Applied && v316Applied && v317Applied && v318Applied;
 
-		if (legacyModernApplied && v319Applied && v320Applied && v321Applied && v322Applied && v323Applied && v324Applied) {
+		if (legacyModernApplied && v319Applied && v320Applied && v321Applied && v322Applied && v323Applied && v324Applied && v325Applied) {
 			await settingService.refresh(c);
 			return;
 		}
@@ -158,6 +159,7 @@ const dbInit = {
 			if (!v322Applied) await migrations.v3_22DB(c);
 			if (!v323Applied) await migrations.v3_23DB(c);
 			if (!v324Applied) await migrations.v3_24DB(c);
+			if (!v325Applied) await migrations.v3_25DB(c);
 			await settingService.refresh(c);
 			return;
 		}
@@ -200,6 +202,7 @@ const dbInit = {
 		await migrations.v3_22DB(c);
 		await migrations.v3_23DB(c);
 		await migrations.v3_24DB(c, 'resend');
+		await migrations.v3_25DB(c);
 
 		await settingService.refresh(c);
 	},
@@ -290,14 +293,16 @@ const dbInit = {
 			this.v3_22Applied(c),
 			this.v3_23Applied(c),
 			this.v3_24Applied(c),
+			this.v3_25Applied(c),
 		]);
 
 		return {
 			current: applied.every(Boolean),
 			// Validate every supported core migration, not just MAX(version).
-			compatible: applied.slice(0, -2).every(Boolean)
-				&& (applied.at(-2) || await isConfirmationUpgradePending(c))
-				&& (applied.at(-1) || await isMailProviderUpgradePending(c)),
+			compatible: applied.slice(0, -3).every(Boolean)
+				&& (applied.at(-3) || await isConfirmationUpgradePending(c))
+				&& (applied.at(-2) || await isMailProviderUpgradePending(c))
+				&& (applied.at(-1) || await this.v3_25UpgradePending(c)),
 			upgradeSupported: true
 		};
 	},
@@ -315,7 +320,8 @@ const dbInit = {
 			|| message.includes('existing managed domain')
 			|| message.includes('legacy runtime configuration')
 			|| message.includes('existing runtime configuration')
-			|| message.includes('existing google');
+			|| message.includes('existing google')
+			|| message.includes('reply-to migration requires manual recovery');
 	},
 
 	async findApplicationTable(c) {

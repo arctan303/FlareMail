@@ -15,7 +15,27 @@ import settingService from './setting-service';
 import accountService from './account-service';
 import userService from './user-service';
 
+const RESEND_MESSAGE_ID_TIMEOUT_MS = 1500;
+const MESSAGE_ID_WARNING = 'The provider accepted the message, but its Message-ID could not be retrieved.';
+
+function providerMessageId(value) {
+	const id = String(value || '').trim();
+	return /^<[^<>\s@\u0000-\u001f\u007f]+@[^<>\s@\u0000-\u001f\u007f]+>$/.test(id) ? id : '';
+}
+
 export const emailSendService = {
+	buildReplyHeaders(messageId, references) {
+		const inReplyTo = String(messageId || '').trim();
+		if (!inReplyTo) return undefined;
+		const referenceIds = String(references || '')
+			.match(/<[^<>\r\n]+>/g) || [];
+		if (!referenceIds.includes(inReplyTo)) referenceIds.push(inReplyTo);
+		return {
+			'in-reply-to': inReplyTo,
+			'references': referenceIds.join(' '),
+		};
+	},
+
 	async claimSendRequest(c, userId, requestId) {
 		let inserted;
 		try {
@@ -148,12 +168,10 @@ export const emailSendService = {
 			sendForm.attachments = attachments;
 		}
 
-		if (params.sendType === 'reply' && params.messageId) {
-			sendForm.headers = {
-				'in-reply-to': params.messageId,
-				'references': params.messageId
-			};
-		}
+		const replyHeaders = params.sendType === 'reply'
+			? this.buildReplyHeaders(params.messageId, params.references)
+			: undefined;
+		if (replyHeaders) sendForm.headers = replyHeaders;
 
 		validateCloudflareMessage(sendForm);
 		return sendForm;
@@ -163,10 +181,13 @@ export const emailSendService = {
 		const sendForm = prepared || await this.prepareCloudflareEmail(params);
 		const result = await c.env.email.send(sendForm);
 		if (typeof result?.messageId !== 'string' || !result.messageId) throw new Error('Cloudflare returned no message ID.');
+		const messageId = providerMessageId(result.messageId);
 
 		return {
 			data: {
-				id: result.messageId
+				id: result.messageId,
+				messageId,
+				messageIdWarning: messageId ? '' : 'The provider accepted the message, but did not return an RFC Message-ID.',
 			}
 		};
 	},
@@ -183,14 +204,41 @@ export const emailSendService = {
 			attachments: await this.toResendAttachments(params.attachments)
 		};
 
-		if (params.sendType === 'reply') {
-			sendForm.headers = {
-				'in-reply-to': params.messageId,
-				'references': params.messageId
-			};
-		}
+		const replyHeaders = params.sendType === 'reply'
+			? this.buildReplyHeaders(params.messageId, params.references)
+			: undefined;
+		if (replyHeaders) sendForm.headers = replyHeaders;
 
-		return await resend.emails.send(sendForm);
+		const result = await resend.emails.send(sendForm);
+		if (result?.data?.id && !result.error) {
+			Object.assign(result.data, await this.retrieveResendMessageId(resend, result.data.id));
+		}
+		return result;
+	},
+
+	async retrieveResendMessageId(resend, id, timeoutMs = RESEND_MESSAGE_ID_TIMEOUT_MS) {
+		const controller = new AbortController();
+		let timer;
+		try {
+			const timeout = new Promise(resolve => {
+				timer = setTimeout(() => {
+					controller.abort();
+					resolve(null);
+				}, timeoutMs);
+			});
+			const retrieved = await Promise.race([
+				resend.get(`/emails/${encodeURIComponent(id)}`, { signal: controller.signal }),
+				timeout,
+			]);
+			const messageId = providerMessageId(retrieved?.data?.message_id);
+			if (messageId) return { messageId, messageIdWarning: '' };
+			return { messageId: '', messageIdWarning: MESSAGE_ID_WARNING };
+		} catch (error) {
+			console.error('Failed to retrieve the accepted Resend Message-ID', error?.message || error?.name || 'unknown error');
+			return { messageId: '', messageIdWarning: MESSAGE_ID_WARNING };
+		} finally {
+			if (timer !== undefined) clearTimeout(timer);
+		}
 	},
 
 	async toCloudflareAttachments(attachments) {

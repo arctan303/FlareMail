@@ -48,6 +48,12 @@ describe('per-request language isolation', () => {
 		expect(t('IncorrectPwd')).toBe(zh.IncorrectPwd);
 	});
 
+	it('localizes the conversation view capacity error', () => {
+		expect(runWithLocale('en', () => t('conversationViewLimit'))).toBe(en.conversationViewLimit);
+		expect(runWithLocale('zh', () => t('conversationViewLimit'))).toBe(zh.conversationViewLimit);
+		expect(en.conversationViewLimit).not.toBe(zh.conversationViewLimit);
+	});
+
 	it('keeps the two locale files in key parity', () => {
 		const missingFromEn = Object.keys(zh).filter(key => !Object.hasOwn(en, key));
 		const missingFromZh = Object.keys(en).filter(key => !Object.hasOwn(zh, key));

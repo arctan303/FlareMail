@@ -165,15 +165,13 @@
     color: var(--text-strong);
     .row-sender {
       font-weight: 750;
-      color: #0f172a;
+      color: var(--text-strong);
       opacity: 1;
-      html.dark & { color: #ffffff; }
     }
     .row-subject {
       font-weight: 750;
-      color: #0f172a;
+      color: var(--text-strong);
       opacity: 1;
-      html.dark & { color: #ffffff; }
     }
     .row-snippet {
       color: var(--text);
@@ -184,7 +182,6 @@
       font-weight: 700;
       color: var(--text-strong);
       opacity: 1;
-      html.dark & { color: #ffffff; }
     }
   }
   &[data-checked="true"] { --row-bg: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
@@ -198,7 +195,8 @@
   &:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .row-checkbox { margin: 0; height: 32px; }
   .row-star { border: 0; border-radius: 50%; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; width: 28px; height: 32px; padding: 0; cursor: pointer; transition: background-color var(--duration-fast, 150ms) ease, transform var(--duration-fast, 150ms) var(--ease-spring); &.is-starred { color: #d99b16; } &:hover { background: color-mix(in srgb, var(--text) 8%, transparent); } }
-  .row-sender { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 400; color: var(--faint); opacity: 0.9; transition: color var(--duration-fast, 150ms) ease, opacity var(--duration-fast, 150ms) ease; }
+  .row-sender { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; font-size: 14px; font-weight: 400; color: var(--faint); opacity: 0.9; transition: color var(--duration-fast, 150ms) ease, opacity var(--duration-fast, 150ms) ease; }
+  .row-sender-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .unread-dot { display: none; }
   .row-summary { min-width: 0; display: flex; align-items: center; overflow: hidden; white-space: nowrap; gap: 6px; font-size: 14px; }
   .row-subject { overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; max-width: 100%; font-weight: 400; color: var(--faint); opacity: 0.9; transition: color var(--duration-fast, 150ms) ease, opacity var(--duration-fast, 150ms) ease; }

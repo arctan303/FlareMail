@@ -1,16 +1,17 @@
 <template>
   <div class="email-detail-route-page">
     <div class="detail-route-card">
-      <MailDetailPane
-        :email="email"
+      <MailConversation
+        :anchor="email"
         :del-type="emailStore.contentData.delType"
         :show-star="emailStore.contentData.showStar"
         :show-reply="emailStore.contentData.showReply"
-        :show-unread="emailStore.contentData.showUnread"
-        :is-embedded="false"
+        :show-unread="true"
         @back="handleBack"
         @delete-success="handleDeleteSuccess"
         @star-change="handleStarChange"
+        @unread-change="handleUnreadChange"
+        @thread-read="handleThreadRead"
       />
     </div>
   </div>
@@ -20,7 +21,7 @@
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useEmailStore } from '@/store/email.js';
-import MailDetailPane from '@/components/mail-detail/index.vue';
+import MailConversation from '@/components/mail-conversation/index.vue';
 
 const router = useRouter();
 const emailStore = useEmailStore();
@@ -79,9 +80,25 @@ function handleStarChange(email) {
   else emailStore.starScroll?.deleteEmail([email.emailId]);
 }
 
-function handleDeleteSuccess(emailId) {
+function handleDeleteSuccess(emailId, shouldLeave) {
   emailStore.deleteIds = [emailId];
-  router.back();
+  if (shouldLeave) router.back();
+}
+
+function handleUnreadChange(message) {
+  const read = Number(message?.unread) === 1;
+  if (Number(email.value?.emailId) === Number(message?.emailId)) email.value.unread = message.unread;
+  for (const list of [emailStore.emailScroll, emailStore.starScroll, emailStore.sendScroll]) {
+    list?.applyReadState?.(message.emailId, read);
+  }
+}
+
+function handleThreadRead(emailIds) {
+  const ids = new Set((emailIds || []).map(Number));
+  if (ids.has(Number(email.value?.emailId))) email.value.unread = 1;
+  for (const id of ids) {
+    for (const list of [emailStore.emailScroll, emailStore.starScroll, emailStore.sendScroll]) list?.applyReadState?.(id, true);
+  }
 }
 </script>
 

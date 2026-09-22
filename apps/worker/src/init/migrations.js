@@ -1482,6 +1482,35 @@ export const migrations = {
 		if (!await this.v3_24Applied(c)) throw new Error('Mail provider migration requires manual recovery.');
 	},
 
+	async v3_25Applied(c) {
+		if (!await this.hasTable(c, 'schema_migrations') || !await this.hasMigrationMarker(c, 325)
+			|| !await this.hasTable(c, 'email')) return false;
+		const columns = await c.env.db.prepare(`PRAGMA table_info('email')`).all();
+		const replyTo = (columns.results || []).find(column => column.name === 'reply_to');
+		return replyTo?.type?.toUpperCase() === 'TEXT'
+			&& Number(replyTo.notnull) === 1
+			&& String(replyTo.dflt_value || '').replace(/^['"]|['"]$/g, '') === '[]';
+	},
+
+	async v3_25UpgradePending(c) {
+		if (!await this.hasTable(c, 'schema_migrations') || await this.hasMigrationMarker(c, 325)
+			|| !await this.hasTable(c, 'email')) return false;
+		const columns = await c.env.db.prepare(`PRAGMA table_info('email')`).all();
+		return !(columns.results || []).some(column => column.name === 'reply_to');
+	},
+
+	async v3_25DB(c) {
+		if (await this.v3_25Applied(c)) return;
+		if (!await this.v3_25UpgradePending(c)) {
+			throw new Error('Reply-To migration requires manual recovery.');
+		}
+		await c.env.db.batch([
+			c.env.db.prepare(`ALTER TABLE email ADD COLUMN reply_to TEXT NOT NULL DEFAULT '[]'`),
+			c.env.db.prepare('INSERT OR IGNORE INTO schema_migrations(version) VALUES (325)'),
+		]);
+		if (!await this.v3_25Applied(c)) throw new Error('Reply-To migration requires manual recovery.');
+	},
+
 	async ensurePhase5Columns(c) {
 		const userCols = await c.env.db.prepare(`PRAGMA table_info('user')`).all();
 		const userColNames = new Set((userCols.results || []).map(col => col.name));

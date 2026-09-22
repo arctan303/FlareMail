@@ -455,7 +455,9 @@ describe('outgoing mail and forwarding boundaries', () => {
 		await createLegacyUser(recipient, 'inline-image-recipient-password');
 		const accountId = await accountIdFor(sender);
 		const sourceEmail = await env.db.prepare(
-			`INSERT INTO email(user_id, account_id, type, status, subject) VALUES (?, ?, 0, 0, 'source inline') RETURNING email_id AS emailId`
+			`INSERT INTO email(user_id, account_id, type, status, subject, message_id, relation)
+			 VALUES (?, ?, 0, 0, 'source inline', '<inline-source@example.net>', '<inline-root@example.net>')
+			 RETURNING email_id AS emailId`
 		).bind(senderId, accountId).first();
 		const oldKey = 'attachments/legacy-inline-image.png';
 		const bytes = Uint8Array.from([137, 80, 78, 71, 1, 2, 3]);
@@ -471,6 +473,8 @@ describe('outgoing mail and forwarding boundaries', () => {
 			receiveEmail: [recipient],
 			subject: 'reused inline image',
 			content: `<p>copy</p><img src="/api/attachment/${encodeURIComponent(oldKey)}">`,
+			sendType: 'reply',
+			emailId: sourceEmail.emailId,
 			requestId: 'request_inline_image_copy_0001',
 		});
 		expect(response.status).toBe(200);
@@ -484,6 +488,21 @@ describe('outgoing mail and forwarding boundaries', () => {
 		const copiedObject = await env.r2.get(copied.key);
 		expect(copiedObject).not.toBeNull();
 		expect(Array.from(new Uint8Array(await copiedObject.arrayBuffer()))).toEqual(Array.from(bytes));
+		const sent = await env.db.prepare(`
+			SELECT message_id AS messageId, in_reply_to AS inReplyTo, relation, content
+			FROM email WHERE user_id = ? AND type = 1 AND subject = 'reused inline image'
+		`).bind(senderId).first();
+		expect(sent.messageId).toMatch(/^<[^<>]+@example\.com>$/);
+		expect(sent.inReplyTo).toBe('<inline-source@example.net>');
+		expect(sent.relation).toBe('<inline-root@example.net> <inline-source@example.net>');
+		expect(sent.content).toContain(`{{domain}}${copied.key}`);
+		const recipientCopy = await env.db.prepare(`
+			SELECT e.message_id AS messageId, a.key
+			FROM email e JOIN attachments a ON a.email_id = e.email_id
+			WHERE e.user_id = (SELECT user_id FROM user WHERE email = ?)
+			  AND e.type = 0 AND e.subject = 'reused inline image'
+		`).bind(recipient).first();
+		expect(recipientCopy).toMatchObject({messageId: sent.messageId, key: copied.key});
 		const authenticated = await api(`/api/attachment/${encodeURIComponent(copied.key)}`, {
 			headers: { Cookie: cookie },
 		});
@@ -1015,7 +1034,9 @@ describe('outgoing mail and forwarding boundaries', () => {
 	it('returns accepted with a warning after an irreversible external side effect even if final persistence fails', async () => {
 		await env.db.prepare("UPDATE mail_provider_config SET provider = 'cloudflare' WHERE id = 1").run();
 		const sender = 'accepted-persistence@example.com';
+		const localRecipient = 'accepted-local@example.com';
 		const userId = await createLegacyUser(sender, 'accepted-persistence-password');
+		const localRecipientId = await createLegacyUser(localRecipient, 'accepted-local-password');
 		const cookie = await login(sender, 'accepted-persistence-password');
 		let providerAccepted = false;
 		const failingDb = new Proxy(env.db, {
@@ -1034,7 +1055,7 @@ describe('outgoing mail and forwarding boundaries', () => {
 		});
 		const response = await send(cookie, {
 			accountId: await accountIdFor(sender),
-			receiveEmail: ['friend@outside.test'],
+			receiveEmail: ['friend@outside.test', localRecipient],
 			subject: 'accepted before local failure',
 			content: '<p>accepted</p>',
 		}, {
@@ -1042,14 +1063,17 @@ describe('outgoing mail and forwarding boundaries', () => {
 			db: failingDb,
 			email: { send: vi.fn(async () => {
 				providerAccepted = true;
-				return { messageId: 'accepted-before-db-failure' };
+				return { messageId: '<accepted-before-db-failure@provider.test>' };
 			}) },
 		});
 		expect(response.status).toBe(200);
 		const body = await response.json();
 		expect(body.data[0].deliveryWarning).toMatch(/persistence was incomplete/i);
+		const localCopy = await env.db.prepare('SELECT message_id AS messageId FROM email WHERE user_id = ? AND type = 0 AND subject = ?')
+			.bind(localRecipientId, 'accepted before local failure').first();
+		expect(localCopy.messageId).toBe('<accepted-before-db-failure@provider.test>');
 		const quota = await env.db.prepare('SELECT send_count AS sendCount FROM user WHERE user_id = ?').bind(userId).first();
-		expect(quota.sendCount).toBe(1);
+		expect(quota.sendCount).toBe(2);
 	});
 
 	it('replays a completed request ID without sending or charging quota twice', async () => {

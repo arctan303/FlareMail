@@ -1,5 +1,23 @@
 # Changelog
 
+## 未发布 / Unreleased
+
+- 会话数量移至发件人后，阅读主题随正文滚动，收起邮件并入操作栏以减少空行。
+- Moved conversation counts beside senders, let the reading heading scroll with messages, and placed Collapse in the message toolbar to remove the extra row.
+
+- 会话归组同时检查回复关联与主题，兼容重复 `Re:` 等回复前缀；中途改题另起会话，列表、阅读及会话操作使用同一规则，原始主题和引用保留。
+- Conversations now require reply links and matching subjects, tolerating repeated reply prefixes such as `Re:`. Subject changes start separate conversations consistently across lists, reading and actions, while original subjects and quotes are preserved.
+
+- 会话阅读顶部统一显示主题，各封原始主题保留在邮件详情，避免历史邮件重复大标题。
+- Conversation reading shows one heading, with each original subject available in message details.
+
+- 新增 Gmail 式会话列表与阅读：同一回复链一个入口，按会话分页并显示未读；打开后整段来信标已读，历史邮件可展开，引用原文保留。
+- Added conversation lists and reading: one entry per reply chain, conversation paging and unread state, and conversation-wide read updates on opening, with expandable history and original quotes preserved.
+- 优化阅读和写信的历史引用折叠及多级缩进，保留原文；修复引用错配、草稿/编辑器同步、回复对象和消息关联 ID。
+- Improved quote folding and nested indentation in reading and composing while preserving original content; fixed stale quotes, draft/editor synchronization, reply recipients, and threading IDs.
+- 新收件保存并展示 Reply-To，需要管理员执行数据库 325 更新；旧邮件丢失的字段不自动恢复。
+- Newly received mail stores and displays Reply-To after an administrator applies database update 325; missing historical values cannot be recovered automatically.
+
 ## v1.0.4 — 2026-09-22
 
 ### 新增 / Added

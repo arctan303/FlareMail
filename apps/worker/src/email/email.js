@@ -104,6 +104,7 @@ export async function email(message, env, ctx) {
 			inReplyTo: parsedEmail.inReplyTo,
 			relation: parsedEmail.references,
 			messageId: parsedEmail.messageId,
+			replyTo: parsedEmail.replyTo || [],
 			userId: account ? account.userId : 0,
 			accountId: account ? account.accountId : 0,
 			isDel: isDel.DELETE,

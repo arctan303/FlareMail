@@ -35,11 +35,24 @@ export function createSeed(locale = 'zh') {
             content: '<div style="font-family:system-ui;line-height:1.8;max-width:660px"><p>'+(en?'Hi Alex,':'你好，Alex：')+'</p><p>'+text+'</p><p>'+(en?'Have a lovely day,':'祝你今天愉快，')+'<br>'+name+'</p></div>',
             recipient: JSON.stringify([{address:accounts.find(a=>a.accountId===accountId).email,name:'Alex'}]),
             cc:'[]',bcc:'[]',unread:index%3===0?0:1,isStar:index%7===1?1:0,
-            status:2,isDel:0,createTime:ago(index*3),messageId:'sample-'+index+'@example.net',code:index%8===6?'482916':'',
+            status:2,isDel:0,createTime:ago(index*3),messageId:'<sample-'+index+'@example.net>',code:index%8===6?'482916':'',
             attachments:index%8===4?[{filename:'project-brief.txt',key:'sample/project-brief.txt',size:144,contentType:'text/plain'}]:[],
         };
     });
     emails.push({...emails[1],emailId:1100,accountId:1,type:1,name:'Alex',sendEmail:accounts[0].email,subject:en?'Re: A few ideas for our next project':'回复：关于下一个项目的一些想法',recipient:'[{"address":"maya@example.net"}]',text:en?'Thanks Maya, Friday works for me!':'谢谢 Maya，周五见！',content:en?'<p>Thanks Maya, Friday works for me!</p>':'<p>谢谢 Maya，周五见！</p>',createTime:ago(2),unread:1,isStar:0});
+    // A real four-message example spanning received/sent mail, not merely
+    // matching subjects. Keep the original list counts and independent rows.
+    const root=emails[17],middle=emails[9],latest=emails[1],sent=emails.at(-1);
+    root.subject=latest.subject;
+    middle.subject=`Re: ${root.subject}`;
+    middle.inReplyTo=root.messageId;middle.relation=root.messageId;
+    latest.inReplyTo=middle.messageId;latest.relation=`${root.messageId} ${middle.messageId}`;
+    sent.messageId='<sample-project-reply@example.com>';sent.inReplyTo=latest.messageId;
+    sent.relation=`${latest.relation} ${latest.messageId}`;
+    const quote=(sender,html)=>`<div class="gmail_quote flaremail_quote"><p>${sender}:</p><blockquote type="cite" style="margin-left:24px;padding-left:12px;border-left:2px solid #cbd5e1">${html}</blockquote></div>`;
+    middle.content+=quote(root.name,root.content);
+    latest.content+=quote(middle.name,middle.content);
+    sent.content+=quote(latest.name,latest.content);
     emails.forEach(email=>{email.toEmail=JSON.parse(email.recipient)[0]?.address||'';email.attList=email.attachments.map((att,index)=>({...att,attId:email.emailId+'-'+index}));});
     const contacts = [
         {contactId:1,name:'Maya Chen',email:'maya@example.net',groupName:en?'Work':'工作',remark:en?'Product designer':'产品设计师',phone:''},

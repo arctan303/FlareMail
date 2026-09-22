@@ -22,15 +22,19 @@ function stripHtml(html) {
 	}
 }
 
+function textToHtml(text) {
+	return String(text || '')
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;')
+		.replace(/\n/g, '<br>');
+}
+
 async function selectOwnedEmail(c, emailId, userId) {
 	if (!Number.isInteger(emailId) || emailId <= 0) return null;
-	return orm(c).select().from(email)
-		.where(and(
-			eq(email.emailId, emailId),
-			eq(email.userId, userId),
-			eq(email.isDel, isDel.NORMAL)
-		))
-		.get();
+	return emailService.selectById(c, emailId, userId);
 }
 
 // GET /cli/accounts
@@ -92,6 +96,7 @@ app.get('/cli/emails', async (c) => {
 			.where(and(...conditions))
 			.get()
 	]);
+	await emailService.emailAddReplyTo(c, list);
 
 	const emailIds = list.map(item => item.emailId);
 	const attachmentRows = emailIds.length > 0
@@ -105,6 +110,7 @@ app.get('/cli/emails', async (c) => {
 		id: e.emailId,
 		from: `${e.name || ''} <${e.sendEmail || ''}>`.trim(),
 		to: e.toEmail,
+		replyTo: e.replyTo,
 		subject: e.subject,
 		date: e.createTime,
 		unread: e.unread === 0,
@@ -141,6 +147,7 @@ app.get('/cli/emails/:id', async (c) => {
 		id: emailRow.emailId,
 		from: `${emailRow.name || ''} <${emailRow.sendEmail || ''}>`.trim(),
 		to: emailRow.toEmail,
+		replyTo: emailRow.replyTo,
 		cc: emailRow.cc,
 		subject: emailRow.subject,
 		date: emailRow.createTime,
@@ -184,7 +191,7 @@ app.post('/cli/emails/send', async (c) => {
 		receiveEmail: [to],
 		subject,
 		text: body || '',
-		content: (body || '').replace(/\n/g, '<br>'),
+		content: textToHtml(body),
 		cc: cc || '',
 		sendType: 'new',
 		requestId: params.requestId,
@@ -212,8 +219,24 @@ app.post('/cli/emails/:id/reply', async (c) => {
 		throw new BizError('CC recipients are not supported by the CLI endpoint.');
 	}
 
-	const replyTo = original.sendEmail;
-	const replySubject = original.subject?.startsWith('Re:') ? original.subject : `Re: ${original.subject || ''}`;
+	let replyRecipients = original.type === 0
+		? (original.replyTo || []).map(item => item.address).filter(Boolean)
+		: [];
+	if (original.type === 0 && replyRecipients.length === 0) replyRecipients = [original.sendEmail];
+	if (original.type === 1) {
+		try {
+			replyRecipients = JSON.parse(original.recipient || '[]')
+				.map(item => item?.address)
+				.filter(Boolean);
+		} catch {
+			replyRecipients = [];
+		}
+		if (replyRecipients.length === 0 && original.toEmail) replyRecipients = [original.toEmail];
+	}
+	replyRecipients = [...new Set(replyRecipients.filter(Boolean))];
+	if (replyRecipients.length === 0) throw new BizError('No reply recipient is available for this message.', 400);
+	const baseSubject = String(original.subject || '').replace(/^(?:(?:re|回复)\s*[:：]\s*)+/i, '');
+	const replySubject = `Re: ${baseSubject}`;
 
 	const quoteHeader = `\n\n--- Original message ---\nFrom: ${original.name || original.sendEmail}\nDate: ${original.createTime}\nSubject: ${original.subject}\n\n`;
 	const originalBody = original.text || stripHtml(original.content);
@@ -226,10 +249,10 @@ app.post('/cli/emails/:id/reply', async (c) => {
 
 	const sendParams = {
 		accountId: replyAccountId,
-		receiveEmail: [replyTo],
+		receiveEmail: replyRecipients,
 		subject: replySubject,
 		text: body,
-		content: body.replace(/\n/g, '<br>'),
+		content: textToHtml(body),
 		cc: params.cc || '',
 		sendType: 'reply',
 		emailId,

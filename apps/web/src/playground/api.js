@@ -1,5 +1,6 @@
 import {createSeed} from './seed.js';
 import {SCHEMA_PATCH_CATALOG, LATEST_SCHEMA_VERSION} from '../../../worker/src/init/patch-catalog.js';
+import {findConversation, groupConversations} from '../../../worker/src/utils/mail-conversation.js';
 
 const clone = value => structuredClone(value);
 const ids = value => (Array.isArray(value)?value:String(value??'').split(',')).map(Number);
@@ -11,6 +12,34 @@ export function createPlaygroundApi(locale='zh') {
     const fail=(zh,en,code=400)=>{throw {code,message:locale==='en'?en:zh};};
     const required=(list,key,id)=>list.find(item=>item[key]===Number(id))||fail('示例数据不存在，请刷新后重试。','Sample data not found. Refresh to start again.');
     const myAccounts=()=>state.accounts.filter(a=>a.userId===1);
+    const visibleMail=()=>state.emails.filter(e=>e.userId===1&&!e.isDel&&myAccounts().some(a=>a.accountId===e.accountId&&!a.isDel));
+    function conversationMetadata(){
+        const rows=visibleMail();
+        if(rows.length>10000)fail('当前用户的有效邮件超过 10000 封，暂时无法使用会话列表及整段操作。','Conversation lists and actions currently support up to 10,000 active messages per user.',413);
+        return rows;
+    }
+    const newestFirst=(a,b)=>b.createTime.localeCompare(a.createTime)||b.emailId-a.emailId;
+    function scopeMail(rows,p,starred=false){
+        if(starred)return rows.filter(e=>e.isStar&&(!Number(p.accountId)||e.accountId===Number(p.accountId)));
+        return rows.filter(e=>e.type===Number(p.type||0)&&(Number(p.allReceive)===1||e.accountId===Number(p.accountId||1)));
+    }
+    function matchesMail(e,p){
+        if(p.filter==='unread'&&e.unread!==0)return false;
+        if(p.filter==='has_att'&&!e.attachments.length)return false;
+        const term=String(p.keyword||p.q||'').toLowerCase();
+        return !term||[e.subject,e.text,e.sendEmail,e.recipient,e.name].some(v=>String(v||'').toLowerCase().includes(term));
+    }
+    function conversationList(p,starred){
+        const visible=conversationMetadata(),byId=new Map(visible.map(e=>[e.emailId,e]));
+        const grouped=groupConversations(visible);
+        const list=grouped.groups.flatMap(group=>{
+            const members=scopeMail(group.map(id=>byId.get(id)),p,starred).sort(newestFirst);
+            if(!members.some(e=>matchesMail(e,p)))return [];
+            const unreadIds=members.filter(e=>e.type===0&&e.unread===0).map(e=>e.emailId);
+            return [{...members[0],conversationId:Math.min(...group),conversationCount:group.length,scopeCount:members.length,memberIds:members.map(e=>e.emailId),unreadIds,unread:unreadIds.length?0:1,isStar:members.some(e=>e.isStar)?1:0}];
+        }).sort((a,b)=>Number(p.timeSort)?-newestFirst(a,b):newestFirst(a,b));
+        return {...page(list,p),truncated:grouped.truncated};
+    }
     function userInfo(){return {...state.users[0],permKeys:['*'],account:myAccounts()[0],accountList:myAccounts(),accountCount:myAccounts().length,domainList:state.domains.map(d=>'@'+d)};}
     function publicConfig(){return {...state.settings,...setupStatus,domainList:state.domains.map(d=>'@'+d),logoUrl:state.settings.siteLogo||'/mail-logo.svg',faviconUrl:state.settings.siteFavicon||'/favicon.svg',manifestUrl:''};}
     function page(list,p,pageKey='num'){
@@ -82,6 +111,7 @@ export function createPlaygroundApi(locale='zh') {
         case 'PUT /account/setDefaultSend': myAccounts().forEach(a=>{a.isDefaultSend=a.accountId===Number(d.accountId)?1:0;});return {};
         case 'GET /account/getDefaultSend': return clone(myAccounts().find(a=>a.isDefaultSend)||myAccounts()[0]);
         case 'GET /email/list': case 'GET /star/list': {
+            if(p.view==='conversation')return clone(conversationList(p,path==='/star/list'));
             let list=state.emails.filter(e=>!e.isDel&&e.userId===1);
             if(path==='/star/list')list=list.filter(e=>e.isStar&&(!p.accountId||e.accountId===Number(p.accountId)));
             else {list=list.filter(e=>e.type===Number(p.type||0));if(!Number(p.allReceive))list=list.filter(e=>e.accountId===Number(p.accountId||1));}
@@ -92,8 +122,56 @@ export function createPlaygroundApi(locale='zh') {
             return clone(page(list,p));
         }
         case 'GET /email/latest': return [];
+        case 'GET /email/conversation': {
+            const size=p.size===undefined?20:Number(p.size);
+            if(!Number.isInteger(size)||size<1||size>50)fail('无效的分页大小。','Invalid page size.');
+            const visible=visibleMail();
+            const anchor=required(visible,'emailId',p.emailId);
+            const sorted=[...visible].sort((a,b)=>b.createTime.localeCompare(a.createTime)||b.emailId-a.emailId);
+            const scanLimited=sorted.length>5000;
+            const metadata=sorted.slice(0,5000);
+            if(!metadata.some(e=>e.emailId===anchor.emailId))metadata.push(anchor);
+            const component=findConversation(metadata,anchor.emailId);
+            let rows=sorted.filter(e=>component.emailIds.includes(e.emailId));
+            if(p.before){
+                let cursor;
+                try{cursor=JSON.parse(atob(String(p.before).replace(/-/g,'+').replace(/_/g,'/')));}catch{fail('无效的分页位置。','Invalid conversation cursor.');}
+                if(typeof cursor?.createTime!=='string'||!Number.isSafeInteger(cursor?.emailId))fail('无效的分页位置。','Invalid conversation cursor.');
+                rows=rows.filter(e=>e.createTime<cursor.createTime||(e.createTime===cursor.createTime&&e.emailId<cursor.emailId));
+            }
+            const selected=rows.slice(0,size),hasMore=rows.length>size,last=selected.at(-1);
+            const nextCursor=hasMore?btoa(JSON.stringify({createTime:last.createTime,emailId:last.emailId})).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''):null;
+            return clone({anchorEmailId:anchor.emailId,anchor,messages:selected.reverse(),nextCursor,hasMore,scanLimited,truncated:component.truncated,readThroughEmailId:Math.max(...visible.map(e=>e.emailId))});
+        }
+        case 'PUT /email/conversation/read': {
+            const boundary=Number(d.readThroughEmailId);
+            if(!Number.isSafeInteger(boundary)||boundary<=0)fail('无效的阅读位置。','Invalid read boundary.');
+            const visible=conversationMetadata();required(visible,'emailId',d.emailId);
+            const group=groupConversations(visible).groups.find(group=>group.includes(Number(d.emailId)));
+            const selected=visible.filter(e=>group.includes(e.emailId)&&e.emailId<=boundary&&e.type===0);
+            selected.forEach(e=>{e.unread=1;});
+            return {emailIds:selected.map(e=>e.emailId),updatedCount:selected.length};
+        }
+        case 'PUT /email/conversation/state': {
+            if(!Array.isArray(d.emailIds)||!d.emailIds.length||d.emailIds.length>50||!['read','unread','delete','star','unstar'].includes(d.action))fail('无效的会话操作。','Invalid conversation action.');
+            const visible=conversationMetadata(),grouped=groupConversations(visible),wanted=new Set();
+            for(const id of ids(d.emailIds)){
+                required(visible,'emailId',id);
+                const group=grouped.groups.find(group=>group.includes(id));group.forEach(member=>wanted.add(member));
+            }
+            const selected=scopeMail(visible.filter(e=>wanted.has(e.emailId)),d.view||{},Boolean(d.view?.starred));
+            for(const e of selected){
+                if(d.action==='read')e.unread=1;
+                if(d.action==='unread')e.unread=0;
+                if(d.action==='delete')e.isDel=1;
+                if(d.action==='star')e.isStar=1;
+                if(d.action==='unstar')e.isStar=0;
+            }
+            return {emailIds:selected.map(e=>e.emailId),updatedCount:selected.length};
+        }
         case 'DELETE /email/delete': state.emails=state.emails.filter(e=>!ids(p.emailIds).includes(e.emailId));return {};
         case 'PUT /email/read': state.emails.filter(e=>ids(d.emailIds).includes(e.emailId)).forEach(e=>{e.unread=1;});return {};
+        case 'PUT /email/unread': state.emails.filter(e=>ids(d.emailIds).includes(e.emailId)).forEach(e=>{e.unread=0;});return {};
         case 'POST /star/add': required(state.emails,'emailId',d.emailId).isStar=1;return {};
         case 'DELETE /star/cancel': required(state.emails,'emailId',p.emailId).isStar=0;return {};
         case 'POST /email/send': {
@@ -107,6 +185,12 @@ export function createPlaygroundApi(locale='zh') {
                 return {filename:att.filename,size:att.size,contentType:att.contentType,key};
             });
             const email={emailId:state.nextId++,userId:1,accountId:account.accountId,type:1,isStar:0,isDel:0,unread:1,status:2,code:'',cc:'[]',bcc:'[]',subject:d.subject,content:await preserveInlineImages(d.content),text:d.text||'',sendEmail:account.email,name:d.name||account.name,recipient:JSON.stringify(d.receiveEmail.map(address=>({address}))),toEmail:d.receiveEmail[0],attachments,attList:attachments.map((att,index)=>({...att,attId:state.nextId+'-'+index})),createTime:now(),messageId:'sample-send@example.com',deliveryWarning:locale==='en'?'Simulated send. No email was delivered.':'已模拟发送，未投递真实邮件。'};
+            email.messageId=`<sample-send-${email.emailId}@example.com>`;
+            if(d.sendType==='reply'){
+                const parent=required(state.emails.filter(e=>e.userId===1&&!e.isDel),'emailId',d.emailId);
+                email.inReplyTo=parent.messageId||'';
+                email.relation=[parent.relation,parent.messageId].filter(Boolean).join(' ');
+            }
             state.emails.push(email);state.users[0].sendCount++;
             if(d.requestId)sentRequests.set(d.requestId,[email]);return clone([email]);
         }

@@ -58,14 +58,15 @@
 
     <div ref="scroll" class="scroll" @scroll="onScroll" :aria-busy="loading">
       <FilterChips v-if="showCategories" :active-filter="activeFilter" :filter-chips="filterChips" @select="setFilter" />
+      <div v-if="listTruncated" class="list-notice">{{ $t('conversationListPartial') }}</div>
       <div class="mail-page-rows" v-if="!loading && displayEmails.length > 0">
             <div v-for="(item, index) in displayEmails"
                  :class="['email-row', props.type, { 'is-unread-row': item.unread === EmailUnreadEnum.UNREAD && shouldShowUnread }]"
-                 :key="item.emailId || item.draftId" :data-checked="item.checked" :data-email-id="item.emailId"
-                 tabindex="0" role="link" :aria-label="item.subject || $t('noSubjectParens')"
+                 :key="item.conversationId || item.emailId || item.draftId" :data-checked="item.checked" :data-email-id="item.emailId"
+                 tabindex="0" role="link" :aria-label="conversationView ? (conversationSubject(item.subject) || $t('noSubjectParens')) : (item.subject || $t('noSubjectParens'))"
                  @keydown.enter.self="jumpDetails(item)" @click="jumpDetails(item)"
                  @contextmenu="handleContextmenu($event, item)">
-              <el-checkbox class="row-checkbox" :model-value="item.checked" :aria-label="$t('selectMailLabel', { subject: item.subject || $t('noSubjectParens') })"
+              <el-checkbox class="row-checkbox" :model-value="item.checked" :aria-label="$t('selectMailLabel', { subject: conversationView ? (conversationSubject(item.subject) || $t('noSubjectParens')) : (item.subject || $t('noSubjectParens')) })"
                            @click.stop="handleRowCheckboxClick($event, index, item)" />
               <button v-if="showStar && props.type !== 'draft'" class="row-star" type="button"
                       :class="{ 'is-starred': item.isStar, 'is-starring': starringId === item.emailId }" :aria-pressed="!!item.isStar"
@@ -76,11 +77,12 @@
               <span v-else class="row-star-placeholder" />
               <div class="row-sender" :title="item.sendEmail">
                 <span class="unread-dot" v-if="item.unread === EmailUnreadEnum.UNREAD && shouldShowUnread" :title="$t('unread')" />
-                <slot name="name" :email="item">{{ item.name || item.sendEmail }}</slot>
+                <span class="row-sender-name"><slot name="name" :email="item">{{ item.name || item.sendEmail }}</slot></span>
+                <span v-if="conversationView && item.conversationCount > 1" class="conversation-count-inline">{{ item.conversationCount }}</span>
               </div>
               <div class="row-summary">
                 <span v-if="item.code" class="code-tag" @click.stop="copyCode(item.code)">{{ item.code }}</span>
-                <span class="row-subject"><slot name="subject" :email="item">{{ item.subject || $t('noSubjectParens') }}</slot></span>
+                <span class="row-subject"><slot name="subject" :email="item">{{ conversationView ? (conversationSubject(item.subject) || $t('noSubjectParens')) : (item.subject || $t('noSubjectParens')) }}</slot></span>
                 <span v-if="item.formatText" class="row-snippet">— {{ item.formatText }}</span>
               </div>
               <div class="row-indicators">
@@ -92,8 +94,8 @@
               <div class="row-user-info" v-if="showUserInfo">{{ item.userEmail }} · {{ item.type === 0 ? item.toEmail : item.sendEmail }}</div>
               <div class="hover-actions" @click.stop>
                 <button v-if="item.code" class="hover-action-btn" @click.stop="copyCode(item.code)" :title="$t('copyCode')"><Icon icon="solar:copy-linear" width="17" /></button>
-                <button v-if="item.unread === EmailUnreadEnum.UNREAD && shouldShowUnread && props.emailRead" class="hover-action-btn" @click.stop="emailRead(item.emailId)" :title="$t('markAsRead')"><Icon icon="solar:letter-opened-linear" width="17" /></button>
-                <button class="hover-action-btn danger" @click.stop="rightDelete(item.emailId)" :title="$t('deleteMail')"><Icon icon="solar:trash-bin-trash-linear" width="17" /></button>
+                <button v-if="item.unread === EmailUnreadEnum.UNREAD && shouldShowUnread && props.emailRead" class="hover-action-btn" @click.stop="emailRead(item)" :title="$t('markAsRead')"><Icon icon="solar:letter-opened-linear" width="17" /></button>
+                <button class="hover-action-btn danger" @click.stop="rightDelete(item)" :title="$t('deleteMail')"><Icon icon="solar:trash-bin-trash-linear" width="17" /></button>
               </div>
             </div>
       </div>
@@ -158,6 +160,7 @@ import { EmailUnreadEnum } from "@/enums/index.js";
 import { Icon } from "@iconify/vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { emailUnread as apiEmailUnread } from "@/request/email.js";
+import { applyConversationRead, conversationMemberIds, conversationSubject } from '@/utils/mail-conversation.js';
 
 
 const { t } = useI18n();
@@ -167,6 +170,7 @@ const props = defineProps({
   emailDelete: Function,
   emailRead: Function,
   emailUnread: Function,
+  conversationAction: Function,
   starAdd: Function,
   starCancel: Function,
   starSuccess: Function,
@@ -212,7 +216,12 @@ const props = defineProps({
   type: {
     type: String,
     default: 'email'
-  }
+  },
+  conversationView: {
+    type: Boolean,
+    default: false
+  },
+  conversationScope: { type: Object, default: () => ({}) }
 });
 
 const route = useRoute();
@@ -243,6 +252,7 @@ const loading = ref(false);
 const noLoading = ref(false);
 const latestEmail = ref({});
 const total = ref(0);
+const listTruncated = ref(false);
 
 const checkAll = ref(false);
 const isIndeterminate = ref(false);
@@ -269,7 +279,7 @@ const pageRange = computed(() => {
   if (isCompact.value) {
     return `${start}–${Math.max(start, end)} / ${total.value}`;
   }
-  return t('pageRangeOfTotal', { start, end: Math.max(start, end), total: total.value });
+  return t(props.conversationView ? 'conversationPageRange' : 'pageRangeOfTotal', { start, end: Math.max(start, end), total: total.value });
 });
 
 defineExpose({
@@ -282,7 +292,8 @@ defineExpose({
   latestEmail,
   noLoading,
   total,
-  currentPage
+  currentPage,
+  applyReadState
 });
 
 onActivated(() => {
@@ -482,7 +493,16 @@ function starChange(email) {
   setTimeout(() => {
     if (starringId.value === email.emailId) starringId.value = null;
   }, 280);
-  if (!email.isStar) {
+  if (props.conversationView) {
+    const wasStarred = !!email.isStar;
+    if (!wasStarred && !props.allowStar) return;
+    email.isStar = wasStarred ? 0 : 1;
+    const scope = { ...props.conversationScope };
+    Promise.resolve(props.conversationAction?.(wasStarred ? 'unstar' : 'star', [email.emailId], scope)).then(() => {
+      if (wasStarred) props.cancelSuccess?.(email); else props.starSuccess?.(email);
+      if (props.type === 'star') schedulePageReload();
+    }).catch(error => { console.error(error); email.isStar = wasStarred ? 1 : 0; schedulePageReload(); });
+  } else if (!email.isStar) {
     if (!props.allowStar) return;
     email.isStar = 1;
     props.starAdd(email.emailId).then(() => {
@@ -512,13 +532,13 @@ let pendingRead = null;
 
 function commitPendingRead() {
   if (!pendingRead) return;
-  const { emailIds, timer } = pendingRead;
+  const { emailIds, timer, scope } = pendingRead;
   pendingRead = null;
   if (timer) clearTimeout(timer);
-  if (emailIds?.length && typeof props.emailRead === 'function') {
-    const res = props.emailRead(emailIds);
+  if (emailIds?.length && (typeof props.emailRead === 'function' || typeof props.conversationAction === 'function')) {
+    const res = props.conversationView ? props.conversationAction('read', emailIds, scope) : props.emailRead(emailIds);
     if (res && typeof res.catch === 'function') {
-      res.catch(err => console.error(err));
+      res.catch(err => { console.error(err); schedulePageReload(); });
     }
     if (props.type === 'email' && activeFilter.value === 'unread') {
       schedulePageReload();
@@ -543,10 +563,11 @@ function undoRead() {
   if (messageInstance && typeof messageInstance.close === 'function') {
     messageInstance.close();
   }
-  savedStates.forEach(({ emailId, unread, checked }) => {
+  savedStates.forEach(({ emailId, unread, unreadIds, checked }) => {
     const item = emailList.find(email => email.emailId === emailId);
     if (item) {
       item.unread = unread;
+      item.unreadIds = unreadIds;
       item.checked = checked;
     }
   });
@@ -560,12 +581,14 @@ function triggerReadWithUndo(targetIds, isBatch = false) {
   flushPendingRead();
 
   const savedStates = [];
-  targetIds.forEach(id => {
+  targetIds.forEach(target => {
+    const id = typeof target === 'object' ? target.emailId : target;
     const item = emailList.find(email => email.emailId === id);
     if (item) {
       savedStates.push({
         emailId: item.emailId,
         unread: item.unread,
+        unreadIds: Array.isArray(item.unreadIds) ? [...item.unreadIds] : [],
         checked: item.checked
       });
     }
@@ -573,8 +596,10 @@ function triggerReadWithUndo(targetIds, isBatch = false) {
 
   if (!savedStates.length) return;
 
+  const selectedRows = savedStates.map(state => emailList.find(item => item.emailId === state.emailId)).filter(Boolean);
   const emailIds = savedStates.map(s => s.emailId);
-  localRead(emailIds);
+  selectedRows.forEach(item => { item.unread = EmailUnreadEnum.READ; item.unreadIds = []; item.checked = false; });
+  updateCheckStatus();
 
   const messageText = isBatch
     ? t('batchMarkedAsRead', { count: emailIds.length })
@@ -609,20 +634,36 @@ function triggerReadWithUndo(targetIds, isBatch = false) {
     emailIds,
     timer,
     messageInstance,
-    savedStates
+    savedStates,
+    scope: { ...props.conversationScope }
   };
 }
 
 const handleRead = () => {
-  const emailIds = getSelectedMailsIds();
-  if (!emailIds.length) return;
-  triggerReadWithUndo(emailIds, true);
+  const rows = getSelectedMails();
+  if (!rows.length) return;
+  triggerReadWithUndo(rows, true);
 };
 
 const showDelete = computed(() => props.type === 'draft');
 
-const handleStar = () => {
+const handleStar = async () => {
   if (!props.allowStar) return;
+  const selected = getSelectedMails().filter(email => !email.isStar);
+  if (props.conversationView) {
+    if (!selected.length) return;
+    const scope = { ...props.conversationScope };
+    selected.forEach(email => { email.isStar = 1; email.checked = false; });
+    updateCheckStatus();
+    try {
+      await props.conversationAction?.('star', selected.map(email => email.emailId), scope);
+      ElMessage({ message: t('batchStarSuccessMsg', { count: selected.length }), type: 'success', plain: true });
+      schedulePageReload();
+    } catch (error) {
+      console.error(error); selected.forEach(email => { email.isStar = 0; }); schedulePageReload();
+    }
+    return;
+  }
   let count = 0;
   emailList.filter(item => item.checked).forEach(email => {
     if (!email.isStar) {
@@ -654,12 +695,16 @@ function localRead(emailIds) {
 }
 
 function emailUnread(emailId) {
-  const ids = Array.isArray(emailId) ? emailId : [emailId];
+  const targets = Array.isArray(emailId) ? emailId : [emailId];
+  const rows = targets.map(target => typeof target === 'object' ? target : emailList.find(item => item.emailId === target)).filter(Boolean);
+  const ids = props.conversationView ? rows.map(row => row.emailId) : targets;
   if (!ids.length) return;
   flushPendingRead();
-  localUnread(ids);
+  if (props.conversationView) rows.forEach(row => { row.unreadIds = conversationMemberIds(row); row.unread = EmailUnreadEnum.UNREAD; });
+  else localUnread(ids);
   const doUnread = props.emailUnread || apiEmailUnread;
-  const res = doUnread(ids);
+  const scope = { ...props.conversationScope };
+  const res = props.conversationView ? props.conversationAction?.('unread', rows.map(row => row.emailId), scope) : doUnread(ids);
   if (res && typeof res.then === 'function') {
     res.then(() => {
       ElMessage({ message: t('markedAsUnreadMsg'), type: 'success', plain: true });
@@ -668,6 +713,7 @@ function emailUnread(emailId) {
       }
     }).catch(err => {
       console.error(err);
+      schedulePageReload();
     });
   } else {
     ElMessage({ message: t('markedAsUnreadMsg'), type: 'success', plain: true });
@@ -686,25 +732,54 @@ function localUnread(emailIds) {
   });
 }
 
+function applyReadState(emailId, read) {
+  const ids = [Number(emailId)]
+  if (props.conversationView) {
+    if (read) applyConversationRead(emailList, ids)
+    else emailList.forEach(row => {
+      if (conversationMemberIds(row).includes(ids[0])) {
+        row.unreadIds = [...new Set([...(row.unreadIds || []).map(Number), ids[0]])]
+        row.unread = EmailUnreadEnum.UNREAD
+      }
+    })
+    if (read && props.type === 'email' && activeFilter.value === 'unread') schedulePageReload()
+    return
+  }
+  if (read) {
+    localRead(ids)
+    if (props.type === 'email' && activeFilter.value === 'unread') schedulePageReload()
+  } else {
+    localUnread(ids)
+  }
+}
+
 function rightDelete(emailId) {
   flushPendingRead();
+  const row = typeof emailId === 'object' ? emailId : emailList.find(item => item.emailId === emailId);
+  const deleteIds = props.conversationView && row ? conversationMemberIds(row) : [typeof emailId === 'object' ? emailId.emailId : emailId];
+  const scope = { ...props.conversationScope };
+  const deleteAction = () => props.conversationView ? props.conversationAction?.('delete', [row.emailId], scope) : props.emailDelete(deleteIds);
   if (props.type === 'all-email') {
     ElMessageBox.confirm(t('delOneEmailConfirm'), {
       confirmButtonText: t('confirm'),
       cancelButtonText: t('cancel'),
       type: 'warning'
     }).then(() => {
-      props.emailDelete([emailId]).then(() => {
+      deleteAction().then(result => {
+        const affected = result?.emailIds || deleteIds;
         ElMessage({ message: t('delSuccessMsg'), type: 'success', plain: true });
-        emailStore.deleteIds = [emailId];
-      });
+        emailStore.deleteIds = affected;
+        schedulePageReload();
+      }).catch(err => { console.error(err); schedulePageReload(); });
     });
     return;
   }
-  props.emailDelete([emailId]).then(() => {
+  deleteAction().then(result => {
+    const affected = result?.emailIds || deleteIds;
     ElMessage({ message: t('delSuccessMsg'), type: 'success', plain: true });
-    emailStore.deleteIds = [emailId];
-  });
+    emailStore.deleteIds = affected;
+    schedulePageReload();
+  }).catch(err => { console.error(err); schedulePageReload(); });
 }
 
 function handleSearch(type, value) {
@@ -733,11 +808,16 @@ function handleDelete() {
       emit('delete-draft', draftIds);
       return;
     }
-    const emailIds = getSelectedMailsIds();
-    props.emailDelete(emailIds).then(() => {
+    const selected = getSelectedMails();
+    const emailIds = props.conversationView ? selected.map(item => item.emailId) : getSelectedMailsIds();
+    const scope = { ...props.conversationScope };
+    const operation = props.conversationView ? props.conversationAction?.('delete', emailIds, scope) : props.emailDelete(emailIds);
+    operation.then(result => {
+      const affected = result?.emailIds || emailIds;
       ElMessage({ message: t('delSuccessMsg'), type: 'success', plain: true });
-      emailStore.deleteIds = emailIds;
-    });
+      emailStore.deleteIds = affected;
+      schedulePageReload();
+    }).catch(err => { console.error(err); schedulePageReload(); });
   });
 }
 
@@ -752,6 +832,11 @@ function deleteEmail(emailIds) {
 }
 
 function addItem(email) {
+  if (props.conversationView) {
+    if (email.emailId > (latestEmail.value?.emailId || 0)) latestEmail.value = email;
+    schedulePageReload();
+    return true;
+  }
   if (emailList.some(item => item.emailId === email.emailId)) return false;
   // Re-query one bounded page so new mail never expands it beyond 50 items.
   if (email.emailId > (latestEmail.value?.emailId || 0)) latestEmail.value = email;
@@ -777,6 +862,10 @@ function handleCheckAllChange(val) {
 
 function getSelectedMailsIds() {
   return emailList.filter(item => item.checked).map(item => item.emailId);
+}
+
+function getSelectedMails() {
+  return emailList.filter(item => item.checked);
 }
 
 function getSelectedDraftsIds() {
@@ -858,6 +947,7 @@ async function getEmailList(refresh = false, targetPage = currentPage.value, pre
     handleList(rows);
     emailList.splice(0, emailList.length, ...rows);
     total.value = Math.max(0, Number(data?.total) || 0);
+    listTruncated.value = !!data?.truncated;
     latestEmail.value = data?.latestEmail || {};
     currentPage.value = page;
     noLoading.value = (page + 1) * PAGE_SIZE >= total.value;
@@ -874,7 +964,7 @@ async function getEmailList(refresh = false, targetPage = currentPage.value, pre
     if (manualRefreshTriggered) ElMessage({ message: t('listRefreshedMsg'), type: 'success', plain: true, duration: 1500 });
   } catch (error) {
     if (version !== requestVersion) return;
-    ElMessage({ message: error?.message || t('mailLoadFailedMsg'), type: 'error', plain: true });
+    ElMessage({ message: Number(error?.response?.status || error?.code || error?.status) === 413 ? t('conversationLimitExceeded') : (error?.message || t('mailLoadFailedMsg')), type: 'error', plain: true });
   } finally {
     if (version === requestVersion) {
       loading.value = false;
@@ -887,6 +977,7 @@ async function getEmailList(refresh = false, targetPage = currentPage.value, pre
 
 function handleList(list) {
   list.forEach(email => {
+    if (props.conversationView) email.unread = Array.isArray(email.unreadIds) && email.unreadIds.length ? EmailUnreadEnum.UNREAD : EmailUnreadEnum.READ;
     email.formatText = htmlToText(email);
     email.formatCreateTime = formatMailListTime(email.createTime);
     email.test = t('received');
@@ -928,6 +1019,27 @@ function refreshList() {
 
 <style lang="scss" scoped>
 @use './email-scroll.scss';
+
+.conversation-count-inline {
+  flex: none;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--paper-soft);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.list-notice {
+  margin: 8px 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--paper-soft);
+  color: var(--muted);
+  font-size: 12px;
+}
 
 :global(.undo-toast-msg) {
   border-radius: 20px !important;

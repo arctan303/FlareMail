@@ -65,6 +65,7 @@ async function businessSnapshot() {
   const rows = {};
   for (const table of BUSINESS_TABLES) {
     rows[table] = (await env.db.prepare('SELECT * FROM ' + identifier(table) + ' ORDER BY 1').all()).results;
+		if (table === 'email') rows[table] = rows[table].map(({ reply_to: _replyTo, ...emailRow }) => emailRow);
   }
   rows.attachmentBody = await (await env.r2.get(ATTACHMENT_KEY)).text();
   rows.keptSession = await env.kv.get('upgrade:kept-session');

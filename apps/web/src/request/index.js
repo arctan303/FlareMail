@@ -67,9 +67,9 @@ export function contactDelete(data) {
 }
 
 // Email APIs
-export function emailList(accountId, allReceive, emailId, timeSort, size, type, keyword, filter, offset) {
+export function emailList(accountId, allReceive, emailId, timeSort, size, type, keyword, filter, offset, view) {
     return http.get('/email/list', {
-        params: { accountId, allReceive, emailId, timeSort, size, type, keyword: keyword || undefined, filter: filter || undefined, offset }
+        params: { accountId, allReceive, emailId, timeSort, size, type, keyword: keyword || undefined, filter: filter || undefined, offset, view }
     });
 }
 
@@ -83,6 +83,18 @@ export function emailLatest(emailId, accountId, allReceive) {
         noMsg: true,
         timeout: 35 * 1000
     });
+}
+
+export function emailConversation(emailId, size = 20, before) {
+    return http.get('/email/conversation', { params: { emailId, size, before: before || undefined }, noMsg: true });
+}
+
+export function emailConversationRead(emailId, readThroughEmailId) {
+    return http.put('/email/conversation/read', { emailId, readThroughEmailId });
+}
+
+export function emailConversationState(emailIds, action, view) {
+    return http.put('/email/conversation/state', { emailIds, action, view });
 }
 
 export function emailRead(emailIds) {
@@ -260,8 +272,8 @@ export function starCancel(emailId) {
     return http.delete('/star/cancel', { params: { emailId } });
 }
 
-export function starList(emailId, size, keyword, offset, accountId) {
-    return http.get('/star/list', { params: { emailId, size, keyword: keyword || undefined, offset, accountId } });
+export function starList(emailId, size, keyword, offset, accountId, view) {
+    return http.get('/star/list', { params: { emailId, size, keyword: keyword || undefined, offset, accountId, view } });
 }
 
 // Unmatched APIs

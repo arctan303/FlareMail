@@ -80,8 +80,8 @@ describe.sequential('admin database schema inspection API', () => {
     const body = await res.json();
     expect(body.code).toBe(200);
     expect(body.data).toMatchObject({
-      currentVersion: { id: 324, label: 'v3.24' },
-      latestVersion: { id: 324, label: 'v3.24' },
+      currentVersion: { id: 325, label: 'v3.25' },
+      latestVersion: { id: 325, label: 'v3.25' },
       upgradeRequired: false,
       upgradeBlocking: false,
       upgradeSupported: true,
@@ -90,29 +90,35 @@ describe.sequential('admin database schema inspection API', () => {
     expect(Array.isArray(body.data.history)).toBe(true);
     expect(body.data.history.length).toBeGreaterThanOrEqual(14);
     const topPatch = body.data.history[0];
-    expect(topPatch.version).toBe(324);
-    expect(topPatch.label).toBe('v3.24');
-    expect(topPatch.descKey).toBe('schemaPatch324');
+    expect(topPatch.version).toBe(325);
+    expect(topPatch.label).toBe('v3.25');
+    expect(topPatch.descKey).toBe('schemaPatch325');
     expect(topPatch.appliedTime).toBeTruthy();
   });
 
   it('reports pending patch when database is behind, and updates after upgrade', async () => {
     const adminCookie = await login(ADMIN);
-    // Simulate being behind by removing patch 324 marker and table
+    const account = await env.db.prepare('SELECT account_id AS accountId, user_id AS userId FROM account WHERE email = ?').bind(ADMIN).first();
+    const existing = await env.db.prepare("INSERT INTO email(account_id,user_id,subject,text) VALUES (?,?,?,?) RETURNING email_id AS emailId")
+      .bind(account.accountId, account.userId, 'preserved 324 mail', 'unchanged body').first();
+    const settingBefore = await env.db.prepare('SELECT * FROM setting').first();
+    // Simulate a healthy 324 database: the additive Reply-To column and its marker do not exist yet.
     await env.db.batch([
-      env.db.prepare('DROP TABLE IF EXISTS mail_provider_config'),
-      env.db.prepare('DELETE FROM schema_migrations WHERE version = 324'),
+      env.db.prepare('ALTER TABLE email DROP COLUMN reply_to'),
+      env.db.prepare('DELETE FROM schema_migrations WHERE version = 325'),
     ]);
 
     const behindRes = await api('/admin/schema', { cookie: adminCookie });
     expect(behindRes.status).toBe(200);
     const behindData = (await behindRes.json()).data;
-    expect(behindData.currentVersion).toMatchObject({ id: 323, label: 'v3.23' });
-    expect(behindData.latestVersion).toMatchObject({ id: 324, label: 'v3.24' });
+    expect(behindData.currentVersion).toMatchObject({ id: 324, label: 'v3.24' });
+    expect(behindData.latestVersion).toMatchObject({ id: 325, label: 'v3.25' });
     expect(behindData.upgradeRequired).toBe(true);
+    expect(behindData.upgradeBlocking).toBe(false);
     expect(behindData.pendingPatches).toEqual([
-      expect.objectContaining({ version: 324, label: 'v3.24', descKey: 'schemaPatch324' }),
+      expect.objectContaining({ version: 325, label: 'v3.25', descKey: 'schemaPatch325' }),
     ]);
+    expect((await login(ADMIN))).toBeTruthy();
 
     // Admin runs upgrade
     const upgradeRes = await api('/admin/upgrade', { method: 'POST', cookie: adminCookie });
@@ -122,9 +128,70 @@ describe.sequential('admin database schema inspection API', () => {
     const afterRes = await api('/admin/schema', { cookie: adminCookie });
     expect(afterRes.status).toBe(200);
     const afterData = (await afterRes.json()).data;
-    expect(afterData.currentVersion).toMatchObject({ id: 324, label: 'v3.24' });
-    expect(afterData.latestVersion).toMatchObject({ id: 324, label: 'v3.24' });
+    expect(afterData.currentVersion).toMatchObject({ id: 325, label: 'v3.25' });
+    expect(afterData.latestVersion).toMatchObject({ id: 325, label: 'v3.25' });
     expect(afterData.upgradeRequired).toBe(false);
     expect(afterData.pendingPatches).toEqual([]);
+    const replyToColumn = (await env.db.prepare("PRAGMA table_info('email')").all()).results.find(column => column.name === 'reply_to');
+    expect(replyToColumn).toMatchObject({ type: 'TEXT', notnull: 1, dflt_value: "'[]'" });
+    expect(await env.db.prepare('SELECT subject, text, reply_to AS replyTo FROM email WHERE email_id = ?').bind(existing.emailId).first())
+      .toMatchObject({ subject: 'preserved 324 mail', text: 'unchanged body', replyTo: '[]' });
+    expect(await env.db.prepare('SELECT * FROM setting').first()).toEqual(settingBefore);
+
+    expect((await api('/admin/upgrade', { method: 'POST', cookie: adminCookie })).status).toBe(200);
+    expect(await env.db.prepare('SELECT reply_to AS replyTo FROM email WHERE email_id = ?').bind(existing.emailId).first())
+      .toEqual({ replyTo: '[]' });
+  });
+
+  it('keeps a 323 database usable and upgrades both additive patches to current', async () => {
+    const adminCookie = await login(ADMIN);
+    await env.db.batch([
+      env.db.prepare('ALTER TABLE email DROP COLUMN reply_to'),
+      env.db.prepare('DELETE FROM schema_migrations WHERE version = 325'),
+      env.db.prepare('DROP TABLE mail_provider_config'),
+      env.db.prepare('DELETE FROM schema_migrations WHERE version = 324'),
+    ]);
+
+    const behind = await api('/admin/schema', { cookie: adminCookie });
+    expect(behind.status).toBe(200);
+    const behindData = (await behind.json()).data;
+    expect(behindData.currentVersion).toMatchObject({ id: 323, label: 'v3.23' });
+    expect(behindData.latestVersion).toMatchObject({ id: 325, label: 'v3.25' });
+    expect(behindData).toMatchObject({ upgradeRequired: true, upgradeBlocking: false, upgradeSupported: true });
+    expect(behindData.pendingPatches).toEqual([
+      expect.objectContaining({ version: 324, descKey: 'schemaPatch324' }),
+      expect.objectContaining({ version: 325, descKey: 'schemaPatch325' }),
+    ]);
+    expect(await login(ADMIN)).toBeTruthy();
+
+    expect((await api('/admin/upgrade', { method: 'POST', cookie: adminCookie })).status).toBe(200);
+    const upgraded = (await (await api('/admin/schema', { cookie: adminCookie })).json()).data;
+    expect(upgraded).toMatchObject({
+      currentVersion: { id: 325, label: 'v3.25' },
+      latestVersion: { id: 325, label: 'v3.25' },
+      upgradeRequired: false,
+      upgradeBlocking: false,
+    });
+    expect(upgraded.pendingPatches).toEqual([]);
+    expect(await dbInit.v3_24Applied(context())).toBe(true);
+    expect(await dbInit.v3_25Applied(context())).toBe(true);
+  });
+
+  it('blocks a forged 325 marker when the Reply-To column is missing', async () => {
+    await env.db.prepare('ALTER TABLE email DROP COLUMN reply_to').run();
+    try {
+      const status = await api('/setup/status');
+      expect(status.status).toBe(200);
+      expect((await status.json()).data).toMatchObject({
+        upgradeRequired: true,
+        upgradeBlocking: true,
+        upgradeSupported: true,
+      });
+      await expect(dbInit.v3_25DB(context())).rejects.toThrow('requires manual recovery');
+      expect(dbInit.requiresManualRecovery(new Error('Reply-To migration requires manual recovery.'))).toBe(true);
+    } finally {
+      await env.db.prepare('DELETE FROM schema_migrations WHERE version = 325').run();
+      await dbInit.v3_25DB(context());
+    }
   });
 });
