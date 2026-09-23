@@ -231,6 +231,7 @@ const emailStore = useEmailStore();
 const uiStore = useUiStore();
 
 let reqLock = false;
+let requestIsQuiet = false;
 let requestVersion = 0;
 let scrollTop = 0;
 const skeletonRows = 12;
@@ -284,6 +285,7 @@ const pageRange = computed(() => {
 
 defineExpose({
   refreshList,
+  refreshCurrentPage,
   deleteEmail,
   addItem,
   handleList,
@@ -755,6 +757,13 @@ function applyReadState(emailId, read) {
 
 function rightDelete(emailId) {
   flushPendingRead();
+  if (props.type === 'draft') {
+    const draftId = typeof emailId === 'object' ? emailId.draftId : emailId;
+    if (!draftId) return;
+    return ElMessageBox.confirm(t('delOneEmailConfirm'), {
+      confirmButtonText: t('confirm'), cancelButtonText: t('cancel'), type: 'warning'
+    }).then(() => emit('delete-draft', [draftId])).catch(() => {});
+  }
   const row = typeof emailId === 'object' ? emailId : emailList.find(item => item.emailId === emailId);
   const deleteIds = props.conversationView && row ? conversationMemberIds(row) : [typeof emailId === 'object' ? emailId.emailId : emailId];
   const scope = { ...props.conversationScope };
@@ -925,13 +934,16 @@ function jumpDetails(email) {
 
 let manualRefreshTriggered = false;
 
-async function getEmailList(refresh = false, targetPage = currentPage.value, preserveScroll = false) {
-  if (reqLock && !refresh) return;
+async function getEmailList(refresh = false, targetPage = currentPage.value, preserveScroll = false, quiet = false) {
+  // Foreground navigation wins over a background request. Its version also
+  // prevents the late background response from replacing the user's page.
+  if (reqLock && !refresh && (quiet || !requestIsQuiet)) return;
   reqLock = true;
+  requestIsQuiet = quiet;
   const version = ++requestVersion;
   let page = refresh ? 0 : Math.max(0, targetPage);
   const previousScroll = scrollTop;
-  loading.value = true;
+  if (!quiet) loading.value = true;
   clearTimeout(reloadTimer);
   try {
     if (typeof props.getEmailList !== 'function') throw new Error(t('missingEmailFetcher'));
@@ -943,6 +955,7 @@ async function getEmailList(refresh = false, targetPage = currentPage.value, pre
       data = await props.getEmailList(0, PAGE_SIZE, page);
       if (version !== requestVersion) return;
     }
+    if (quiet && hasActiveListInteraction()) return;
     const rows = (data?.list || []).slice(0, PAGE_SIZE).map(item => ({ ...item, checked: false }));
     handleList(rows);
     emailList.splice(0, emailList.length, ...rows);
@@ -955,7 +968,7 @@ async function getEmailList(refresh = false, targetPage = currentPage.value, pre
     checkAll.value = false;
     isIndeterminate.value = false;
     lastCheckedIndex.value = -1;
-    const restoreScroll = preserveScroll && page === targetPage ? previousScroll : 0;
+    const restoreScroll = preserveScroll && page === targetPage ? (quiet ? scrollTop : previousScroll) : 0;
     loading.value = false;
     await nextTick();
     if (version !== requestVersion) return;
@@ -964,13 +977,14 @@ async function getEmailList(refresh = false, targetPage = currentPage.value, pre
     if (manualRefreshTriggered) ElMessage({ message: t('listRefreshedMsg'), type: 'success', plain: true, duration: 1500 });
   } catch (error) {
     if (version !== requestVersion) return;
-    ElMessage({ message: Number(error?.response?.status || error?.code || error?.status) === 413 ? t('conversationLimitExceeded') : (error?.message || t('mailLoadFailedMsg')), type: 'error', plain: true });
+    if (!quiet) ElMessage({ message: Number(error?.response?.status || error?.code || error?.status) === 413 ? t('conversationLimitExceeded') : (error?.message || t('mailLoadFailedMsg')), type: 'error', plain: true });
   } finally {
     if (version === requestVersion) {
       loading.value = false;
       isRefreshing.value = false;
       manualRefreshTriggered = false;
       reqLock = false;
+      requestIsQuiet = false;
     }
   }
 }
@@ -1013,6 +1027,15 @@ function refreshList() {
   checkAll.value = false;
   isIndeterminate.value = false;
   getEmailList(true);
+}
+
+function hasActiveListInteraction() {
+  return emailList.some(item => item.checked) || !!pendingRead || !!starringId.value || dropdownShow.value;
+}
+
+function refreshCurrentPage() {
+  if (reqLock || loading.value || hasActiveListInteraction()) return;
+  return getEmailList(false, currentPage.value, true, true);
 }
 
 </script>

@@ -38,7 +38,8 @@ export function createPlaygroundApi(locale='zh') {
             const unreadIds=members.filter(e=>e.type===0&&e.unread===0).map(e=>e.emailId);
             return [{...members[0],conversationId:Math.min(...group),conversationCount:group.length,scopeCount:members.length,memberIds:members.map(e=>e.emailId),unreadIds,unread:unreadIds.length?0:1,isStar:members.some(e=>e.isStar)?1:0}];
         }).sort((a,b)=>Number(p.timeSort)?-newestFirst(a,b):newestFirst(a,b));
-        return {...page(list,p),truncated:grouped.truncated};
+        const latestEmail=scopeMail(visible,p,starred).reduce((latest,e)=>!latest||e.emailId>latest.emailId?e:latest,null);
+        return {...page(list,p),latestEmail,truncated:grouped.truncated};
     }
     function userInfo(){return {...state.users[0],permKeys:['*'],account:myAccounts()[0],accountList:myAccounts(),accountCount:myAccounts().length,domainList:state.domains.map(d=>'@'+d)};}
     function publicConfig(){return {...state.settings,...setupStatus,domainList:state.domains.map(d=>'@'+d),logoUrl:state.settings.siteLogo||'/mail-logo.svg',faviconUrl:state.settings.siteFavicon||'/favicon.svg',manifestUrl:''};}
@@ -121,7 +122,7 @@ export function createPlaygroundApi(locale='zh') {
             list.sort((a,b)=>Number(p.timeSort)?a.createTime.localeCompare(b.createTime):b.createTime.localeCompare(a.createTime));
             return clone(page(list,p));
         }
-        case 'GET /email/latest': return [];
+        case 'GET /email/latest': return scopeMail(conversationMetadata(),{...p,type:0},false).filter(e=>e.emailId>Number(p.emailId||0)).sort((a,b)=>b.emailId-a.emailId).slice(0,20);
         case 'GET /email/conversation': {
             const size=p.size===undefined?20:Number(p.size);
             if(!Number.isInteger(size)||size<1||size>50)fail('无效的分页大小。','Invalid page size.');

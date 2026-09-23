@@ -4,7 +4,6 @@
       <emailScroll ref="scroll"
                    :allow-star="false"
                    :getEmailList="getEmailList"
-                   :emailDelete="emailDelete"
                    :star-add="starAdd"
                    :star-cancel="starCancel"
                    @jump="jumpContent"
@@ -28,9 +27,11 @@
 
 <script setup>
 import emailScroll from "@/components/email-scroll/index.vue"
-import {emailDelete} from "@/request/email.js";
+import {deleteLocalDrafts} from '@/db/draft-lifecycle.js';
+import {ElMessage} from 'element-plus';
+import {useI18n} from 'vue-i18n';
 import {starAdd, starCancel} from "@/request/star.js";
-import {defineOptions, ref, watch, toRaw} from "vue";
+import {defineOptions, ref, watch} from "vue";
 import {useEmailStore} from "@/store/email.js";
 import {useUiStore} from "@/store/ui.js";
 import {userDraftStore} from "@/store/draft.js";
@@ -44,28 +45,7 @@ const draftStore = userDraftStore();
 const emailStore = useEmailStore();
 const uiStore = useUiStore();
 const scroll = ref({})
-
-watch(() => draftStore.setDraft, async () => {
-  const draft = toRaw(draftStore.setDraft)
-  const draftId = draft.draftId
-  const attachments = toRaw(draftStore.setDraft.attachments)
-
-  delete draft.draftId
-  delete draft.attachments
-
-  if (!draft.content && !draft.subject && !(draft.receiveEmail.length > 0)) {
-    await db.value.draft.delete(draftId);
-    await db.value.att.delete(draftId);
-    draftStore.refreshList++
-    return;
-  }
-
-  await db.value.draft.update(draftId, draft);
-  await db.value.att.update(draftId, {attachments: attachments});
-  draftStore.refreshList++
-}, {
-  deep: true
-})
+const {t} = useI18n();
 
 watch(() => draftStore.refreshList, () => scroll.value?.refreshList());
 watch(() => emailStore.searchKeyword, () => scroll.value?.refreshList());
@@ -79,8 +59,14 @@ async function getEmailList(_emailId, size = 50, page = 0) {
 }
 
 async function deleteDraft(draftIds) {
-  await db.value.draft.bulkDelete(draftIds);
-  draftStore.refreshList++
+  try {
+    await deleteLocalDrafts(db.value, draftIds);
+    draftStore.refreshList++;
+    ElMessage.success(t('delSuccessMsg'));
+  } catch (error) {
+    console.error('Draft deletion failed:', error);
+    ElMessage.error(t('deleteFailedMsg'));
+  }
 }
 
 async function jumpContent(email) {

@@ -226,7 +226,10 @@ const emailService = {
 		await this.emailAddAtt(c, rows); const rowMap = new Map(rows.map(row => [row.emailId,row]));
 		const list = page.map(item => ({ ...rowMap.get(item.representative.emailId), unread:item.unreadIds.length?emailConst.unread.UNREAD:emailConst.unread.READ, isStar: item.memberIds.some(id=>starIds.has(id)) ? 1 : 0,
 			conversationId: Math.min(...item.globalIds), conversationCount:item.globalIds.length, scopeCount:item.memberIds.length, memberIds:item.memberIds, unreadIds:item.unreadIds }));
-		return { list, total:summaries.length, latestEmail:list[0] || null, truncated:grouped.truncated };
+		// Poll by insertion ID across the folder/mailbox scope, independently of
+		// page, date ordering, search and unread/attachment filters.
+		const latestEmail = scope.reduce((latest, row) => !latest || row.emailId > latest.emailId ? row : latest, null);
+		return { list, total:summaries.length, latestEmail, truncated:grouped.truncated };
 	},
 
 	async conversationState(c, body, userId) {

@@ -2,6 +2,8 @@
 
 ## Read and organize
 
+The inbox checks for new mail every 30 seconds by default while visible and online, and immediately when you return or reconnect. Updates preserve the current page and scroll position and are deferred while messages are selected or menus are open. Checks pause when the page is hidden; manual refresh remains available.
+
 Choose Inbox, Sent or Drafts from the sidebar. All mailboxes in the top toolbar combines your primary and alias addresses. Selecting one address filters its messages and returns to page one. Combine this with search, unread/star/attachment filters and date sorting; it does not change receiving policies or your login identity.
 
 Inbox, Sent and Starred show one row per conversation, with a message count and up to 50 conversations per page. A conversation containing unread incoming mail appears in bold. Returning preserves filters and pagination. List actions affect members within the current folder and mailbox selection; search, unread and attachment filters do not narrow actions to only the matching messages. Drafts and administrator mail lists remain message-based.
@@ -22,7 +24,7 @@ Saving Reply-To requires the administrator to apply database update 325. Older d
 
 Download attachments and preview images. Real mailboxes block external images until explicitly allowed; the experience never loads these external images. See [sending setup](/docs/en/sending) for limits and troubleshooting.
 
-Closing an unsent message offers to save a draft. Real drafts are stored in the current browser's IndexedDB and do not sync across devices; clearing site data can lose them. Experience drafts live only in the current page and reset on refresh.
+Use Save draft at the bottom of the composer, even before completing recipients, subject or body. Saving stores the body and attachments and closes the window. Closing a new message also offers to save; closing an existing draft updates it. A failed save keeps your edits open. Real drafts are stored in the current browser's IndexedDB and do not sync across devices; clearing site data can lose them. Experience drafts live only in the current page and reset on refresh.
 
 ## Contacts and mailbox addresses
 

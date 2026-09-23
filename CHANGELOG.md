@@ -2,6 +2,12 @@
 
 ## 未发布 / Unreleased
 
+- 修复草稿行删除误用服务器邮件接口及批量删除遗留附件；自动检查新邮件时，手动刷新与翻页优先处理，保留请求期间用户的新滚动位置。
+- Fixed draft-row deletion calling the server mail API and batch deletion leaving attachments behind. Manual refresh and paging now take priority over background checks, which preserve scrolling performed during the request.
+
+- 写信新增直接保存草稿入口，新建及更新均事务保存正文和附件；收件箱默认每30秒自动检查新邮件，切回页面立即检查，后台更新保留页码/滚动并避开勾选操作，修复筛选和分页下的新邮件检测游标。
+- Added direct draft saving with transactional body and attachment storage. Inbox checks for new mail every 30 seconds by default and on return, preserving paging/scroll position and active selections; corrected update cursors across filters and pages.
+
 - 修复 Resend 刚受理邮件、仍在排队时 Message-ID 为空的问题：元数据查询增加有限重试和总截止时间，不重复发信，并记录失败类别。
 - Added bounded Message-ID lookup retries for newly queued Resend messages, with an overall deadline and diagnostic reasons, without resending mail.
 

@@ -78,6 +78,26 @@ describe.sequential('bounded mail conversations', () => {
 		await expect(emailService.conversation(context(), { emailId: ids.wrongAccountOwner, size: 20 }, owner.userId)).rejects.toMatchObject({ code: 404 });
 	});
 
+	it('tracks incoming insertion IDs across pages and filters without using the current representative', async () => {
+		const isolated = await mailbox('refresh-marker@example.com');
+		const add = async (type, subject, created) => (await env.db.prepare('INSERT INTO email(user_id,account_id,type,subject,create_time) VALUES (?,?,?,?,?) RETURNING email_id AS id')
+			.bind(isolated.userId, isolated.accountId, type, subject, created).first()).id;
+		const olderId = await add(0, 'search match', '2026-09-20');
+		const latestId = await add(0, 'outside search', '2026-01-01');
+		await add(1, 'sent should not hide new mail', '2026-09-23');
+		const params = { type:0, accountId:isolated.accountId, allReceive:0, size:1, offset:0, keyword:'search match' };
+		const first = await emailService.listConversations(context(), params, isolated.userId);
+		expect(first.list[0].emailId).toBe(olderId);
+		expect(first.latestEmail.emailId).toBe(latestId);
+		for (const extra of [{offset:1,keyword:''}, {timeSort:1,keyword:''}, {keyword:'no results'}, {filter:'has_att',keyword:''}]) {
+			const result = await emailService.listConversations(context(), {...params,...extra}, isolated.userId);
+			expect(result.latestEmail.emailId).toBe(latestId);
+		}
+		expect(await emailService.latest(context(), {emailId:latestId,accountId:isolated.accountId,allReceive:0}, isolated.userId)).toEqual([]);
+		const newId = await add(0, 'new arrival', '2025-01-01');
+		expect((await emailService.latest(context(), {emailId:latestId,accountId:isolated.accountId,allReceive:0}, isolated.userId)).map(e=>e.emailId)).toEqual([newId]);
+	});
+
 	it('uses the nearest visible parent as a hard subject boundary and supports References-only replies', async () => {
 		const first = await emailService.conversation(context(), { emailId: ids.changedRoot, size: 20 }, owner.userId);
 		const middle = await emailService.conversation(context(), { emailId: ids.changedMiddle, size: 20 }, owner.userId);

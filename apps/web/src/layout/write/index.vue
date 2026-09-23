@@ -1,7 +1,7 @@
 <template>
   <transition name="modal-scale">
     <div class="send" v-show="show" :class="{ 'is-minimized': isMinimized }">
-    <div class="write-box arc-card">
+    <div class="write-box arc-card" :inert="savingDraft">
       <!-- 顶栏组件（支持全屏和最小化挂起胶囊两种形态） -->
       <ComposeHeader
         v-model="form.accountId"
@@ -95,6 +95,11 @@
               <span class="key-shortcut">Ctrl+Enter</span>
             </el-button>
 
+            <button type="button" class="bottom-tool-btn" @click="saveDraft" :title="$t('saveDraft')" :disabled="savingDraft">
+              <Icon icon="solar:document-text-linear" width="16" height="16" />
+              <span>{{ $t('saveDraft') }}</span>
+            </button>
+
             <button type="button" class="bottom-tool-btn" @click="chooseFile" :title="$t('addAttachment')">
               <Icon icon="solar:paperclip-2-linear" width="18" height="18" />
               <span>{{ $t('addAttachment') }}</span>
@@ -186,6 +191,7 @@ defineExpose({
 })
 
 const isMinimized = ref(false)
+const savingDraft = ref(false)
 const {t} = useI18n()
 const writerStore = useWriterStore();
 const contactStore = useContactStore();
@@ -257,6 +263,7 @@ const form = reactive({
   emailId: 0,
   attachments: [],
   draftId: null,
+  createTime: null,
   requestId: '',
 })
 
@@ -622,6 +629,7 @@ function resetForm() {
   form.sendType = ''
   form.emailId = 0
   form.draftId = null
+  form.createTime = null
   form.requestId = ''
   backReply.content = ''
   backReply.subject = ''
@@ -843,33 +851,18 @@ onUnmounted(() => {
 });
 
 async function close() {
+  if (sendActivity.isActive()) return;
   composeLoad.begin()
   if (selectStatus) openSelect();
 
   syncEditorState()
 
   if (form.draftId) {
-    try {
-      const savedDraft = await persistPendingSendDraft(db.value, {
-        ...toRaw(form),
-        receiveEmail: [...form.receiveEmail],
-        attachments: form.attachments ? form.attachments.map(att => ({...att})) : [],
-      }, {
-        userId: userStore.user.userId,
-      })
-      draftStore.setDraft = savedDraft
-      draftStore.refreshList++
-      show.value = false
-      isMinimized.value = false
-      resetForm()
-    } catch (error) {
-      console.error('Draft update failed:', error)
-      ElMessage.error(t('saveFailedMsg'))
-    }
+    await saveDraft();
     return;
   }
 
-  if (!form.subject && !form.content && form.receiveEmail.length === 0) {
+  if (!form.subject && !form.content && form.receiveEmail.length === 0 && !form.attachments?.length) {
     show.value = false
     isMinimized.value = false
     resetForm()
@@ -879,7 +872,7 @@ async function close() {
   if (form.sendType === 'reply' || form.sendType === 'forward') {
     if (form.content === backReply.content &&
         form.subject === backReply.subject &&
-        form.receiveEmail.toString() === backReply.receiveEmail.toString()
+        form.receiveEmail.toString() === backReply.receiveEmail.toString() && !form.attachments?.length
     ) {
       show.value = false
       isMinimized.value = false
@@ -896,35 +889,39 @@ async function close() {
         type: 'warning',
         distinguishCancelAndClose: true,
       }
-  ).then(() => {
-    if (!form.subject) {
-      form.subject = t('emptySubject')
-    }
-    const sendAccount = accountOptions.value.find(item => item.accountId === form.accountId) || accountOptions.value[0];
-    const draftData = {
-      ...toRaw(form),
-      sendAccountId: sendAccount?.accountId,
-      sendEmail: sendAccount?.email,
-      sendName: sendAccount?.name,
-      updateTime: new Date().getTime(),
-      createTime: new Date().getTime(),
-      userId: userStore.user.userId
-    };
-    db.value.draft.add(draftData).then(draftId => {
-      draftData.draftId = draftId
-      draftStore.setDraft = draftData
-      show.value = false
-      isMinimized.value = false
-      resetForm()
-      ElMessage.success(t('draftSavedMsg'));
-    })
-  }).catch((action) => {
+  ).then(() => saveDraft()).catch((action) => {
     if (action === 'cancel') {
       show.value = false
       isMinimized.value = false
       resetForm()
     }
   })
+}
+
+async function saveDraft() {
+  if (!sendActivity.tryBeginPersistence()) return;
+  savingDraft.value = true;
+  try {
+    syncEditorState();
+    const saved = await persistPendingSendDraft(db.value, {
+      ...toRaw(form),
+      sendAccountId: form.accountId,
+      receiveEmail: [...form.receiveEmail],
+      attachments: form.attachments?.map(att => ({ ...att })) || [],
+    }, { userId: userStore.user.userId });
+    form.draftId = saved.draftId;
+    draftStore.refreshList++;
+    show.value = false;
+    isMinimized.value = false;
+    resetForm();
+    ElMessage.success(t('draftSavedMsg'));
+  } catch (error) {
+    console.error('Draft save failed:', error);
+    ElMessage.error(t('saveFailedMsg'));
+  } finally {
+    savingDraft.value = false;
+    sendActivity.endPersistence();
+  }
 }
 </script>
 

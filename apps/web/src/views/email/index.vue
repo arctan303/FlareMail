@@ -28,7 +28,7 @@
 </template>
 
 <script setup>
-import { computed, defineOptions, onMounted, reactive, ref, watch } from 'vue';
+import { computed, defineOptions, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Icon } from '@iconify/vue';
 import emailScroll from '@/components/email-scroll/index.vue';
@@ -39,7 +39,7 @@ import { useEmailStore } from '@/store/email.js';
 import { useSettingStore } from '@/store/setting.js';
 import { emailList, emailDelete, emailLatest, emailRead, emailUnread, emailConversationState } from '@/request/email.js';
 import { starAdd, starCancel } from '@/request/star.js';
-import { sleep } from '@/utils/time-utils.js';
+import { createInboxCheck, createInboxRefresh } from '@/utils/inbox-refresh.js';
 
 defineOptions({
   name: 'email'
@@ -52,6 +52,7 @@ const accountStore = useAccountStore();
 const settingStore = useSettingStore();
 
 const scroll = ref({});
+let refreshDisposed = false;
 
 const params = reactive({
   timeSort: 0,
@@ -59,7 +60,20 @@ const params = reactive({
 
 onMounted(() => {
   emailStore.emailScroll = scroll;
-  latest();
+  document.addEventListener('visibilitychange', syncRefresh);
+  window.addEventListener('online', syncRefresh);
+  window.addEventListener('offline', syncRefresh);
+  window.addEventListener('focus', syncRefresh);
+  syncRefresh();
+});
+
+onBeforeUnmount(() => {
+  refreshDisposed = true;
+  refresher.dispose();
+  document.removeEventListener('visibilitychange', syncRefresh);
+  window.removeEventListener('online', syncRefresh);
+  window.removeEventListener('offline', syncRefresh);
+  window.removeEventListener('focus', syncRefresh);
 });
 
 watch(() => [accountStore.currentAccountId,accountStore.mailboxFilterId], () => {
@@ -78,42 +92,29 @@ function jumpContent(email) {
   router.push('/message');
 }
 
-const existIds = new Set();
-
-async function latest() {
-  while (true) {
-    let autoRefresh = settingStore.settings.autoRefresh;
-    await sleep(autoRefresh > 1 ? autoRefresh * 1000 : 3000);
-
-    if (route.name !== 'email' || !scroll.value || scroll.value.currentPage > 0) {
-      continue;
-    }
-
-    const latestId = scroll.value.latestEmail?.emailId;
-
-    if (!scroll.value.firstLoad && autoRefresh > 1) {
-      try {
-        const accountId = accountStore.mailboxQuery.accountId;
-        const allReceive = scroll.value.latestEmail?.allReceive;
-        const curTimeSort = params.timeSort;
-        let list = [];
-
-        if (accountId === scroll.value.latestEmail?.reqAccountId) {
-          list = await emailLatest(latestId, accountId, allReceive);
-        }
-
-        if (accountId === accountStore.mailboxQuery.accountId && params.timeSort === curTimeSort && allReceive === accountStore.mailboxQuery.allReceive) {
-          if (list.length > 0) scroll.value.refreshList();
-        }
-      } catch (e) {
-        if (e.code === 401 || e.code === 403) {
-          settingStore.settings.autoRefresh = 0;
-        }
-        console.error(e);
-      }
-    }
-  }
+const refreshContext = () => JSON.stringify([route.fullPath, accountStore.mailboxQuery, params.timeSort, emailStore.searchKeyword]);
+const isRefreshActive = () => !refreshDisposed && route.name === 'email' && document.visibilityState !== 'hidden' && navigator.onLine !== false;
+const refresher = createInboxRefresh({
+  // Older installations stored 0 with no settings UI to turn polling on.
+  interval: () => Math.max(5000, (Number(settingStore.settings.autoRefresh) > 1 ? Number(settingStore.settings.autoRefresh) : 30) * 1000),
+  check: createInboxCheck({
+    isActive: isRefreshActive,
+    isReady: () => !!scroll.value && !scroll.value.firstLoad,
+    getContext: () => ({ key: refreshContext(), ...accountStore.mailboxQuery }),
+    getMarker: () => scroll.value.latestEmail,
+    fetchLatest: emailLatest,
+    refresh: () => scroll.value.refreshCurrentPage(),
+  }),
+  onError: error => {
+    if ([401, 403].includes(Number(error?.code || error?.response?.status))) refresher.pause();
+    console.error('Inbox update check failed:', error);
+  },
+});
+function syncRefresh() {
+  if (isRefreshActive()) refresher.resume();
+  else refresher.pause();
 }
+watch(() => [route.name, settingStore.settings.autoRefresh], syncRefresh);
 
 function addStar(email) {
   emailStore.starScroll?.addItem(email);
