@@ -135,6 +135,7 @@ const en = {
     recordDeletedMsg: 'Record deleted',
     recentClearedMsg: 'Recent history cleared',
     deliveryWarningTitle: 'Message accepted, but its status needs confirmation',
+    sendThreadingUnavailable: 'The message was sent, but its threading information could not be retrieved. Future replies may not join the same conversation. No need to resend.',
     draftSavedMsg: 'Draft saved',
     allGroups: 'All groups',
     searchRecentRecipients: 'Search recent recipients…',

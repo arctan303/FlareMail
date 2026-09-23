@@ -2,6 +2,12 @@
 
 ## 未发布 / Unreleased
 
+- 修复 Resend 刚受理邮件、仍在排队时 Message-ID 为空的问题：元数据查询增加有限重试和总截止时间，不重复发信，并记录失败类别。
+- Added bounded Message-ID lookup retries for newly queued Resend messages, with an overall deadline and diagnostic reasons, without resending mail.
+
+- 修复发信成功但 Message-ID 查询受限时误报“状态需要确认”：改为已发送提示，单独说明会话关联限制，并补齐中英文说明。
+- Corrected misleading delivery warnings after successful sends when Message-ID lookup is unavailable; show sent feedback with a localized threading limitation notice.
+
 - 会话数量移至发件人后，阅读主题随正文滚动，收起邮件并入操作栏以减少空行。
 - Moved conversation counts beside senders, let the reading heading scroll with messages, and placed Collapse in the message toolbar to remove the extra row.
 

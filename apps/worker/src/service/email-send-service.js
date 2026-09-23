@@ -15,7 +15,8 @@ import settingService from './setting-service';
 import accountService from './account-service';
 import userService from './user-service';
 
-const RESEND_MESSAGE_ID_TIMEOUT_MS = 1500;
+const RESEND_MESSAGE_ID_TIMEOUT_MS = 5000;
+const RESEND_MESSAGE_ID_MAX_ATTEMPTS = 3;
 const MESSAGE_ID_WARNING = 'The provider accepted the message, but its Message-ID could not be retrieved.';
 
 function providerMessageId(value) {
@@ -219,25 +220,53 @@ export const emailSendService = {
 	async retrieveResendMessageId(resend, id, timeoutMs = RESEND_MESSAGE_ID_TIMEOUT_MS) {
 		const controller = new AbortController();
 		let timer;
+		let retryTimer;
+		let reason = 'unavailable';
 		try {
 			const timeout = new Promise(resolve => {
 				timer = setTimeout(() => {
+					reason = 'timeout';
 					controller.abort();
 					resolve(null);
 				}, timeoutMs);
 			});
-			const retrieved = await Promise.race([
-				resend.get(`/emails/${encodeURIComponent(id)}`, { signal: controller.signal }),
-				timeout,
-			]);
-			const messageId = providerMessageId(retrieved?.data?.message_id);
-			if (messageId) return { messageId, messageIdWarning: '' };
+			for (let attempt = 0; attempt < RESEND_MESSAGE_ID_MAX_ATTEMPTS; attempt++) {
+				const retrieved = await Promise.race([
+					resend.get(`/emails/${encodeURIComponent(id)}`, { signal: controller.signal }),
+					timeout,
+				]);
+				if (controller.signal.aborted) break;
+				if (retrieved?.error) {
+					const status = retrieved.error.statusCode;
+					reason = Number.isInteger(status) ? `http_${status}` : 'request_failed';
+					break;
+				}
+				const value = retrieved?.data?.message_id;
+				const messageId = providerMessageId(value);
+				if (messageId) return { messageId, messageIdWarning: '' };
+				// A successful GET can still report queued + message_id:null while
+				// Resend generates the RFC ID. Retry only metadata reads, never send.
+				if (!retrieved?.data || value != null) {
+					reason = 'invalid_response';
+					break;
+				}
+				reason = 'not_ready';
+				if (attempt + 1 === RESEND_MESSAGE_ID_MAX_ATTEMPTS) break;
+				await Promise.race([
+					new Promise(resolve => { retryTimer = setTimeout(resolve, 1000 * (attempt + 1)); }),
+					timeout,
+				]);
+				if (controller.signal.aborted) break;
+			}
+			// Fixed diagnostic values only: no credentials, response body or mail content.
+			console.warn('Accepted Resend Message-ID unavailable', reason);
 			return { messageId: '', messageIdWarning: MESSAGE_ID_WARNING };
 		} catch (error) {
 			console.error('Failed to retrieve the accepted Resend Message-ID', error?.message || error?.name || 'unknown error');
 			return { messageId: '', messageIdWarning: MESSAGE_ID_WARNING };
 		} finally {
 			if (timer !== undefined) clearTimeout(timer);
+			if (retryTimer !== undefined) clearTimeout(retryTimer);
 		}
 	},
 

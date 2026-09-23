@@ -11,7 +11,9 @@
 
 每个发件域名都需可用的 Key 和域名验证。输入框留空通常表示保留已有密钥，不是清除。不要把 Key 写进源码或文档。Resend 的测试发件域名和测试收件限制不能代替自己的正式域名配置。[域名验证](https://resend.com/docs/dashboard/domains/introduction) · [API Key](https://resend.com/docs/dashboard/api-keys/introduction)
 
-发送成功后，FlareMail 会尝试读取真实 Message-ID，供后续回复关联原邮件。若密钥没有读取邮件的权限，或读取请求失败，发送仍然有效，但界面会提示 Message-ID 未能取得；继续回复这封已发送邮件时，外部客户端可能无法将它归入原会话。此提示不要求重新发送邮件。[Resend 邮件关联说明](https://resend.com/changelog/message-id-for-sent-emails)
+发送成功后，FlareMail 会尝试读取真实 Message-ID，供后续回复关联原邮件。`Sending access` 仅支持发信；当前实现的邮件详情查询需要 `Full access`，该权限也允许管理其他 Resend 资源，并非单独的邮件读取权限。若保留仅发送权限，或读取请求失败，发送仍然有效，界面会显示已发送并单独说明会话关联限制；后续回复可能无法归入原会话，无需重新发送。[Resend 权限说明](https://resend.com/changelog/new-api-key-permissions) · [邮件关联说明](https://resend.com/changelog/message-id-for-sent-emails)
+
+完整权限也不能保证发送受理后立即得到 Message-ID：Resend 排队期间该字段可能为 `null`。FlareMail 最多查询 3 次，总等待不超过 5 秒；超过后仍保留已发送结果及会话关联提示，不会重新发送。当前不通过投递回调补齐历史记录。
 
 ## Cloudflare Email Sending（Beta）
 

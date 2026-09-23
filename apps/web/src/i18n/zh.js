@@ -832,6 +832,7 @@ const zh = {
     recordDeletedMsg: '已删除该记录',
     recentClearedMsg: '最近记录已清空',
     deliveryWarningTitle: '邮件已受理，但状态需要确认',
+    sendThreadingUnavailable: '邮件已发送，但未能获取会话关联信息，后续回复可能无法自动归入同一会话。无需重新发送。',
     draftSavedMsg: '草稿已保存',
     allGroups: '全部分组',
     searchRecentRecipients: '搜索最近发件邮箱...',

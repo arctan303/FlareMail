@@ -9,6 +9,7 @@ import { estimateCloudflareMessageBytes, CLOUDFLARE_MAX_MESSAGE_BYTES } from '..
 import cryptoUtils from '../src/utils/crypto-utils';
 import KvConst from '../src/const/kv-const';
 import { markInstalled } from './installed-instance';
+import { Resend } from 'resend';
 
 const PASSWORD = 'cf-provider-fixture-password';
 const ADMIN = 'cf-admin@example.com';
@@ -94,6 +95,25 @@ describe.sequential('selectable Cloudflare sending', () => {
     const r = await send({}, e); expect(r.status).toBe(200);
     expect(resend).toHaveBeenCalledOnce(); expect(e.email.send).not.toHaveBeenCalled();
     expect((await r.json()).data[0]).toMatchObject({status:1,resendEmailId:'resend-id'});
+  });
+  it('persists an ID generated after queueing in sent and internal copies without sending twice', async () => {
+    const post = vi.spyOn(Resend.prototype, 'post').mockResolvedValue({ data: { id: 'queued-provider-id' }, error: null });
+    const get = vi.spyOn(Resend.prototype, 'get')
+      .mockResolvedValueOnce({ data: { last_event: 'queued', message_id: null }, error: null })
+      .mockResolvedValueOnce({ data: { last_event: 'sent', message_id: '<ready@provider.test>' }, error: null });
+    const payload = { receiveEmail: [ADMIN, 'friend@outside.test'], subject: 'queued metadata ready', requestId: 'queued_metadata_ready_01' };
+    const first = await send(payload);
+    expect(first.status).toBe(200);
+    const sent = (await first.json()).data[0];
+    expect(sent).toMatchObject({ status: 1, messageId: '<ready@provider.test>', resendEmailId: 'queued-provider-id' });
+    expect(sent.deliveryWarning).toBeUndefined();
+    const copies = await env.db.prepare('SELECT message_id AS messageId FROM email WHERE subject = ?').bind(payload.subject).all();
+    expect(copies.results).toHaveLength(2);
+    expect(copies.results.every(copy => copy.messageId === '<ready@provider.test>')).toBe(true);
+    const replay = await send(payload);
+    expect((await replay.json()).data[0]).toMatchObject({ idempotentReplay: true, messageId: '<ready@provider.test>' });
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledTimes(2);
   });
   it('finishes internal delivery and idempotency when accepted Resend mail has no retrievable Message-ID', async () => {
     const resend = vi.spyOn(emailSendService,'sendByResend').mockResolvedValue({data:{id:'accepted-resend-id',messageId:'',messageIdWarning:'The provider accepted the message, but its Message-ID could not be retrieved.'}});

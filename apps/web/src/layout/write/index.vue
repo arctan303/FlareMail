@@ -162,6 +162,7 @@ import {useContactStore} from "@/store/contact.js";
 import {useUiStore} from "@/store/ui.js";
 import {sanitizeEmailHtml} from "@/utils/html-sanitizer.js";
 import {buildQuotedEmailHtml} from "@/utils/compose-quote.js";
+import {sendFeedback} from "@/utils/send-feedback.js";
 import {
   createComposeLoadGate,
   editorSnapshot,
@@ -558,13 +559,7 @@ function executeSend(sendForm) {
     })
     emailStore.conversationRevision++
 
-    ElNotification({
-      title: email?.deliveryWarning ? t('deliveryWarningTitle') : t('sendSuccessMsg'),
-      type: email?.deliveryWarning ? 'warning' : 'success',
-      message: h('span', {style: 'color: teal'}, email?.deliveryWarning || email?.subject),
-      position: 'bottom-right',
-      duration: email?.deliveryWarning ? 0 : 4500,
-    })
+    ElNotification({ ...sendFeedback(email, t), position: 'bottom-right' })
 
     userStore.refreshUserInfo();
     addRecipientRecord(sendForm.receiveEmail);

@@ -11,7 +11,9 @@ Choose an instance-wide provider under System settings → Mail delivery. New in
 
 Each sender domain needs valid credentials and verification. Leaving an existing secret field empty generally keeps its value rather than removing it. Keep keys out of source and documentation. Resend's test domain and recipient restrictions are not a replacement for your production domain. [Domain verification](https://resend.com/docs/dashboard/domains/introduction) · [API keys](https://resend.com/docs/dashboard/api-keys/introduction)
 
-After an accepted send, FlareMail attempts to retrieve the actual Message-ID for subsequent replies. If the key cannot read emails or retrieval fails, the send remains accepted and the interface warns that the Message-ID was unavailable. A later reply to that sent message may not join the original conversation in external clients. This warning does not require resending the message. [Resend threading details](https://resend.com/changelog/message-id-for-sent-emails)
+After an accepted send, FlareMail attempts to retrieve the actual Message-ID for subsequent replies. `Sending access` only permits sending; the current email lookup requires `Full access`, which also allows managing other Resend resources, not just reading emails. If you retain sending-only access or retrieval fails, the interface confirms the send and separately explains the threading limitation. Later replies may not join the original conversation. There is no need to resend. [Resend permissions](https://resend.com/changelog/new-api-key-permissions) · [Threading details](https://resend.com/changelog/message-id-for-sent-emails)
+
+Full access does not guarantee an immediate Message-ID: Resend may return `null` while the message is queued. FlareMail makes up to three lookups within a five-second deadline, then retains the accepted send with a threading notice if needed. It never resends the message. Delivery webhooks do not currently backfill historical records.
 
 ## Cloudflare Email Sending (Beta)
 
