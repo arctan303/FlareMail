@@ -166,10 +166,13 @@ const oauthProviderService = {
 		const code = randomToken();
 		const now = Date.now();
 		await cleanupAuthorizationCodes(c, now);
-		await c.env.db.prepare(`
+		const inserted = await c.env.db.prepare(`
 			INSERT INTO oauth_authorization_code(code_hash, client_id, redirect_uri, user_id, code_challenge, created_at, expires_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`).bind(await cryptoUtils.hashSecret(code), clientId, redirectUri, user.userId, challenge, now, now + CODE_TTL_MS).run();
+			SELECT ?, ?, ?, user_id, ?, ?, ? FROM user
+			WHERE user_id = ? AND password = ? AND is_del = 0 AND status = 0
+		`).bind(await cryptoUtils.hashSecret(code), clientId, redirectUri, challenge, now, now + CODE_TTL_MS,
+			user.userId, user.password).run();
+		if (Number(inserted.meta?.changes || 0) !== 1) return oauthRedirect(c, appendError(redirectUri, 'login_required', state));
 
 		const target = new URL(redirectUri);
 		target.searchParams.set('code', code);
@@ -203,14 +206,20 @@ const oauthProviderService = {
 		if (!row || !await secretsEqual(await cryptoUtils.hashSecret(verifier), row.code_challenge)) {
 			return oauthJson(c, { error: 'invalid_grant' }, 400);
 		}
-		const consumed = await c.env.db.prepare(`UPDATE oauth_authorization_code SET used_at = ? WHERE code_hash = ? AND used_at IS NULL`)
-			.bind(Date.now(), codeHash).run();
-		if (Number(consumed.meta?.changes || 0) !== 1) return oauthJson(c, { error: 'invalid_grant' }, 400);
-
 		const user = await userService.selectByIdIncludeDel(c, Number(row.user_id));
 		if (!user || user.isDel !== isDel.NORMAL || user.status === userConst.status.BAN) {
 			return oauthJson(c, { error: 'invalid_grant' }, 400);
 		}
+		const now = Date.now();
+		const consumed = await c.env.db.prepare(`UPDATE oauth_authorization_code SET used_at = ?
+			WHERE code_hash = ? AND client_id = ? AND redirect_uri = ? AND code_challenge = ?
+			AND used_at IS NULL AND expires_at > ?
+			AND EXISTS (SELECT 1 FROM user WHERE user_id = oauth_authorization_code.user_id
+				AND password = ? AND is_del = 0 AND status = 0)`)
+			.bind(now, codeHash, clientId, redirectUri, row.code_challenge, now, user.password).run();
+		if (Number(consumed.meta?.changes || 0) !== 1) return oauthJson(c, { error: 'invalid_grant' }, 400);
+		// Bind to the password captured before the atomic consume. A reset after
+		// consume must never upgrade this grant to the replacement credential.
 		const accessToken = randomToken();
 		await c.env.kv.put(`${TOKEN_PREFIX}${await cryptoUtils.hashSecret(accessToken)}`, JSON.stringify({
 			clientId,

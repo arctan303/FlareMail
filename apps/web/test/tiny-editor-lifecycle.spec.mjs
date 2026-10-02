@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createEditorLifecycle } from '../src/components/tiny-editor/editor-lifecycle.js'
+import { createEditorLifecycle, installEditorCommentFilter } from '../src/components/tiny-editor/editor-lifecycle.js'
 
 function fakeEditor({ throwBeforeReady = false } = {}) {
   let value = ''
@@ -82,4 +82,23 @@ test('a late init event from a destroyed instance cannot initialize its replacem
   replacement.becomeReady()
   assert.equal(state.markReady(replacement), true)
   assert.deepEqual(replacement.calls, [['set', '<p>preserved</p>']])
+})
+
+test('editor parser drops protected comments before source, paste and restored-content serialization', () => {
+  const events = new Map()
+  const filters = new Map()
+  installEditorCommentFilter({
+    on(name, callback) { events.set(name, callback) },
+    parser: { addNodeFilter(name, filter) { filters.set(name, filter) } },
+  })
+  events.get('PreInit')()
+  const comments = [
+    { value: 'mce:protected %3Cimg%20src%3D%22https%3A//tracker.example/pixel%22%3E' },
+    { value: 'ordinary comment' },
+  ].map(comment => ({ ...comment, remove() { this.removed = true } }))
+  filters.get('#comment')(comments)
+  assert.equal(comments.every(comment => comment.removed), true)
+  // Only comment nodes are filtered: authored blob/data uploads and rich tags
+  // continue through the normal editor parser instead of reader sanitation.
+  assert.deepEqual([...filters.keys()], ['#comment'])
 })

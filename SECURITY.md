@@ -17,7 +17,10 @@ Include the affected code version, deployment configuration names (not values), 
 - Password and Google mailbox login are separate from the optional OAuth Provider.
 - “Enable authorization” stops or permits new grants. Disabling it preserves client settings and does not revoke existing codes, access tokens, or downstream sessions. Existing validation and expiry still apply.
 - Client removal and callback edits affect unused authorization codes through the current client checks. Existing access tokens retain their existing expiry and user-credential checks.
-- Provider configuration writes require administrator access, same-origin protection, and recent password authentication.
+- Password changes atomically invalidate unused authorization codes; issuance and redemption are checked against the validated credentials. Disabling the Provider remains a separate action that preserves otherwise valid grants.
+- Replacing a Google link revokes prior browser sessions except the initiating session. Database patch 326 supplies the durable revocation state required before replacing a link.
+- Browser drafts belong to a stable user ID. Legacy drafts migrate only to their recorded owner; unowned legacy drafts stay hidden until explicitly claimed. Passive session expiry preserves drafts; explicit sign-out clears only that user's drafts.
+- Provider configuration writes require administrator access and same-origin protection. Recent password authentication follows the administrator's shared sensitive-operation confirmation policy, which defaults to disabled. Reading the Shared Secret always requires a fresh password check.
 
 Real deployment files, database exports, session cookies, API tokens, email bodies, and private Cloudflare identifiers must not be committed. Test configuration contains deliberately fake local credentials.
 

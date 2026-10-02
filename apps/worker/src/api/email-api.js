@@ -3,6 +3,7 @@ import emailService from '../service/email-service';
 import result from '../model/result';
 import userContext from '../security/user-context';
 import securityService from '../service/security-service';
+import { readSendBody } from './send-body';
 
 app.get('/email/list', async (c) => {
 	await securityService.rateLimit(c, 'EMAIL_RATE_LIMITER', 'email-list', 60);
@@ -24,7 +25,7 @@ app.delete('/email/delete', async (c) => {
 
 app.post('/email/send', async (c) => {
 	await securityService.rateLimit(c, 'SEND_RATE_LIMITER', 'email-send', 10);
-	const email = await emailService.send(c, await c.req.json(), userContext.getUserId(c));
+	const email = await emailService.send(c, await readSendBody(c), userContext.getUserId(c));
 	return c.json(result.ok(email));
 });
 

@@ -23,6 +23,8 @@ https://mail.example.com/oauth/bind/callback
 
 Google 登录不会自动创建邮箱成员。登录入口开关与个人账号绑定不同：已配置凭据时，关闭入口仍可在个人设置绑定或解绑。解绑会使现有会话及个人 CLI Token 失效，需要重新登录。改变网页域名时同步修改 Google 回调地址。[Google 配置说明](https://developers.google.com/identity/protocols/oauth2/web-server)
 
+更换已绑定的 Google 账号后，发起操作的当前网页会话保留，其他已有网页会话（包括密码登录）需要重新登录。首次绑定或再次绑定同一 Google 账号不会触发这项撤销。旧实例需先完成数据库 326 更新才能更换绑定。
+
 ## Turnstile（可选）
 
 在 Cloudflare 创建 Turnstile widget，将正式网页主机名加入允许列表。把 Site Key 与 Secret Key 保存到「登录与授权」，按界面启用验证。Site Key 用于浏览器，Secret Key 只交给服务端；两者不能互换。启用后从退出登录的页面验证是否能正常加载与登录。[官方步骤](https://developers.cloudflare.com/turnstile/get-started/)

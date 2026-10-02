@@ -102,7 +102,7 @@
           </div>
           <el-divider style="margin: 14px 0;" />
           <div class="mail-content-container">
-            <div class="mail-html-preview" v-if="currentDetail.content" v-html="currentDetail.content"></div>
+            <shadow-html v-if="currentDetail.content" :key="currentDetail.emailId" :html="currentDetail.content" />
             <pre v-else class="mail-plain-text">{{ currentDetail.text }}</pre>
           </div>
         </div>
@@ -114,6 +114,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { Icon } from '@iconify/vue';
+import ShadowHtml from '@/components/shadow-html/index.vue';
 import { unmatchedList, unmatchedDetail, unmatchedDelete } from '@/request/unmatched.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
 

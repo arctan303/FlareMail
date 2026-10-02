@@ -328,7 +328,7 @@ const emailService = {
 			throw new BizError(t('noSendProvider'), 503);
 		}
 
-		let { imageDataList, html } = await attService.toImageUrlHtml(c, content, userId);
+		let { imageDataList, html } = await attService.toImageUrlHtml(c, content, userId, attachments);
 		html = sanitizeEmailHtml(html, { blockRemoteImages: false });
 		validatePreparedAttachments([...imageDataList, ...attachments]);
 

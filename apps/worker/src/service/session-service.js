@@ -1,6 +1,9 @@
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import constant from '../const/constant';
 import KvConst from '../const/kv-const';
+import cryptoUtils from '../utils/crypto-utils';
+import BizError from '../error/biz-error';
+import { sessionEpoch, selectSecurityUser, sessionEpochColumns } from '../security/session-epoch';
 
 const PROD_COOKIE = '__Host-mail_session';
 const DEV_COOKIE = 'mail_session_dev';
@@ -52,8 +55,83 @@ function recentAuthKey(hash) {
 	return KvConst.RECENT_AUTH + hash;
 }
 
+async function currentCredentials(c, userId) {
+	return selectSecurityUser(c, 'user_id = ?', [userId]);
+}
+
+function active(user) {
+	return user && user.isDel === 0 && user.status === 0;
+}
+
+function isPreserved(session, current, hash) {
+	return hash && current.preservedSessionHash === hash
+		&& sessionEpoch(session.sessionEpoch) < sessionEpoch(current.sessionEpoch);
+}
+
+async function persistCurrentRevocation(c, session) {
+	const columns = await sessionEpochColumns(c);
+	const statements = [];
+	const now = Date.now();
+	if (columns.revocations) {
+		statements.push(c.env.db.prepare('DELETE FROM session_revocation WHERE expires_at <= ?').bind(now));
+		statements.push(c.env.db.prepare(`INSERT INTO session_revocation(session_hash, user_id, expires_at) VALUES (?, ?, ?)
+			ON CONFLICT(session_hash) DO UPDATE SET expires_at = MAX(session_revocation.expires_at, excluded.expires_at)`)
+			.bind(session.hash, session.userId, now + constant.TOKEN_EXPIRE * 1000));
+	}
+	if (columns.preserved) statements.push(c.env.db.prepare(`UPDATE user
+		SET preserved_session_hash = CASE WHEN preserved_session_hash = ? THEN '' ELSE preserved_session_hash END
+		WHERE user_id = ?`).bind(session.hash, session.userId));
+	if (statements.length) await c.env.db.batch(statements);
+}
+
+async function revocationStatus(c, hash) {
+	const available = !!await c.env.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_revocation'").first();
+	const revoked = available && !!await c.env.db.prepare('SELECT 1 AS revoked FROM session_revocation WHERE session_hash = ? AND expires_at > ?')
+		.bind(hash, Date.now()).first();
+	return { available, revoked };
+}
+
+async function revokedHashes(c, hashes) {
+	const candidates = [...new Set(hashes.filter(hash => /^[A-Za-z0-9_-]{43}$/.test(hash || '')))];
+	if (!candidates.length || !await c.env.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'session_revocation'").first()) return new Set();
+	const placeholders = candidates.map(() => '?').join(',');
+	const rows = await c.env.db.prepare(`SELECT session_hash FROM session_revocation WHERE expires_at > ? AND session_hash IN (${placeholders})`)
+		.bind(Date.now(), ...candidates).all();
+	return new Set((rows.results || []).map(row => row.session_hash));
+}
+
+async function revokeEpoch(c, userId) {
+	const columns = await sessionEpochColumns(c);
+	const assignments = [];
+	if (columns.epoch) assignments.push('session_epoch = session_epoch + 1');
+	if (columns.preserved) assignments.push("preserved_session_hash = ''");
+	if (assignments.length) await c.env.db.prepare(`UPDATE user SET ${assignments.join(', ')} WHERE user_id = ?`).bind(userId).run();
+}
+
+async function cleanupRevoked(c, userId, entries) {
+	if (!entries.length) return;
+	const current = await currentCredentials(c, userId);
+	if (!current) return;
+	const revoked = entries.filter(item => item?.hash && item.hash !== current.preservedSessionHash
+		&& sessionEpoch(item.sessionEpoch) < sessionEpoch(current.sessionEpoch));
+	// Current-epoch records can become the initiator of a concurrent binding.
+	// Removing their index membership caps authority; their KV TTL bounds orphans.
+	await Promise.all(revoked.flatMap(item => [
+		c.env.kv.delete(sessionKey(item.hash)),
+		c.env.kv.delete(recentAuthKey(item.hash)),
+		c.env.kv.delete(KvConst.ADMIN_CONFIRMATION + item.hash),
+	]));
+}
+
 const sessionService = {
-	async create(c, userId, credentialFingerprint) {
+	async create(c, userId, credentialFingerprint, authenticatedSnapshot = null) {
+		const current = await currentCredentials(c, userId);
+		const snapshot = authenticatedSnapshot || current;
+		if (!active(current) || !snapshot || credentialFingerprint !== await cryptoUtils.hashSecret(current.password)
+			|| sessionEpoch(snapshot.sessionEpoch) !== sessionEpoch(current.sessionEpoch)
+			|| (snapshot.googleLoginSub !== undefined && snapshot.googleLoginSub !== current.googleSub)) {
+			throw new BizError('Authentication expired', 401);
+		}
 		const bytes = new Uint8Array(32);
 		crypto.getRandomValues(bytes);
 		const token = toBase64Url(bytes);
@@ -64,23 +142,46 @@ const sessionService = {
 		if (!authInfo || authInfo.version !== SESSION_VERSION || !Array.isArray(authInfo.sessions)) {
 			authInfo = { version: SESSION_VERSION, sessions: [] };
 		}
-
-		authInfo.sessions.push({ hash, createdAt: now });
-		while (authInfo.sessions.length > MAX_SESSIONS_PER_USER) {
-			const removed = authInfo.sessions.shift();
-			if (removed?.hash) {
-				await Promise.all([
-					c.env.kv.delete(sessionKey(removed.hash)),
-					c.env.kv.delete(recentAuthKey(removed.hash)),
-					c.env.kv.delete(KvConst.ADMIN_CONFIRMATION + removed.hash),
-				]);
+		const latest = await currentCredentials(c, userId);
+		if (!active(latest) || credentialFingerprint !== await cryptoUtils.hashSecret(latest.password)) {
+			throw new BizError('Authentication expired', 401);
+		}
+		// Revoked stale index entries do not consume session slots. Preserve the
+		// authentication snapshot for the new record instead of upgrading it.
+		const denied = await revokedHashes(c, [...authInfo.sessions.map(item => item?.hash), latest.preservedSessionHash]);
+		const filterNow = Date.now();
+		const authorizedEntry = item => /^[A-Za-z0-9_-]{43}$/.test(item?.hash || '') && !denied.has(item.hash)
+			&& Number.isSafeInteger(item.createdAt) && item.createdAt <= filterNow && item.createdAt + constant.TOKEN_EXPIRE * 1000 > filterNow
+			&& (item.hash === latest.preservedSessionHash || sessionEpoch(item.sessionEpoch) === sessionEpoch(latest.sessionEpoch));
+		const removed = authInfo.sessions.filter(item => !authorizedEntry(item));
+		authInfo.sessions = authInfo.sessions.filter(authorizedEntry);
+		// A stale writer may have dropped the retained session from the KV index.
+		// Restore it before applying the cap, so it occupies one of the five slots.
+		if (latest.preservedSessionHash && !denied.has(latest.preservedSessionHash)
+			&& !authInfo.sessions.some(item => item.hash === latest.preservedSessionHash)) {
+			const kept = await c.env.kv.get(sessionKey(latest.preservedSessionHash), { type: 'json' });
+			if (kept?.version === SESSION_VERSION && kept.userId === userId
+				&& kept.credentialFingerprint === credentialFingerprint && Number.isSafeInteger(kept.createdAt)
+				&& kept.createdAt <= filterNow && kept.createdAt + constant.TOKEN_EXPIRE * 1000 > filterNow
+				&& isPreserved(kept, latest, latest.preservedSessionHash)) {
+				authInfo.sessions.unshift({ hash: latest.preservedSessionHash, createdAt: kept.createdAt, sessionEpoch: sessionEpoch(kept.sessionEpoch) });
 			}
 		}
+
+		if (sessionEpoch(snapshot.sessionEpoch) === sessionEpoch(latest.sessionEpoch)) {
+			authInfo.sessions.push({ hash, createdAt: now, sessionEpoch: sessionEpoch(snapshot.sessionEpoch) });
+		}
+		while (authInfo.sessions.length > MAX_SESSIONS_PER_USER) {
+			const index = authInfo.sessions.findIndex(item => item?.hash !== latest.preservedSessionHash);
+			removed.push(...authInfo.sessions.splice(index < 0 ? 0 : index, 1));
+		}
+		await cleanupRevoked(c, userId, removed);
 
 		const session = {
 			version: SESSION_VERSION,
 			userId,
 			credentialFingerprint,
+			sessionEpoch: sessionEpoch(snapshot.sessionEpoch),
 			createdAt: now,
 		};
 		await Promise.all([
@@ -138,19 +239,20 @@ const sessionService = {
 	async resolveByHash(c, hash) {
 		if (!/^[A-Za-z0-9_-]{43}$/.test(hash || '')) return null;
 		const session = await c.env.kv.get(sessionKey(hash), { type: 'json' });
-		if (!session || session.version !== SESSION_VERSION || !Number.isInteger(session.userId)) {
+		if (!session || session.version !== SESSION_VERSION || !Number.isInteger(session.userId)
+			|| !Number.isSafeInteger(session.createdAt) || session.createdAt > Date.now()
+			|| session.createdAt + constant.TOKEN_EXPIRE * 1000 <= Date.now()) {
 			return null;
 		}
 
 		const authInfo = await c.env.kv.get(KvConst.AUTH_INFO + session.userId, { type: 'json' });
-		if (
-			!authInfo ||
-			authInfo.version !== SESSION_VERSION ||
-			!Array.isArray(authInfo.sessions) ||
-			!authInfo.sessions.some(item => item.hash === hash)
-		) {
-			return null;
-		}
+		const current = await currentCredentials(c, session.userId);
+		const revocation = await revocationStatus(c, hash);
+		const indexed = authInfo?.version === SESSION_VERSION && Array.isArray(authInfo.sessions)
+			&& authInfo.sessions.some(item => item.hash === hash);
+		if (revocation.revoked || !active(current) || (!(revocation.available && isPreserved(session, current, hash))
+			&& (!indexed || sessionEpoch(session.sessionEpoch) !== sessionEpoch(current.sessionEpoch)))
+			|| session.credentialFingerprint !== await cryptoUtils.hashSecret(current.password)) return null;
 
 		return { ...session, hash };
 	},
@@ -158,6 +260,9 @@ const sessionService = {
 	async revokeCurrent(c) {
 		const resolved = await this.resolve(c);
 		if (resolved) {
+			// Clear D1's retained-session authority before KV cleanup. Its old epoch
+			// then remains invalid even if a stale index writer restores membership.
+			await persistCurrentRevocation(c, resolved);
 			const authKey = KvConst.AUTH_INFO + resolved.userId;
 			const authInfo = await c.env.kv.get(authKey, { type: 'json' });
 			if (authInfo?.version === SESSION_VERSION && Array.isArray(authInfo.sessions)) {
@@ -180,10 +285,16 @@ const sessionService = {
 	},
 
 	async revokeAll(c, userId) {
+		const current = await currentCredentials(c, userId);
+		await revokeEpoch(c, userId);
 		const authKey = KvConst.AUTH_INFO + userId;
 		const authInfo = await c.env.kv.get(authKey, { type: 'json' });
-		if (authInfo?.version === SESSION_VERSION && Array.isArray(authInfo.sessions)) {
-			await Promise.all(authInfo.sessions
+		// The index grants authority; orphaned records must stay unusable if cleanup fails.
+		await c.env.kv.delete(authKey);
+		const entries = authInfo?.version === SESSION_VERSION && Array.isArray(authInfo.sessions) ? authInfo.sessions : [];
+		if (current?.preservedSessionHash) entries.push({ hash: current.preservedSessionHash });
+		if (entries.length) {
+			await Promise.all(entries
 				.filter(item => item?.hash)
 				.flatMap(item => [
 					c.env.kv.delete(sessionKey(item.hash)),
@@ -191,7 +302,15 @@ const sessionService = {
 					c.env.kv.delete(KvConst.ADMIN_CONFIRMATION + item.hash),
 				]));
 		}
-		await c.env.kv.delete(authKey);
+	},
+
+	async revokeOthers(c, userId, preservedHash) {
+		const authKey = KvConst.AUTH_INFO + userId;
+		const authInfo = await c.env.kv.get(authKey, { type: 'json' });
+		if (authInfo?.version !== SESSION_VERSION || !Array.isArray(authInfo.sessions)) return;
+		// D1 already revoked the old epoch. Never rewrite the index here: a
+		// legitimate new login may append to it while physical cleanup is running.
+		await cleanupRevoked(c, userId, authInfo.sessions.filter(item => item?.hash !== preservedHash));
 	},
 
 	clearCookie(c) {

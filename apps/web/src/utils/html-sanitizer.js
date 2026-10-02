@@ -1,3 +1,5 @@
+import { downgradeOverBudgetTables, isBoundedLink } from '../../../shared/content-budgets.mjs'
+
 const ALLOWED_TAGS = new Set([
     'DIV', 'SPAN', 'P', 'BR', 'HR', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
     'BLOCKQUOTE', 'PRE', 'CODE', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'DEL',
@@ -85,10 +87,50 @@ function safeUrl(value, protocols) {
     }
 }
 
+function isPrivateAttachmentSource(value) {
+    if (!value.startsWith('/api/attachment/') || /[\\\u0000-\u001f\u007f]/.test(value)) return false
+    try {
+        const url = new URL(value, window.location.origin)
+        if (url.origin !== window.location.origin || !url.pathname.startsWith('/api/attachment/')) return false
+        const key = decodeURIComponent(url.pathname.slice('/api/attachment/'.length))
+        return !key.includes('..') && !/[\\\u0000-\u001f\u007f]/.test(key)
+            && ((key.startsWith('attachments/') && key.length > 'attachments/'.length)
+                || /^__pages_inline_\d+$/.test(key))
+    } catch {
+        return false
+    }
+}
+
+function removeComments(root) {
+    const pending = [root]
+    while (pending.length) {
+        const node = pending.pop()
+        for (const child of Array.from(node.childNodes || [])) {
+            if (child.nodeType === 8) child.remove()
+            else pending.push(child)
+        }
+    }
+}
+
+function normalizeAttributes(element, tag) {
+    const attributes = new Map()
+    for (const attribute of Array.from(element.attributes)) {
+        const name = attribute.name.toLowerCase()
+        attributes.set(name, { value: attribute.value, ambiguous: attributes.has(name) })
+        element.removeAttribute(attribute.name)
+    }
+    for (const [name, attribute] of attributes) {
+        if (!attribute.ambiguous && !name.startsWith('on')
+            && (GLOBAL_ATTRIBUTES.has(name) || TAG_ATTRIBUTES[tag]?.has(name))) {
+            element.setAttribute(name, attribute.value)
+        }
+    }
+}
+
 function sanitizeImage(element, allowRemoteImages) {
     const source = (element.getAttribute('src') || '').trim()
     const remembered = (element.getAttribute('data-remote-src') || '').trim()
-    if (source.startsWith('/api/attachment/')) {
+    if (isPrivateAttachmentSource(source)) {
         element.setAttribute('src', source)
         element.removeAttribute('data-remote-src')
         return
@@ -113,6 +155,7 @@ function sanitizeImage(element, allowRemoteImages) {
 export function sanitizeEmailHtml(html, {allowRemoteImages = false, isDark = false} = {}) {
     const document = new DOMParser().parseFromString(html || '', 'text/html')
     const body = document.body
+    removeComments(body)
 
     for (const element of Array.from(body.querySelectorAll('*'))) {
         const tag = element.tagName.toUpperCase()
@@ -125,12 +168,7 @@ export function sanitizeEmailHtml(html, {allowRemoteImages = false, isDark = fal
             continue
         }
 
-        for (const attribute of Array.from(element.attributes)) {
-            const name = attribute.name.toLowerCase()
-            if (name.startsWith('on') || !(GLOBAL_ATTRIBUTES.has(name) || TAG_ATTRIBUTES[tag]?.has(name))) {
-                element.removeAttribute(attribute.name)
-            }
-        }
+        normalizeAttributes(element, tag)
 
         if (element.hasAttribute('style')) {
             const style = sanitizeStyle(element.getAttribute('style'), isDark)
@@ -146,8 +184,11 @@ export function sanitizeEmailHtml(html, {allowRemoteImages = false, isDark = fal
         }
 
         if (tag === 'A') {
-            const href = safeUrl(element.getAttribute('href'), new Set(['http:', 'https:', 'mailto:']))
-            if (href) {
+            const rawHref = element.getAttribute('href')
+            const href = isBoundedLink(rawHref)
+                ? safeUrl(rawHref, new Set(['http:', 'https:', 'mailto:']))
+                : null
+            if (href && isBoundedLink(new URL(href, window.location.origin).toString())) {
                 element.setAttribute('href', href)
                 element.setAttribute('target', '_blank')
                 element.setAttribute('rel', 'noopener noreferrer')
@@ -158,6 +199,7 @@ export function sanitizeEmailHtml(html, {allowRemoteImages = false, isDark = fal
 
         if (tag === 'IMG') sanitizeImage(element, allowRemoteImages)
     }
+    downgradeOverBudgetTables(body)
 
     const bodyStyle = sanitizeStyle(body.getAttribute('style'), isDark)
     const blockedRemoteImages = body.querySelectorAll('img[data-remote-src]').length

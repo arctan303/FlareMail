@@ -28,6 +28,7 @@ const APPLICATION_TABLES = [
 	'runtime_config',
 	'schema_migrations',
 	'send_request',
+	'session_revocation',
 	'setting',
 	'star',
 	'verify_record',
@@ -55,6 +56,7 @@ const BOOTSTRAP_SCHEMA_TABLES = [
 	'object_delete_queue',
 	'oauth',
 	'oauth_authorization_code',
+	'session_revocation',
 	'perm',
 	'reg_key',
 	'role',
@@ -131,10 +133,11 @@ const dbInit = {
 		const v323Applied = await migrations.v3_23Applied(c);
 		const v324Applied = await migrations.v3_24Applied(c);
 		const v325Applied = await migrations.v3_25Applied(c);
+		const v326Applied = await migrations.v3_26Applied(c);
 		const legacyModernApplied = v308Applied && v309Applied && v310Applied && v311Applied
 			&& v312Applied && v314Applied && v315Applied && v316Applied && v317Applied && v318Applied;
 
-		if (legacyModernApplied && v319Applied && v320Applied && v321Applied && v322Applied && v323Applied && v324Applied && v325Applied) {
+		if (legacyModernApplied && v319Applied && v320Applied && v321Applied && v322Applied && v323Applied && v324Applied && v325Applied && v326Applied) {
 			await settingService.refresh(c);
 			return;
 		}
@@ -160,6 +163,7 @@ const dbInit = {
 			if (!v323Applied) await migrations.v3_23DB(c);
 			if (!v324Applied) await migrations.v3_24DB(c);
 			if (!v325Applied) await migrations.v3_25DB(c);
+			if (!v326Applied) await migrations.v3_26DB(c);
 			await settingService.refresh(c);
 			return;
 		}
@@ -203,6 +207,7 @@ const dbInit = {
 		await migrations.v3_23DB(c);
 		await migrations.v3_24DB(c, 'resend');
 		await migrations.v3_25DB(c);
+		await migrations.v3_26DB(c);
 
 		await settingService.refresh(c);
 	},
@@ -294,15 +299,17 @@ const dbInit = {
 			this.v3_23Applied(c),
 			this.v3_24Applied(c),
 			this.v3_25Applied(c),
+			this.v3_26Applied(c),
 		]);
 
 		return {
 			current: applied.every(Boolean),
 			// Validate every supported core migration, not just MAX(version).
-			compatible: applied.slice(0, -3).every(Boolean)
-				&& (applied.at(-3) || await isConfirmationUpgradePending(c))
-				&& (applied.at(-2) || await isMailProviderUpgradePending(c))
-				&& (applied.at(-1) || await this.v3_25UpgradePending(c)),
+			compatible: applied.slice(0, -4).every(Boolean)
+				&& (applied.at(-4) || await isConfirmationUpgradePending(c))
+				&& (applied.at(-3) || await isMailProviderUpgradePending(c))
+				&& (applied.at(-2) || await this.v3_25UpgradePending(c))
+				&& (applied.at(-1) || await this.v3_26UpgradePending(c)),
 			upgradeSupported: true
 		};
 	},
@@ -321,7 +328,8 @@ const dbInit = {
 			|| message.includes('legacy runtime configuration')
 			|| message.includes('existing runtime configuration')
 			|| message.includes('existing google')
-			|| message.includes('reply-to migration requires manual recovery');
+			|| message.includes('reply-to migration requires manual recovery')
+			|| message.includes('session epoch migration requires manual recovery');
 	},
 
 	async findApplicationTable(c) {

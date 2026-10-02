@@ -65,6 +65,9 @@ async function businessSnapshot() {
   const rows = {};
   for (const table of BUSINESS_TABLES) {
     rows[table] = (await env.db.prepare('SELECT * FROM ' + identifier(table) + ' ORDER BY 1').all()).results;
+		// Patch 326 adds these defaults; compare their values as well as preserving
+		// every older business field, without hiding an incorrect migrated value.
+		if (table === 'user') rows[table] = rows[table].map(row => ({ session_epoch: 0, preserved_session_hash: '', ...row }));
 		if (table === 'email') rows[table] = rows[table].map(({ reply_to: _replyTo, ...emailRow }) => emailRow);
   }
   rows.attachmentBody = await (await env.r2.get(ATTACHMENT_KEY)).text();

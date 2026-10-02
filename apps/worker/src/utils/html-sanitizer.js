@@ -1,4 +1,5 @@
 import { parseHTML } from 'linkedom';
+import { downgradeOverBudgetTables, isBoundedLink } from '../../../shared/content-budgets.mjs';
 
 const ALLOWED_TAGS = new Set([
 	'HTML', 'HEAD', 'BODY', 'DIV', 'SPAN', 'P', 'BR', 'HR',
@@ -68,11 +69,55 @@ function safeExternalUrl(value, protocols) {
 	}
 }
 
+function isSafeAttachmentKey(value) {
+	try {
+		const key = decodeURIComponent(value);
+		return key.startsWith('attachments/') && key.length > 'attachments/'.length
+			&& !key.includes('..') && !/[\\\u0000-\u001f\u007f]/.test(key);
+	} catch {
+		return false;
+	}
+}
+
 function isInternalImageSource(value) {
-	return value.startsWith('{{domain}}attachments/') ||
-		value.startsWith('attachments/') ||
-		value.startsWith('/api/attachment/attachments/') ||
-		value.startsWith('cid:');
+	if (value.startsWith('cid:')) return !/[\u0000-\u0020\u007f]/.test(value) && value.length > 4;
+	const path = value.startsWith('{{domain}}') ? value.slice('{{domain}}'.length) : value;
+	if (!(path.startsWith('attachments/') || path.startsWith('/api/attachment/attachments/'))) return false;
+	if (/[\\\u0000-\u001f\u007f]/.test(path)) return false;
+	try {
+		const url = new URL(path, 'https://mail.invalid/api/attachment/');
+		return url.pathname.startsWith('/api/attachment/attachments/')
+			&& isSafeAttachmentKey(url.pathname.slice('/api/attachment/'.length));
+	} catch {
+		return false;
+	}
+}
+
+function removeComments(document) {
+	const pending = [document];
+	while (pending.length) {
+		const node = pending.pop();
+		for (const child of Array.from(node.childNodes || [])) {
+			if (child.nodeType === 8) child.remove();
+			else pending.push(child);
+		}
+	}
+}
+
+function normalizeAttributes(element, tag) {
+	const attributes = new Map();
+	for (const attribute of Array.from(element.attributes)) {
+		const name = attribute.name.toLowerCase();
+		const previous = attributes.get(name);
+		attributes.set(name, { value: attribute.value, ambiguous: !!previous });
+		element.removeAttribute(attribute.name);
+	}
+	for (const [name, attribute] of attributes) {
+		if (!attribute.ambiguous && !name.startsWith('on')
+			&& (GLOBAL_ATTRIBUTES.has(name) || TAG_ATTRIBUTES[tag]?.has(name))) {
+			element.setAttribute(name, attribute.value);
+		}
+	}
 }
 
 function sanitizeImageSource(element, blockRemoteImages) {
@@ -114,6 +159,7 @@ export function sanitizeEmailHtml(html, { blockRemoteImages = true } = {}) {
 		? html
 		: `<!doctype html><html><body>${html}</body></html>`;
 	const { document } = parseHTML(source);
+	removeComments(document);
 	const elements = Array.from(document.querySelectorAll('*'));
 
 	for (const element of elements) {
@@ -130,11 +176,7 @@ export function sanitizeEmailHtml(html, { blockRemoteImages = true } = {}) {
 			continue;
 		}
 
-		for (const attribute of Array.from(element.attributes)) {
-			const name = attribute.name.toLowerCase();
-			const allowed = GLOBAL_ATTRIBUTES.has(name) || TAG_ATTRIBUTES[tag]?.has(name);
-			if (!allowed || name.startsWith('on')) element.removeAttribute(attribute.name);
-		}
+		normalizeAttributes(element, tag);
 
 		if (element.hasAttribute('style')) {
 			const style = sanitizeStyle(element.getAttribute('style'));
@@ -143,8 +185,11 @@ export function sanitizeEmailHtml(html, { blockRemoteImages = true } = {}) {
 		}
 
 		if (tag === 'A') {
-			const href = safeExternalUrl(element.getAttribute('href'), new Set(['http:', 'https:', 'mailto:']));
-			if (href) {
+			const rawHref = element.getAttribute('href');
+			const href = isBoundedLink(rawHref)
+				? safeExternalUrl(rawHref, new Set(['http:', 'https:', 'mailto:']))
+				: null;
+			if (href && isBoundedLink(href)) {
 				element.setAttribute('href', href);
 				element.setAttribute('target', '_blank');
 				element.setAttribute('rel', 'noopener noreferrer');
@@ -155,7 +200,15 @@ export function sanitizeEmailHtml(html, { blockRemoteImages = true } = {}) {
 
 		if (tag === 'IMG') sanitizeImageSource(element, blockRemoteImages);
 	}
+	downgradeOverBudgetTables(document);
 
+	// LinkeDOM's HTML attribute serializer does not escape ampersands. Keep
+	// literal entity-looking values stable when the browser parses this output.
+	for (const element of document.querySelectorAll('*')) {
+		for (const attribute of Array.from(element.attributes)) {
+			attribute.value = attribute.value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+		}
+	}
 	return document.toString();
 }
 

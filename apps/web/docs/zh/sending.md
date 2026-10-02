@@ -40,6 +40,8 @@ npx --yes pnpm@10.34.5 run deploy
 
 ## 附件与大小
 
+网页及 CLI 的发送、回复请求，完整 HTTP 请求体最多 32 MiB，包含正文、附件编码和 JSON 开销。超限会在完整读取或解析前返回 413。此整包上限不增加附件或服务商的限额。
+
 应用发信最多 10 个附件（含内嵌图片），单个不超过 10 MiB，合计不超过 20 MiB。Cloudflare 通道还按整封邮件的编码后估算体积提前限制为 5 MiB，因此实际可用附件体积更小。服务商可能另有额度、收件人数或内容限制。[Cloudflare 限制](https://developers.cloudflare.com/email-service/platform/limits/)
 
 ## 发送结果与重试

@@ -46,7 +46,9 @@ npx --yes pnpm@10.34.5 install --frozen-lockfile
 npx --yes pnpm@10.34.5 run deploy
 ~~~
 
-Sign in as an administrator and check pending patches under System settings → Maintenance. Apply upgrades when prompted. The current schema is **324**. Compatible patches allow normal sign-in. If a future incompatible upgrade prevents it, use the login maintenance entry with SETUP_SECRET. This secret is not a forgotten-password reset tool.
+Sign in as an administrator and check pending patches under System settings → Maintenance. Apply upgrades when prompted. The current schema is **326**. Apply patch 326 before replacing a Google link so browser-session revocation is enforced. Compatible patches allow normal sign-in. If a future incompatible upgrade prevents it, use the login maintenance entry with SETUP_SECRET. This secret is not a forgotten-password reset tool.
+
+Patch 326 adds fields and a session revocation table while retaining existing accounts and sessions. Preserve both during a code rollback. Older code does not enforce the new revocation rules, so invalidate every browser session before serving it again. Draft migration retains legacy databases and migration records; clearing site data to roll back can lose drafts.
 
 Check sign-in, mailbox filters, historical messages and attachments. Then test incoming mail and replies with an external mailbox; loading the webpage alone does not verify mail service.
 

@@ -1,3 +1,5 @@
+import {createDraftDatabaseAccess} from '../db/owned-draft-database.js';
+
 // The same small table interface used by the current drafts UI, entirely in memory.
 const copy = value => value == null ? value : JSON.parse(JSON.stringify(value));
 export function createMemoryDb(locale='zh') {
@@ -23,5 +25,5 @@ export function createMemoryDb(locale='zh') {
     }
     const en=locale==='en';
     const draft = {draftId:1,accountId:1,sendAccountId:1,sendEmail:'alex@example.com',sendName:'Alex',name:'Alex',receiveEmail:['maya@example.net'],subject:en?'A note for Friday':'留给周五的一封信',content:en?'<p>Hi Maya, here are a few ideas for Friday…</p>':'<p>你好 Maya，这是周五讨论前的一些想法……</p>',text:en?'A few ideas for Friday':'周五讨论前的一些想法',attachments:[],sendType:'send',userId:1,createTime:Date.now(),updateTime:Date.now()};
-    return {draft:table('draftId',[draft]),att:table('draftId',[{draftId:1,attachments:[]}])};
+    return createDraftDatabaseAccess({draft:table('draftId',[draft]),att:table('draftId',[{draftId:1,userId:1,attachments:[]}])},1);
 }

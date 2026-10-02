@@ -40,6 +40,8 @@ Adding the binding alone does not select the provider. Local simulated bindings 
 
 ## Attachments and size
 
+Web and CLI send/reply requests allow at most 32 MiB for the complete HTTP body, including text, encoded attachments and JSON overhead. Oversized requests return 413 before full reading or parsing. This request limit does not increase attachment or provider limits.
+
 Application sending allows up to 10 attachments including inline images, 10 MiB per file and 20 MiB in total. The Cloudflare provider also applies a conservative 5 MiB estimate for the entire encoded message, leaving less room for attachments. Providers may impose additional quotas, recipient or content limits. [Cloudflare limits](https://developers.cloudflare.com/email-service/platform/limits/)
 
 ## Results and retries

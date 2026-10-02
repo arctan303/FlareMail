@@ -130,6 +130,7 @@ import { setThemeMode } from '@/utils/theme.js'
 import { isShortcutsHelpVisible } from '@/utils/shortcuts.js'
 import db from '@/db/db.js'
 import { clearLocalDrafts } from '@/db/draft-lifecycle.js'
+import {normalizeDraftUserId} from '@/db/owned-draft-database.js'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -208,15 +209,25 @@ function openShortcuts() {
 async function clickLogout() {
 	closeDropdown()
 	logoutLoading.value = true
+  const logoutDatabase = db.value
+  const logoutUserId = userStore.user.userId
+  const clearLogoutDrafts = logoutDatabase.captureExplicitLogoutCleanup?.() || (() => clearLocalDrafts(logoutDatabase, logoutUserId))
+  // Stop ordinary saves and claims before the logout request yields. The
+  // captured cleanup capability remains restricted to this original owner.
+  logoutDatabase.invalidate?.()
 	try {
 		await logout()
   } catch (e) {
     console.warn('Logout request failed, clearing local session anyway:', e)
   } finally {
     try {
-      await clearLocalDrafts(db.value)
+      await clearLogoutDrafts()
     } catch (e) {
       console.warn('Failed to clear local drafts during explicit logout:', e)
+    }
+    if (db.value !== logoutDatabase || normalizeDraftUserId(userStore.user.userId) !== normalizeDraftUserId(logoutUserId)) {
+      logoutLoading.value = false
+      return
     }
     setAuthenticatedSession(false)
     invalidateUserScopedStateAcrossTabs()

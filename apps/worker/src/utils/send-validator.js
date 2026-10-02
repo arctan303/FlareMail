@@ -128,8 +128,11 @@ export function normalizeSendParams(params = {}) {
 	};
 }
 
-export function validatePreparedAttachments(attachments = []) {
-	validateSizes(attachments.map(attachment => ({ size: binarySize(attachment.content) })));
+export function validatePreparedAttachments(attachments = [], ownedMetadata = []) {
+	validateSizes([
+		...attachments.map(attachment => ({ size: binarySize(attachment.content) })),
+		...ownedMetadata,
+	]);
 }
 
 function validateSizes(attachments) {

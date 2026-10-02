@@ -11,6 +11,7 @@ import { and, eq, desc, count, or, like, inArray } from 'drizzle-orm';
 import { parseHTML } from 'linkedom';
 import BizError from '../error/biz-error';
 import securityService from '../service/security-service';
+import { readSendBody } from './send-body';
 
 function stripHtml(html) {
 	if (!html) return '';
@@ -165,7 +166,7 @@ app.get('/cli/emails/:id', async (c) => {
 app.post('/cli/emails/send', async (c) => {
 	await securityService.rateLimit(c, 'SEND_RATE_LIMITER', 'cli-email-send', 10);
 	const userId = userContext.getUserId(c);
-	const params = await c.req.json();
+	const params = await readSendBody(c);
 	if (!params.requestId) throw new BizError('requestId is required for idempotent CLI sending.');
 
 	const { to, subject, body, cc, accountId } = params;
@@ -207,7 +208,7 @@ app.post('/cli/emails/:id/reply', async (c) => {
 	await securityService.rateLimit(c, 'SEND_RATE_LIMITER', 'cli-email-reply', 10);
 	const userId = userContext.getUserId(c);
 	const emailId = Number(c.req.param('id'));
-	const params = await c.req.json();
+	const params = await readSendBody(c);
 	if (!params.requestId) throw new BizError('requestId is required for idempotent CLI sending.');
 
 	const original = await selectOwnedEmail(c, emailId, userId);

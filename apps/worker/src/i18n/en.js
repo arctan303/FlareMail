@@ -61,6 +61,8 @@ const en = {
 	cloudflareEmailRateLimited: "Cloudflare’s sending rate or daily quota was exceeded. Try again later.",
 	cloudflareEmailRejected: "Cloudflare rejected the email. Check its content and sending configuration.",
 	conversationViewLimit: "Conversation view supports up to 10,000 active messages per user.",
+	sendRequestTooLarge: 'The send request body exceeds the 32 MiB limit. Reduce the body or attachments.',
+	invalidSendRequest: 'Invalid send request body.',
 };
 
 export default en;

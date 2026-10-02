@@ -85,7 +85,7 @@ The response includes sub (persistent user ID string), email, email_verified, na
 | Remove/change a callback | Old callback rejected | A code bound to the old URL cannot use either URL | Original rules |
 | Change display name | Unchanged | Unchanged | Unchanged |
 
-Disabling does not clear clients, codes or tokens, or log users out of other sites. Existing user-disable, deletion and credential-change invalidation rules remain. Client sites manage their own local sessions.
+Disabling does not clear clients, codes or tokens, or log users out of other sites. Password changes invalidate previously unredeemed codes; existing tokens are checked against the current user credentials. Existing user-disable and deletion rules remain. Client sites manage their own local sessions.
 
 The switch and trust configuration are read from D1 for each request, so stale general settings in KV cannot keep issuing authorization.
 

@@ -2,6 +2,17 @@
 
 ## 未发布 / Unreleased
 
+- 凭据撤销：更换 Google 绑定保留发起会话并撤销其他网页会话；解绑撤销个人 CLI Token；改密原子作废尚未兑换的 OAuth 授权码并保护并发发行/兑换。Google 更换绑定保护需要数据库 326 更新。
+- Credential revocation: Replacing a Google link preserves the initiating session and revokes other browser sessions; unlinking revokes the personal CLI token; password changes atomically invalidate unused OAuth codes and guard concurrent issuance/redemption. Google-link replacement protection requires database update 326.
+- 本地草稿按稳定用户 ID 隔离，有归属的旧草稿可恢复迁移，无归属旧草稿隐藏并提供主动认领；会话过期保留草稿，主动退出仅清理当前用户的草稿与附件。
+- Local drafts are isolated by stable user ID. Attributed legacy drafts migrate recoverably; unattributed drafts stay hidden until explicitly claimed. Session expiry preserves drafts, while explicit logout clears only the current user's drafts and attachments.
+- 加固邮件 HTML、摘要、预览和编辑器解析，保持远程图片需明确同意；验证码提取采用线性处理，私有内嵌附件先检查额度并复用重复对象读取。
+- Hardened mail HTML, snippets, previews and editor parsing while retaining explicit consent for remote images. Verification-code extraction uses linear processing; private inline attachments are checked against quotas before reads, and repeated references share object retrieval.
+- 新内容边界：链接最长 8192 字符，超限保留文字并取消点击；单表最多 10000 展开格、单格行/列跨度最多 100，超限保留文本行列分隔；Web/CLI 发送与回复整包最多 32 MiB，流式拒绝超限，现有附件规则不变。
+- New content boundaries: Links allow up to 8192 characters, retaining text without a clickable destination above the limit. Tables allow 10000 expanded cells and cell row/column spans up to 100, retaining text separators above the limit. Web/CLI send and reply bodies allow 32 MiB with streamed rejection; existing attachment rules remain unchanged.
+- 本地验证通过 Worker 451/451、Web 147/147、正式/Pages 构建及真实编辑器 92/92。本轮已有 16 项修复完成独立审查；新增链接、表格和整包边界 3 项的最终独立审查被平台过滤中断，仍待审查闭环，不作为稳定发布通过。
+- Local validation passed Worker 451/451, Web 147/147, production/Pages builds and 92/92 real-editor checks. Sixteen fixes completed independent review; final independent review of the three new link, table and request-body boundaries was interrupted by platform filtering and remains pending, rather than approved for a stable release.
+
 ## v1.1.0 — 2026-09-23
 
 本版本覆盖上一稳定版之后 `main` 到 `dev` 的完整变更；此前仅准备、未发布的 v1.0.4 内容一并纳入 v1.1.0。

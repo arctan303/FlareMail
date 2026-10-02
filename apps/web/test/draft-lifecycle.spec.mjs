@@ -2,38 +2,33 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { clearLocalDrafts, deleteLocalDrafts } from '../src/db/draft-lifecycle.js'
 import { createMemoryDb } from '../src/playground/memory-db.js'
+import {createDraftDatabaseAccess} from '../src/db/owned-draft-database.js'
+import {rawDraftFixture} from './draft-fixture.mjs'
 
 test('explicit logout clears draft rows and draft attachment rows in one transaction', async () => {
-  const calls = []
-  const database = {
-    draft: { clear: async () => calls.push('draft') },
-    att: { clear: async () => calls.push('att') },
-    async transaction(mode, draft, att, action) {
-      assert.equal(mode, 'rw')
-      assert.equal(draft, this.draft)
-      assert.equal(att, this.att)
-      calls.push('transaction')
-      return action()
-    },
-  }
-
+  const raw = rawDraftFixture([{draftId: 1, userId: 7}, {draftId: 2, userId: 8}, {draftId: 3}],
+    [{draftId: 1, userId: 7}, {draftId: 2, userId: 8}, {draftId: 3}])
+  const database = createDraftDatabaseAccess(raw, 7)
   await clearLocalDrafts(database)
-  assert.deepEqual(calls, ['transaction', 'draft', 'att'])
+  assert.ok(raw.transactionCount > 0)
+  assert.equal(await raw.draft.get(1), undefined)
+  assert.equal(await raw.att.get(1), undefined)
+  assert.deepEqual((await raw.draft.toArray()).map(row => row.draftId), [2, 3])
+  assert.deepEqual((await raw.att.toArray()).map(row => row.draftId), [2, 3])
 })
 
 test('preview memory drafts are cleared without requiring a transaction API', async () => {
-  const calls = []
-  await clearLocalDrafts({
-    draft: { clear: async () => calls.push('draft') },
-    att: { clear: async () => calls.push('att') },
-  })
-  assert.deepEqual(calls.sort(), ['att', 'draft'])
+  const database = createMemoryDb()
+  delete database.transaction
+  await clearLocalDrafts(database)
+  assert.deepEqual(await database.draft.toArray(), [])
+  assert.equal(await database.att.get(1), undefined)
 })
 
 for (const transactional of [true, false]) {
   test(`selected draft deletion removes matching attachments and keeps other drafts (transaction=${transactional})`, async () => {
     const database = createMemoryDb()
-    await database.draft.put({ draftId: 2, subject: 'Keep' })
+    await database.draft.put({ draftId: 2, userId: 1, subject: 'Keep' })
     await database.att.put({ draftId: 2, attachments: [{ filename: 'keep.txt' }] })
     let transactions = 0
     if (transactional) database.transaction = async (mode, draft, att, operation) => {

@@ -23,6 +23,8 @@ https://mail.example.com/oauth/bind/callback
 
 Google sign-in does not create mailbox members. The entry switch differs from account linking: with credentials configured, personal linking and unlinking remain available when the entry is disabled. Unlinking invalidates existing sessions and the personal CLI token, requiring another sign-in. Update the Google redirects when changing your web domain. [Google setup](https://developers.google.com/identity/protocols/oauth2/web-server)
 
+Replacing a linked Google account preserves the browser session that started the change and signs out all other existing browser sessions, including password sign-ins. First linking and linking the same account again keep those sessions. Older installations must apply database update 326 before replacing a link.
+
 ## Turnstile (optional)
 
 Create a Cloudflare Turnstile widget and allow your production web hostname. Save its Site Key and Secret Key under Sign-in & authorization and enable verification through the UI. The Site Key is for the browser; the Secret Key belongs on the server. Test loading and sign-in while signed out. [Official steps](https://developers.cloudflare.com/turnstile/get-started/)

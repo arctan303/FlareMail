@@ -27,6 +27,7 @@ const loginService = {
 			c,
 			userRow.userId,
 			await cryptoUtils.hashSecret(userRow.password),
+			userRow,
 		);
 		// A compatible pending patch permits login but never grants a confirmation
 		// proof. Protected mutations still require the real persisted policy.

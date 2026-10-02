@@ -74,6 +74,9 @@ async function snapshot() {
   const data = {};
   for (const table of businessTables) {
     data[table] = (await env.db.prepare('SELECT * FROM ' + quote(table) + ' ORDER BY 1').all()).results;
+		// Additive patch 326 must preserve business data and initialize revocation
+		// state to these defaults. Existing wrong/null values still fail equality.
+		if (table === 'user') data[table] = data[table].map(row => ({session_epoch: 0, preserved_session_hash: '', ...row}));
 		if (table === 'email') data[table] = data[table].map(({reply_to: _replyTo, ...emailRow}) => emailRow);
   }
   data.attachment = await (await env.r2.get(ATTACHMENT_KEY)).text();

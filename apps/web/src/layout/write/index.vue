@@ -159,6 +159,7 @@ import {formatDetailDate} from "@/utils/day.js";
 import {userDraftStore} from "@/store/draft.js";
 import {useWriterStore} from "@/store/writer.js";
 import db from "@/db/db.js";
+import {normalizeDraftUserId, requireDraftDatabaseOwner} from '@/db/owned-draft-database.js';
 import dayjs from "dayjs";
 import {useI18n} from "vue-i18n";
 import router from "@/router/index.js";
@@ -438,13 +439,19 @@ async function sendEmail() {
     emailId: form.emailId,
     attachments: form.attachments ? form.attachments.map(att => ({ ...att })) : [],
     draftId: form.draftId,
-    requestId: form.requestId
+    requestId: form.requestId,
+    userId: userStore.user.userId,
   }
 
+  const sendDatabase = db.value
+  const sendUserId = userStore.user.userId
+
   try {
-    formCopy = await persistPendingSendDraft(db.value, formCopy, {
-      userId: userStore.user.userId,
+    formCopy = await persistPendingSendDraft(sendDatabase, formCopy, {
+      userId: sendUserId,
     })
+    requireDraftDatabaseOwner(sendDatabase, userStore.user.userId)
+    if (sendDatabase !== db.value) throw new Error('Draft account changed')
     form.draftId = formCopy.draftId
     draftStore.refreshList++
   } catch (error) {
@@ -492,6 +499,8 @@ async function sendEmail() {
 
   pendingSend = {
     data: formCopy,
+    database: sendDatabase,
+    userId: sendUserId,
     timer,
     interval,
     notificationInstance
@@ -501,14 +510,15 @@ async function sendEmail() {
 
 function commitSend() {
   if (!pendingSend) return
-  const { data, timer, interval, notificationInstance } = pendingSend
+  const { data, database, userId, timer, interval, notificationInstance } = pendingSend
   pendingSend = null
   if (timer) clearTimeout(timer)
   if (interval) clearInterval(interval)
   if (notificationInstance && typeof notificationInstance.close === 'function') {
     notificationInstance.close()
   }
-  executeSend(data)
+  if (database !== db.value || normalizeDraftUserId(userId) !== normalizeDraftUserId(userStore.user.userId)) return
+  executeSend(data, {database, userId})
 }
 
 function flushPendingSend() {
@@ -518,13 +528,16 @@ function flushPendingSend() {
 
 function undoSend() {
   if (!pendingSend) return
-  const { data, timer, interval, notificationInstance } = pendingSend
+  const { data, database, userId, timer, interval, notificationInstance } = pendingSend
   pendingSend = null
   if (timer) clearTimeout(timer)
   if (interval) clearInterval(interval)
   if (notificationInstance && typeof notificationInstance.close === 'function') {
     notificationInstance.close()
   }
+  if (database !== db.value || normalizeDraftUserId(userId) !== normalizeDraftUserId(userStore.user.userId)) return
+
+  try { requireDraftDatabaseOwner(database, userId) } catch { return }
 
   // Restore form
   Object.assign(form, data)
@@ -546,7 +559,12 @@ function undoSend() {
   })
 }
 
-function executeSend(sendForm) {
+function executeSend(sendForm, {database, userId}) {
+  const isCurrentAccount = () => {
+    if (database !== db.value || normalizeDraftUserId(userId) !== normalizeDraftUserId(userStore.user.userId)) return false
+    try { requireDraftDatabaseOwner(database, userId); return true } catch { return false }
+  }
+  if (!isCurrentAccount()) return
   percentMessage = ElMessage({
     message: () => h(sendPercent, {value: percent.value, desc: t('sending')}),
     dangerouslyUseHTMLString: true,
@@ -560,6 +578,15 @@ function executeSend(sendForm) {
   emailSend(sendForm, (e) => {
     percent.value = Math.round((e.loaded * 98) / e.total)
   }).then(async emailList => {
+    try {
+      await clearPendingSendDraft(database, sendForm.draftId, userId)
+      if (isCurrentAccount()) draftStore.refreshList++
+    } catch (error) {
+      // Delivery was accepted. A closed old account handle leaves its recovery
+      // copy intact instead of clearing a later account's same numeric draft ID.
+      console.error('Sent draft cleanup failed:', error)
+    }
+    if (!isCurrentAccount()) return
     const email = emailList[0]
     emailList.forEach(item => {
       emailStore.sendScroll?.addItem(item)
@@ -571,19 +598,11 @@ function executeSend(sendForm) {
     userStore.refreshUserInfo();
     addRecipientRecord(sendForm.receiveEmail);
 
-    try {
-      await clearPendingSendDraft(db.value, sendForm.draftId)
-      draftStore.refreshList++
-    } catch (error) {
-      // The server accepted the idempotent send. Keep a recoverable local copy
-      // if cleanup fails instead of misreporting the delivery as failed.
-      console.error('Sent draft cleanup failed:', error)
-    }
-
     show.value = false
     isMinimized.value = false
     resetForm();
   }).catch((e) => {
+    if (!isCurrentAccount()) return
     ElNotification({
       title: t('sendFailMsg'),
       type: e.code === 403 ? 'warning' : 'error',
@@ -621,6 +640,7 @@ function addRecipientRecord(emails = form.receiveEmail) {
 
 function resetForm() {
   composeLoad.begin()
+  form.userId = userStore.user.userId
   form.receiveEmail = []
   form.subject = ''
   form.content = ''
@@ -776,6 +796,13 @@ function open(targetAccountOrOptions, loadToken = null) {
 
 async function openDraft(draft) {
   if (!canOpenComposer()) return;
+  const database = db.value;
+  if (normalizeDraftUserId(draft.userId) !== normalizeDraftUserId(database.userId)) return;
+  const ownedDraft = await database.draft.get(draft.draftId);
+  if (!ownedDraft || database !== db.value) return;
+  const attachment = await database.att.get(draft.draftId);
+  if (database !== db.value || !canOpenComposer()) return;
+  draft = {...ownedDraft, attachments: attachment?.attachments || []};
   resetForm();
   const loadToken = composeLoad.begin();
   Object.assign(form, { ...draft });
@@ -825,6 +852,19 @@ function handleBeforeUnload(event) {
 }
 
 let unregisterRouterGuard = null;
+
+watch(() => db.value, () => {
+  if (pendingSend) {
+    clearTimeout(pendingSend.timer);
+    clearInterval(pendingSend.interval);
+    pendingSend.notificationInstance?.close?.();
+    pendingSend = null;
+  }
+  show.value = false;
+  isMinimized.value = false;
+  showContacts.value = false;
+  resetForm();
+}, {flush: 'sync'});
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown);
@@ -901,14 +941,17 @@ async function close() {
 async function saveDraft() {
   if (!sendActivity.tryBeginPersistence()) return;
   savingDraft.value = true;
+  const database = db.value;
+  const owner = userStore.user.userId;
   try {
     syncEditorState();
-    const saved = await persistPendingSendDraft(db.value, {
+    const saved = await persistPendingSendDraft(database, {
       ...toRaw(form),
       sendAccountId: form.accountId,
       receiveEmail: [...form.receiveEmail],
       attachments: form.attachments?.map(att => ({ ...att })) || [],
-    }, { userId: userStore.user.userId });
+    }, { userId: owner });
+    if (database !== db.value) return;
     form.draftId = saved.draftId;
     draftStore.refreshList++;
     show.value = false;

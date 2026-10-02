@@ -1046,5 +1046,12 @@ const en = {
     sysMailCfBinding: "Add a send_email binding named email when deploying. Local tests use a simulated binding and do not send real mail.",
     sysMailCfDocs: "Cloudflare setup instructions",
     sysMailProviderPending: "Upgrade the database under Maintenance before changing the provider. Mail keeps using the previous provider.",
+    legacyDraftCount: 'This device has {count} legacy drafts without an owner. They are hidden.',
+    recoverLegacyDrafts: 'Recover legacy drafts',
+    legacyDraftRecoveryNotice: 'Older versions did not record who owned these drafts. If this device was shared, they may contain someone else’s content. Only claim your own drafts; claiming assigns them to your current account.',
+    legacyDraftNumber: 'Legacy draft {number}',
+    claimLegacyDraft: 'Claim for this account',
+    legacyDraftClaimed: 'Legacy draft recovered for this account',
+    schemaPatch326: 'Browser session revocation protection',
 }
 export default en

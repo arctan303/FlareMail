@@ -1213,5 +1213,12 @@ const zh = {
     sysMailCfBinding: "部署时添加 send_email 绑定，名称为 email；本地测试使用模拟绑定，不会发送真实邮件。",
     sysMailCfDocs: "查看 Cloudflare 配置说明",
     sysMailProviderPending: "请先在「系统维护」升级数据库，再修改发信通道。当前邮件服务仍使用原通道。",
+    legacyDraftCount: '此设备有 {count} 份未标记归属的旧草稿，暂未显示。',
+    recoverLegacyDrafts: '恢复旧草稿',
+    legacyDraftRecoveryNotice: '旧版本未记录这些草稿的用户归属。如果此设备曾由多人使用，可能包含他人的内容。请仅认领你自己的草稿；认领后它仅属于当前账号。',
+    legacyDraftNumber: '旧草稿 {number}',
+    claimLegacyDraft: '认领到当前账号',
+    legacyDraftClaimed: '旧草稿已恢复到当前账号',
+    schemaPatch326: '网页会话撤销保护',
 }
 export default zh

@@ -8,6 +8,7 @@ import { attConst } from '../const/entity-const';
 import { parseHTML } from 'linkedom';
 import domainUtils from '../utils/domain-utils';
 import settingService from "./setting-service";
+import { validatePreparedAttachments } from '../utils/send-validator';
 
 const attService = {
 
@@ -33,7 +34,7 @@ const attService = {
 		await orm(c).insert(att).values(attachments).run();
 	},
 
-	async toImageUrlHtml(c, content, userId) {
+	async toImageUrlHtml(c, content, userId, attachments = []) {
 
 		const { r2Domain } = await settingService.query(c);
 		const legacyDomain = domainUtils.toOssDomain(r2Domain);
@@ -49,19 +50,12 @@ const attService = {
 			//邮件正文base64图片转cid附件
 			const src = img.getAttribute('src');
 			if (src && src.toLowerCase().startsWith('data:image')) {
-				const file = fileUtils.base64ToFile(src);
-				const buff = await file.arrayBuffer();
 				const cid = crypto.randomUUID().replace(/-/g, '');
-				const key = constant.ATTACHMENT_PREFIX + await fileUtils.createAttachmentKey(buff, file.name);
 
 				img.setAttribute('src', 'cid:' + cid);
 
 				const attData = {};
-				attData.key = key;
-				attData.filename = file.name;
-				attData.mimeType = file.type;
-				attData.size = file.size;
-				attData.buff = buff;
+				attData.dataUrl = src;
 				attData.content = fileUtils.base64ToDataStr(src);
 				attData.contentId = cid;
 
@@ -77,7 +71,7 @@ const attService = {
 			} catch {
 				privatePath = src;
 			}
-			const isLegacyAttachment = legacyDomain && src.startsWith(legacyDomain + '/');
+			const isLegacyAttachment = src && legacyDomain && src.startsWith(legacyDomain + '/');
 			if (src && (isLegacyAttachment || src.startsWith('attachments/') || privatePath.startsWith(privatePrefix))) {
 
 				const cid = crypto.randomUUID().replace(/-/g, '')
@@ -118,16 +112,45 @@ const attService = {
 		}
 
 		//查询已有内嵌url图片信息
-		const keys = [...new Set(imageDataList.filter(item => !item.content).map(item => item.key))];
+		const keys = [...new Set(imageDataList.filter(item => !item.dataUrl).map(item => item.key))];
 		const dbImageList  = await this.selectOneByKeys(c, keys, userId);
+		const dbImagesByKey = new Map(dbImageList.map(image => [image.key, image]));
+
+		// Count every MIME reference, but check owned sizes before any object read or
+		// data-image decoding. Unknown/foreign references remain omitted as before.
+		validatePreparedAttachments([
+			...attachments,
+			...imageDataList.filter(image => image.dataUrl),
+		], imageDataList.filter(image => !image.dataUrl)
+			.map(image => dbImagesByKey.get(image.key)).filter(Boolean));
+
+		const copiedImages = new Map();
+		const copyOwnedImage = async (key, dbImage) => {
+			const obj = await r2Service.getObj(c, key);
+			if (!obj) return null;
+			const content = obj instanceof ArrayBuffer ? obj : await obj.arrayBuffer();
+			return {
+				content,
+				buff: content,
+				key: constant.ATTACHMENT_PREFIX + await fileUtils.createAttachmentKey(content, dbImage.filename),
+			};
+		};
 
 		//设置给当前附件
 		await Promise.all(imageDataList.map(async image => {
-			if (image.content) {
+			if (image.dataUrl) {
+				const file = fileUtils.base64ToFile(image.dataUrl);
+				const buff = await file.arrayBuffer();
+				image.key = constant.ATTACHMENT_PREFIX + await fileUtils.createAttachmentKey(buff, file.name);
+				image.filename = file.name;
+				image.mimeType = file.type;
+				image.size = file.size;
+				image.buff = buff;
+				delete image.dataUrl;
 				return;
 			}
 
-			const dbImage = dbImageList.find(dbImage => image.key === dbImage.key);
+			const dbImage = dbImagesByKey.get(image.key);
 			if (!dbImage) {
 				return;
 			}
@@ -137,14 +160,11 @@ const attService = {
 			image.mimeType = dbImage.mimeType;
 			image.contentType = dbImage.mimeType;
 
-			const obj = await r2Service.getObj(c, image.key);
-			if (!obj) {
-				return;
+			if (!copiedImages.has(image.key)) {
+				copiedImages.set(image.key, copyOwnedImage(image.key, dbImage));
 			}
-
-			image.content = obj instanceof ArrayBuffer ? obj : await obj.arrayBuffer();
-			image.buff = image.content;
-			image.key = constant.ATTACHMENT_PREFIX + await fileUtils.createAttachmentKey(image.content, dbImage.filename);
+			const copied = await copiedImages.get(image.key);
+			if (copied) Object.assign(image, copied);
 		}))
 
 		imageDataList = imageDataList.filter(image => image.content);

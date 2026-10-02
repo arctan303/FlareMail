@@ -1,3 +1,13 @@
+export function installEditorCommentFilter(editor) {
+  // Register before the initial content and every later set/paste/source load
+  // reach TinyMCE's serializer, which can decode mce:protected comments.
+  editor.on('PreInit', () => {
+    editor.parser.addNodeFilter('#comment', nodes => {
+      for (const node of nodes) node.remove()
+    })
+  })
+}
+
 export function createEditorLifecycle(initialContent = '') {
   let editor = null
   let ready = false
