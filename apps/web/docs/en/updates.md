@@ -46,7 +46,9 @@ npx --yes pnpm@10.34.5 install --frozen-lockfile
 npx --yes pnpm@10.34.5 run deploy
 ~~~
 
-Sign in as an administrator and check pending patches under System settings → Maintenance. Apply upgrades when prompted. The current schema is **326**. Apply patch 326 before replacing a Google link so browser-session revocation is enforced. Compatible patches allow normal sign-in. If a future incompatible upgrade prevents it, use the login maintenance entry with SETUP_SECRET. This secret is not a forgotten-password reset tool.
+Sign in as an administrator and check pending patches under System settings → Maintenance. The current schema is **327**. Google link replacement requires patch 326; mail webhooks require patch 327. Compatible patches allow normal sign-in. If a future incompatible upgrade prevents it, use the login maintenance entry with SETUP_SECRET. This secret is not a forgotten-password reset tool.
+
+Patch 327 adds webhook configuration and delivery tables without enabling notifications. Preserve your resource IDs. Add `* * * * *` to triggers.crons in your own Wrangler configuration while retaining the daily task; otherwise recovery may wait for later mail or the daily run. Public templates include it, but customized existing configurations need merging. D1 backups contain shared webhook secrets and must remain private. Disable webhooks before rolling back code and retain the new tables. See [CLI / Agent](cli) for configuration.
 
 Patch 326 adds fields and a session revocation table while retaining existing accounts and sessions. Preserve both during a code rollback. Older code does not enforce the new revocation rules, so invalidate every browser session before serving it again. Draft migration retains legacy databases and migration records; clearing site data to roll back can lose drafts.
 

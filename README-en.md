@@ -37,7 +37,7 @@ The first formal release is **[v1.0.0](https://github.com/arctan303/FlareMail/re
 - **Use by invitation**: administrators manage invited members, each with their own mailbox.
 - **A complete web interface**: Chinese/English, light/dark appearance, responsive layouts, keyboard shortcuts and PWA.
 - **Configure as needed**: Web setup and administration, custom branding, Google login and password confirmation for sensitive changes.
-- **Scripts and Agents**: personal tokens for reading, sending and replying to mail, plus separate first-party website OAuth authorization.
+- **Scripts and Agents**: personal tokens for reading, sending and replying to mail; incoming webhooks managed through the CLI or Web, with optional sender-address filtering, test notifications and delivery records; plus separate first-party website OAuth authorization.
 
 ## Try it, then deploy
 

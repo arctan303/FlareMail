@@ -13,6 +13,7 @@ import sanitizeEmailHtml from '../utils/html-sanitizer';
 import codeExtractor from '../utils/code-extractor';
 import { selectPersistedAdmin } from '../security/admin-identity';
 import { inboundAttachmentLimitReason, inboundRawLimitReason } from '../utils/inbound-mail-limits';
+import webhookService from '../service/webhook-service';
 
 export async function email(message, env, ctx) {
 	try {
@@ -159,6 +160,7 @@ export async function email(message, env, ctx) {
 			account ? emailConst.status.RECEIVE : emailConst.status.NOONE,
 			emailRow.emailId
 		);
+		webhookService.kick({ env, executionCtx: ctx }, emailRow.emailId);
 
 		if (
 			userRow &&

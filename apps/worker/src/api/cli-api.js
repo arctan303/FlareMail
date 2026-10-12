@@ -7,21 +7,11 @@ import { isDel } from '../const/entity-const';
 import orm from '../entity/orm';
 import email from '../entity/email';
 import { att } from '../entity/att';
-import { and, eq, desc, count, or, like, inArray } from 'drizzle-orm';
-import { parseHTML } from 'linkedom';
+import { and, eq, desc, asc, gt, count, or, like, inArray, sql } from 'drizzle-orm';
+import { readableMailBody } from '../utils/mail-text';
 import BizError from '../error/biz-error';
 import securityService from '../service/security-service';
 import { readSendBody } from './send-body';
-
-function stripHtml(html) {
-	if (!html) return '';
-	try {
-		const { document } = parseHTML(html);
-		return document.body?.textContent?.trim() || html.replace(/<[^>]*>/g, '').trim();
-	} catch {
-		return html.replace(/<[^>]*>/g, '').trim();
-	}
-}
 
 function textToHtml(text) {
 	return String(text || '')
@@ -63,6 +53,10 @@ app.get('/cli/emails', async (c) => {
 	const accountId = q.accountId === undefined || q.accountId === '' ? null : Number(q.accountId);
 	const type = q.type !== undefined ? Number(q.type) : 0;
 	const keyword = (q.q || '').trim();
+	const afterId = q.afterId === undefined ? null : Number(q.afterId);
+	if (afterId !== null && (!Number.isSafeInteger(afterId) || afterId < 0)) throw new BizError('Invalid afterId.');
+	if (afterId !== null && page !== 1) throw new BizError('Incremental scans require page=1.');
+	if (q.unread !== undefined && !['true', 'false'].includes(q.unread)) throw new BizError('unread must be true or false.');
 	if (accountId !== null && (!Number.isInteger(accountId) || accountId <= 0)) throw new BizError('Invalid account ID.');
 	if (![0, 1].includes(type)) throw new BizError('Invalid email type.');
 	if (new TextEncoder().encode(keyword).length > 48) throw new BizError('Search keyword is too long.');
@@ -72,6 +66,8 @@ app.get('/cli/emails', async (c) => {
 		eq(email.type, type),
 		eq(email.isDel, isDel.NORMAL)
 	];
+	if (afterId !== null) conditions.push(gt(email.emailId, afterId));
+	if (q.unread !== undefined) conditions.push(eq(email.unread, q.unread === 'true' ? 0 : 1));
 
 	if (accountId) {
 		conditions.push(eq(email.accountId, accountId));
@@ -82,14 +78,21 @@ app.get('/cli/emails', async (c) => {
 			like(email.subject, `%${keyword}%`),
 			like(email.sendEmail, `%${keyword}%`),
 			like(email.toEmail, `%${keyword}%`),
-			like(email.name, `%${keyword}%`)
+			like(email.name, `%${keyword}%`),
+			like(email.text, `%${keyword}%`),
+			like(email.content, `%${keyword}%`)
 		));
 	}
 
 	const [list, totalRow] = await Promise.all([
-		orm(c).select().from(email)
+		// Compute the visibility barrier in the same SELECT snapshot as the rows.
+		// An earlier ID may still be saving attachments while later IDs are ready.
+		orm(c).select({ ...email, scanPendingId: afterId === null ? sql`NULL` : sql`(
+			SELECT MIN(p.email_id) FROM email p WHERE p.user_id=${userId} AND p.type=${type}
+			AND p.status=6 AND p.is_del=1 AND p.email_id>${afterId}
+			${accountId ? sql`AND p.account_id=${accountId}` : sql``})` }).from(email)
 			.where(and(...conditions))
-			.orderBy(desc(email.emailId))
+			.orderBy(afterId === null ? desc(email.emailId) : asc(email.emailId))
 			.limit(size)
 			.offset(offset)
 			.all(),
@@ -118,11 +121,15 @@ app.get('/cli/emails', async (c) => {
 		hasAtt: attachmentEmailIds.has(e.emailId)
 	}));
 
+	const pendingId = list[0]?.scanPendingId;
+	const maximumId = items.length ? Math.max(...items.map(item => item.id)) : afterId;
 	return c.json(result.ok({
 		total: totalRow.total,
 		page,
 		size,
-		list: items
+		list: items,
+		nextAfterId: pendingId == null ? maximumId : Math.min(maximumId, pendingId - 1),
+		scanPending: pendingId != null
 	}));
 });
 
@@ -142,7 +149,7 @@ app.get('/cli/emails/:id', async (c) => {
 		.where(and(eq(att.emailId, emailId), eq(att.status, 0)))
 		.all();
 
-	const body = emailRow.text || stripHtml(emailRow.content);
+	const readable = readableMailBody(emailRow);
 
 	return c.json(result.ok({
 		id: emailRow.emailId,
@@ -152,7 +159,7 @@ app.get('/cli/emails/:id', async (c) => {
 		cc: emailRow.cc,
 		subject: emailRow.subject,
 		date: emailRow.createTime,
-		body,
+		...readable,
 		attachments: attList.map(a => ({
 			filename: a.filename,
 			size: a.size,
@@ -240,7 +247,7 @@ app.post('/cli/emails/:id/reply', async (c) => {
 	const replySubject = `Re: ${baseSubject}`;
 
 	const quoteHeader = `\n\n--- Original message ---\nFrom: ${original.name || original.sendEmail}\nDate: ${original.createTime}\nSubject: ${original.subject}\n\n`;
-	const originalBody = original.text || stripHtml(original.content);
+	const originalBody = readableMailBody(original).body;
 	const body = (params.body || '') + quoteHeader + (originalBody ? `> ${originalBody.split('\n').join('\n> ')}` : '');
 
 	const originalAccount = await accountService.selectOwnedById(c, original.accountId, userId);

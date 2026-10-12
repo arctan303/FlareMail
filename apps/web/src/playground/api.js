@@ -81,6 +81,12 @@ export function createPlaygroundApi(locale='zh') {
         const p={...Object.fromEntries(parsed.searchParams),...params};
         const d=typeof data==='string'?JSON.parse(data||'{}'):(data||{});
         const key=method+' '+path;
+        if (method === 'GET' && /^\/my\/webhooks\/\d+(\/deliveries)?$/.test(path)) {
+            const accountId = Number(path.split('/')[3]);
+            if (!myAccounts().some(a => a.accountId === accountId)) fail('邮箱不存在。', 'Mailbox not found.', 404);
+            return path.endsWith('/deliveries') ? { list: [], nextBefore: null }
+                : { accountId, url: '', enabled: false, mode: null, allowlist: [], hasSecret: false, revision: 0 };
+        }
         if(method!=='GET' && /^\/(setting|admin|my|user|unmatched)\//.test(path) && key!=='PUT /my/locale')
             fail('体验中的设置仅供查看，语言与外观可以切换。','Settings are read-only in the experience. Language and appearance can be changed.');
         switch(key){

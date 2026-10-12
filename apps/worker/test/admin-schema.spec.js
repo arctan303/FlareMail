@@ -45,6 +45,14 @@ async function login(email = ADMIN) {
   return response.headers.get('set-cookie').split(';')[0];
 }
 
+async function removeWebhookPatch() {
+  await env.db.batch([
+    env.db.prepare('DROP TABLE IF EXISTS webhook_delivery'),
+    env.db.prepare('DROP TABLE IF EXISTS webhook_config'),
+    env.db.prepare('DELETE FROM schema_migrations WHERE version=327'),
+  ]);
+}
+
 beforeAll(async () => {
   await dbInit.migrate(context());
   await markInstalled(env, ['example.com'], []);
@@ -82,8 +90,8 @@ describe.sequential('admin database schema inspection API', () => {
     const body = await res.json();
     expect(body.code).toBe(200);
     expect(body.data).toMatchObject({
-      currentVersion: { id: 326, label: 'v3.26' },
-      latestVersion: { id: 326, label: 'v3.26' },
+      currentVersion: { id: 327, label: 'v3.27' },
+      latestVersion: { id: 327, label: 'v3.27' },
       upgradeRequired: false,
       upgradeBlocking: false,
       upgradeSupported: true,
@@ -92,9 +100,9 @@ describe.sequential('admin database schema inspection API', () => {
     expect(Array.isArray(body.data.history)).toBe(true);
     expect(body.data.history.length).toBeGreaterThanOrEqual(14);
     const topPatch = body.data.history[0];
-    expect(topPatch.version).toBe(326);
-    expect(topPatch.label).toBe('v3.26');
-    expect(topPatch.descKey).toBe('schemaPatch326');
+    expect(topPatch.version).toBe(327);
+    expect(topPatch.label).toBe('v3.27');
+    expect(topPatch.descKey).toBe('schemaPatch327');
     expect(topPatch.appliedTime).toBeTruthy();
   });
 
@@ -105,6 +113,7 @@ describe.sequential('admin database schema inspection API', () => {
       .bind(account.accountId, account.userId, 'preserved 324 mail', 'unchanged body').first();
     const settingBefore = await env.db.prepare('SELECT * FROM setting').first();
     // Simulate a healthy 324 database: the additive Reply-To column and its marker do not exist yet.
+    await removeWebhookPatch();
     await env.db.batch([
       env.db.prepare('ALTER TABLE email DROP COLUMN reply_to'),
       env.db.prepare('DELETE FROM schema_migrations WHERE version = 325'),
@@ -118,12 +127,13 @@ describe.sequential('admin database schema inspection API', () => {
     expect(behindRes.status).toBe(200);
     const behindData = (await behindRes.json()).data;
     expect(behindData.currentVersion).toMatchObject({ id: 324, label: 'v3.24' });
-    expect(behindData.latestVersion).toMatchObject({ id: 326, label: 'v3.26' });
+    expect(behindData.latestVersion).toMatchObject({ id: 327, label: 'v3.27' });
     expect(behindData.upgradeRequired).toBe(true);
     expect(behindData.upgradeBlocking).toBe(false);
     expect(behindData.pendingPatches).toEqual([
       expect.objectContaining({ version: 325, label: 'v3.25', descKey: 'schemaPatch325' }),
       expect.objectContaining({ version: 326, label: 'v3.26', descKey: 'schemaPatch326' }),
+      expect.objectContaining({ version: 327, label: 'v3.27', descKey: 'schemaPatch327' }),
     ]);
     expect((await login(ADMIN))).toBeTruthy();
 
@@ -135,8 +145,8 @@ describe.sequential('admin database schema inspection API', () => {
     const afterRes = await api('/admin/schema', { cookie: adminCookie });
     expect(afterRes.status).toBe(200);
     const afterData = (await afterRes.json()).data;
-    expect(afterData.currentVersion).toMatchObject({ id: 326, label: 'v3.26' });
-    expect(afterData.latestVersion).toMatchObject({ id: 326, label: 'v3.26' });
+    expect(afterData.currentVersion).toMatchObject({ id: 327, label: 'v3.27' });
+    expect(afterData.latestVersion).toMatchObject({ id: 327, label: 'v3.27' });
     expect(afterData.upgradeRequired).toBe(false);
     expect(afterData.pendingPatches).toEqual([]);
     const replyToColumn = (await env.db.prepare("PRAGMA table_info('email')").all()).results.find(column => column.name === 'reply_to');
@@ -152,6 +162,7 @@ describe.sequential('admin database schema inspection API', () => {
 
   it('keeps a 323 database usable and upgrades the additive patches to current', async () => {
     const adminCookie = await login(ADMIN);
+    await removeWebhookPatch();
     await env.db.batch([
       env.db.prepare('ALTER TABLE email DROP COLUMN reply_to'),
       env.db.prepare('DELETE FROM schema_migrations WHERE version = 325'),
@@ -167,20 +178,21 @@ describe.sequential('admin database schema inspection API', () => {
     expect(behind.status).toBe(200);
     const behindData = (await behind.json()).data;
     expect(behindData.currentVersion).toMatchObject({ id: 323, label: 'v3.23' });
-    expect(behindData.latestVersion).toMatchObject({ id: 326, label: 'v3.26' });
+    expect(behindData.latestVersion).toMatchObject({ id: 327, label: 'v3.27' });
     expect(behindData).toMatchObject({ upgradeRequired: true, upgradeBlocking: false, upgradeSupported: true });
     expect(behindData.pendingPatches).toEqual([
       expect.objectContaining({ version: 324, descKey: 'schemaPatch324' }),
       expect.objectContaining({ version: 325, descKey: 'schemaPatch325' }),
       expect.objectContaining({ version: 326, descKey: 'schemaPatch326' }),
+      expect.objectContaining({ version: 327, descKey: 'schemaPatch327' }),
     ]);
     expect(await login(ADMIN)).toBeTruthy();
 
     expect((await api('/admin/upgrade', { method: 'POST', cookie: adminCookie })).status).toBe(200);
     const upgraded = (await (await api('/admin/schema', { cookie: adminCookie })).json()).data;
     expect(upgraded).toMatchObject({
-      currentVersion: { id: 326, label: 'v3.26' },
-      latestVersion: { id: 326, label: 'v3.26' },
+      currentVersion: { id: 327, label: 'v3.27' },
+      latestVersion: { id: 327, label: 'v3.27' },
       upgradeRequired: false,
       upgradeBlocking: false,
     });
@@ -215,6 +227,7 @@ describe.sequential('admin database schema inspection API', () => {
     const before = await env.db.prepare('SELECT email, password, salt, google_sub FROM user WHERE user_id = ?').bind(admin.userId).first();
     const settings = await env.db.prepare('SELECT * FROM setting').first();
     const hash = await cryptoUtils.hashSecret(adminCookie.slice(adminCookie.indexOf('=') + 1));
+    await removeWebhookPatch();
     await env.db.batch([
       env.db.prepare('DELETE FROM schema_migrations WHERE version = 326'),
       env.db.prepare('ALTER TABLE user DROP COLUMN session_epoch'),
@@ -223,7 +236,7 @@ describe.sequential('admin database schema inspection API', () => {
     ]);
     try {
       const schema = (await (await api('/admin/schema', { cookie: adminCookie })).json()).data;
-      expect(schema).toMatchObject({ currentVersion: { id: 325 }, latestVersion: { id: 326 }, upgradeRequired: true, upgradeBlocking: false });
+      expect(schema).toMatchObject({ currentVersion: { id: 325 }, latestVersion: { id: 327 }, upgradeRequired: true, upgradeBlocking: false });
       expect(await login(ADMIN)).toBeTruthy();
       const legacyLogout = await login(ADMIN);
       expect((await api('/logout', { method: 'DELETE', cookie: legacyLogout })).status).toBe(200);

@@ -1157,7 +1157,7 @@ describe('outgoing mail and forwarding boundaries', () => {
 		expect((await env.db.prepare('SELECT send_count AS sendCount FROM user WHERE user_id = ?').bind(userId).first()).sendCount).toBe(1);
 	});
 
-	it('keeps all warnings when provider outcome is unknown and one internal recipient fails', async () => {
+	it('keeps all warnings when provider outcome is unknown and internal persistence fails', async () => {
 		await env.db.prepare("UPDATE mail_provider_config SET provider = 'cloudflare' WHERE id = 1").run();
 		const sender = 'partial-internal@example.com';
 		const firstRecipient = 'partial-first@example.com';
@@ -1200,11 +1200,14 @@ describe('outgoing mail and forwarding boundaries', () => {
 		});
 		expect(response.status).toBe(200);
 		const body = await response.json();
-		expect(body.data[0].deliveryWarning).toMatch(/1 internal recipient/i);
+		// Finalizing the first internal copy is now an atomic readable-mail/outbox
+		// transaction. The injected update failure also makes that copy incomplete.
+		expect(body.data[0].deliveryWarning).toMatch(/2 internal recipient/i);
 		expect(body.data[0].deliveryWarning).toMatch(/do not resend/i);
 		expect(body.data[0].deliveryWarning).toMatch(/persistence was incomplete/i);
 		expect((await env.db.prepare('SELECT send_count AS sendCount FROM user WHERE user_id = ?').bind(senderId).first()).sendCount).toBe(3);
 		expect((await env.db.prepare('SELECT COUNT(*) AS total FROM email WHERE user_id = ? AND type = 0').bind(firstId).first()).total).toBe(1);
+		expect(await env.db.prepare('SELECT status,is_del FROM email WHERE user_id=? AND type=0').bind(firstId).first()).toEqual({ status: 6, is_del: 1 });
 		expect((await env.db.prepare('SELECT COUNT(*) AS total FROM email WHERE user_id = ? AND type = 0').bind(secondId).first()).total).toBe(0);
 	});
 

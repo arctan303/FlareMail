@@ -3,6 +3,7 @@ import { hasCloudflareEmail, normalizeMailProvider } from '../service/mail-provi
 import { normalizeConfirmation } from '../service/confirmation-policy-service';
 import { emailConst } from '../const/entity-const';
 import { ensureMigrationTable } from './schema';
+import { webhookSchemaStatements, webhookSchemaValid } from './webhook-schema';
 import { managedDomains } from '../utils/managed-domain-utils';
 import {
 	normalizeAllowedOrigins,
@@ -49,6 +50,18 @@ function credentialPair(first, second, label) {
 
 export const migrations = {
 	ensureMigrationTable,
+	async v3_27Applied(c) {
+		return await this.hasTable(c, 'schema_migrations') && await this.hasMigrationMarker(c, 327) && await webhookSchemaValid(c);
+	},
+	async v3_27UpgradePending(c) {
+		return await this.hasTable(c, 'schema_migrations') && !await this.hasMigrationMarker(c, 327) && await webhookSchemaValid(c, true);
+	},
+	async v3_27DB(c) {
+		if (await this.v3_27Applied(c)) return;
+		if (!await this.v3_27UpgradePending(c)) throw new Error('Webhook migration requires manual recovery.');
+		await c.env.db.batch([...webhookSchemaStatements(c.env.db), c.env.db.prepare('INSERT OR IGNORE INTO schema_migrations(version) VALUES (327)')]);
+		if (!await this.v3_27Applied(c)) throw new Error('Webhook migration requires manual recovery.');
+	},
 
 	async hasMigrationMarker(c, version) {
 		const row = await c.env.db.prepare(

@@ -143,6 +143,8 @@ async function resetToFreshDatabase() {
 		env.db.prepare('DROP TABLE IF EXISTS role_perm'),
 		env.db.prepare('DROP TABLE IF EXISTS runtime_config'),
 		env.db.prepare('DROP TABLE IF EXISTS session_revocation'),
+		env.db.prepare('DROP TABLE IF EXISTS webhook_delivery'),
+		env.db.prepare('DROP TABLE IF EXISTS webhook_config'),
 		env.db.prepare('DROP TABLE IF EXISTS admin_confirmation'),
 		env.db.prepare('DROP TABLE IF EXISTS mail_provider_config'),
 		env.db.prepare('DROP TABLE IF EXISTS schema_migrations'),

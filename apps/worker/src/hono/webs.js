@@ -15,6 +15,7 @@ import '../api/r2-api';
 import '../api/my-api';
 import '../api/init-api';
 import '../api/cli-api';
+import '../api/webhook-api';
 import '../api/unmatched-api';
 import '../api/oauth-api';
 import '../api/oauth-provider-api';
