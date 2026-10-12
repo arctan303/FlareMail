@@ -12,8 +12,8 @@ Changes since v1.1.0 include security hardening, mail webhooks, CLI improvements
 - Incoming webhooks: Configure each of your mailboxes to notify a receiver after external or internal mail is saved. The Web and CLI share enable/disable, deletion, secret rotation, tests, delivery records and retries, with a choice of all senders or an address allowlist.
 - 回调仅发送事件 ID、邮件 ID 和收件邮箱，通过独立共享密钥验证。通知有限重试，失败不影响收信；接收端按事件 ID 去重、自行排队处理，正文仍使用个人 CLI Token 获取。
 - Callbacks carry only the event ID, mail ID and mailbox, authenticated with a separate shared secret. Bounded retries do not affect mail receipt. Receivers deduplicate by event ID and queue their own work; message bodies remain accessible through the personal CLI token.
-- CLI 列表新增未读过滤与 afterId 增量查询，搜索覆盖主题、地址、文本及 HTML 源文；详情新增可读 body，保留原纯文本 text 和正文来源 bodySource，改善纯 HTML 邮件读取。
-- CLI lists add unread filters and afterId incremental queries. Search covers subjects, addresses, text and HTML source. Details add a readable body while preserving text and bodySource, improving access to HTML-only messages.
+- CLI 列表新增未读过滤与 afterId 增量查询，搜索覆盖主题、地址、文本及 HTML 源文；详情新增可读 body 和正文来源 bodySource，保留原纯文本 text，改善纯 HTML 邮件读取。
+- CLI lists add unread filters and afterId incremental queries. Search covers subjects, addresses, text and HTML source. Details add a readable body and bodySource while preserving the original text, improving access to HTML-only messages.
 - README 与中英 Docs 按个人域名邮箱重新组织，突出无需 VPS、在线体验、网页部署和助手接入；移除 README 邮箱大截图，新增费用与准备，说明 Cloudflare 免费计划与 Resend 免费额度的组合及使用条件。
 - Reorganized the README and bilingual Docs around a personal domain mailbox: no VPS, direct online experience, Web deployment and assistant access. Removed the large README mailbox screenshot and added costs and preparation, including the Cloudflare free-plan and Resend free-allowance combination and its conditions.
 - 中文 README 增加英文简介，公开入口统一为 flaremail.arcinks.com；新增个人邮箱与助手收信的中英场景指南。Pages 为全部公开文档生成可直接阅读的 HTML、规范链接、语言对应链接、分享摘要和站点地图；体验邮箱与正式邮箱继续禁止索引。
@@ -43,8 +43,8 @@ Changes since v1.1.0 include security hardening, mail webhooks, CLI improvements
 
 ### 验证与已知限制 / Validation and known limitations
 
-- 安全加固此前通过 Worker 451/451、Web 147/147、正式/Pages 构建及真实编辑器 92/92；16 项修复完成独立审查。新增链接、表格和整包边界 3 项的最终独立审查被平台过滤中断，仍待完成，不作为稳定发布通过。
-- Earlier security validation passed Worker 451/451, Web 147/147, production/Pages builds and 92/92 real-editor checks; sixteen fixes completed independent review. Final independent review of the three new link, table and request-body boundaries was interrupted by platform filtering and remains pending, rather than approved for stable release.
+- 安全加固此前通过 Worker 451/451、Web 147/147、正式/Pages 构建及真实编辑器 92/92；16 项修复已完成独立审查。本次完整 1.1.1 候选独立审查通过，覆盖新增链接、表格和发送整包 3 项边界，并独立通过 Worker 59 项、Web 8 项专项验证。
+- Earlier security validation passed Worker 451/451, Web 147/147, production/Pages builds and 92/92 real-editor checks; sixteen fixes completed independent review. Independent review of the complete 1.1.1 candidate passed, including the three new link, table and request-body boundaries, with 59 Worker and 8 Web focused checks independently passing.
 - Webhook 变更通过 Worker 469/469、Web 148/148、部署配置检查、双构建和浏览器验收，独立审查的修复项已关闭。真实 IPv6 回调与助手唤醒仍需接收端联调；当前版本未部署到生产，也未执行生产数据库升级。
 - Webhook changes passed Worker 469/469, Web 148/148, deployment configuration checks, both builds and browser checks; independent review fixes are closed. Real IPv6 callbacks and assistant wakeups still need receiver integration. This version has not been deployed to production, and production database upgrades have not been run.
 - 双语公开文档与搜索分享变更通过 Web 153/153、正式/Pages 构建、36 篇文档产物检查及浏览器验证；dev Worker 和 Pages 预览部署已回验成功，匿名邮件与 Webhook 配置接口仍要求认证。
