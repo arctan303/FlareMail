@@ -18,6 +18,8 @@ Changes since v1.1.0 include security hardening, mail webhooks, CLI improvements
 - Reorganized the README and bilingual Docs around a personal domain mailbox: no VPS, direct online experience, Web deployment and assistant access. Removed the large README mailbox screenshot and added costs and preparation, including the Cloudflare free-plan and Resend free-allowance combination and its conditions.
 - 中文 README 增加英文简介，公开入口统一为 flaremail.arcinks.com；新增个人邮箱与助手收信的中英场景指南。Pages 为全部公开文档生成可直接阅读的 HTML、规范链接、语言对应链接、分享摘要和站点地图；体验邮箱与正式邮箱继续禁止索引。
 - Added an English introduction to the Chinese README and unified public links at flaremail.arcinks.com, with bilingual guides for personal and assistant mailboxes. Pages generates readable initial HTML, canonical and language links, sharing metadata and a sitemap for all public documents; the experience mailbox and real mailbox remain excluded from indexing.
+- 开发与发版规则统一为 dev 累积开发、完整候选审查验证、通过 PR 合入 main，再创建不可变版本标签与正式 Release；明确准备请求、发版执行和平台部署各自的授权边界。
+- Aligned development and release rules around accumulated dev changes, full-candidate review and validation, a pull request into main, and immutable tags with a formal Release. Clarified authorization for preparation, release execution and platform deployment.
 
 ### 安全与修复 / Security and fixes
 
@@ -45,6 +47,8 @@ Changes since v1.1.0 include security hardening, mail webhooks, CLI improvements
 - Earlier security validation passed Worker 451/451, Web 147/147, production/Pages builds and 92/92 real-editor checks; sixteen fixes completed independent review. Final independent review of the three new link, table and request-body boundaries was interrupted by platform filtering and remains pending, rather than approved for stable release.
 - Webhook 变更通过 Worker 469/469、Web 148/148、部署配置检查、双构建和浏览器验收，独立审查的修复项已关闭。真实 IPv6 回调与助手唤醒仍需接收端联调；当前版本未部署到生产，也未执行生产数据库升级。
 - Webhook changes passed Worker 469/469, Web 148/148, deployment configuration checks, both builds and browser checks; independent review fixes are closed. Real IPv6 callbacks and assistant wakeups still need receiver integration. This version has not been deployed to production, and production database upgrades have not been run.
+- 双语公开文档与搜索分享变更通过 Web 153/153、正式/Pages 构建、36 篇文档产物检查及浏览器验证；dev Worker 和 Pages 预览部署已回验成功，匿名邮件与 Webhook 配置接口仍要求认证。
+- Bilingual documentation and search/share changes passed 153/153 Web tests, production/Pages builds, checks for 36 document artifacts and browser verification. Dev Worker and Pages preview deployments were verified successfully; anonymous access to mail and webhook configuration still requires authentication.
 
 ## v1.1.0 — 2026-09-23
 
