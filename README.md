@@ -4,7 +4,8 @@
 
 <p align="center">
   <strong>无需 VPS 的个人域名邮箱</strong><br />
-  部署在自己的 Cloudflare 账号，免费计划也能用。
+  部署在自己的 Cloudflare 账号，支持 CLI 与助手接入。<br />
+  <em>Personal domain email in your Cloudflare account. No VPS required.</em>
 </p>
 
 <p align="center">
@@ -16,8 +17,8 @@
 <p align="center">
   <a href="README.md">简体中文</a> ·
   <a href="README-en.md">English</a> ·
-  <a href="https://flaremail-demo.pages.dev/inbox">在线体验</a> ·
-  <a href="https://flaremail-demo.pages.dev/docs/zh/introduction">使用文档</a> ·
+  <a href="https://flaremail.arcinks.com/inbox">在线体验</a> ·
+  <a href="https://flaremail.arcinks.com/docs/zh/introduction">使用文档</a> ·
   <a href="https://github.com/arctan303/FlareMail/releases">Releases</a>
 </p>
 
@@ -25,7 +26,7 @@ FlareMail 是面向个人的开源域名邮箱，支持日常收发、多个邮�
 
 ## 在线体验
 
-**[打开 FlareMail 在线体验 →](https://flaremail-demo.pages.dev/inbox)**
+**[打开 FlareMail 在线体验 →](https://flaremail.arcinks.com/inbox)**
 
 无需登录，可直接尝试阅读会话、搜索邮件、切换邮箱、撰写回复和管理草稿，也支持手机访问。体验使用示例数据，模拟发送不会投递真实邮件，刷新后恢复初始数据。详见[体验说明](apps/web/docs/zh/experience.md)。
 
@@ -54,11 +55,12 @@ Cloudflare 免费计划可用于托管应用和收信，发信可搭配 Resend �
 
 ## 文档
 
-[在线文档](https://flaremail-demo.pages.dev/docs/zh/introduction)提供完整使用指引，也可按主题阅读下方文档。
+[在线文档](https://flaremail.arcinks.com/docs/zh/introduction)提供完整使用指引，也可按主题阅读下方文档。
 
 | 主题 | 文档 |
 | --- | --- |
 | 开始使用 | [项目介绍](apps/web/docs/zh/introduction.md) · [费用与准备](apps/web/docs/zh/costs.md) · [部署指南](apps/web/docs/zh/deployment.md) |
+| 使用场景 | [个人域名邮箱](apps/web/docs/zh/personal-mailbox.md) · [给助手一个邮箱](apps/web/docs/zh/assistant-mailbox.md) |
 | 邮件收发 | [收信配置](apps/web/docs/zh/receiving.md) · [发信配置](apps/web/docs/zh/sending.md) · [日常使用](apps/web/docs/zh/usage.md) |
 | 设置与管理 | [配置说明](apps/web/docs/zh/configuration.md) · [管理员指南](apps/web/docs/zh/administration.md) |
 | 助手与集成 | [CLI / Agent 与 Webhook](apps/web/docs/zh/cli.md) · [OAuth 接入](apps/web/docs/zh/oauth.md) |

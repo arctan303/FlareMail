@@ -31,6 +31,8 @@ FlareMail 让你用自己的域名收发邮件，部署在你自己的 Cloudflar
 
 ## 从这里开始
 
+也可以先按自己的用途阅读：[个人域名邮箱](/docs/zh/personal-mailbox) · [给助手一个邮箱](/docs/zh/assistant-mailbox)。
+
 1. [先体验邮箱](/docs/zh/experience)：无需登录，使用示例邮件了解阅读、整理和写信。
 2. [看费用与准备](/docs/zh/costs)：确认域名、免费方案和发信选择。
 3. [部署并接通收发](/docs/zh/deployment)：创建应用、完成 Web 初始化，再配置域名路由和发信服务。

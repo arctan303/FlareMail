@@ -31,6 +31,8 @@ Administrators can create invited members, each with their own mailbox. Member m
 
 ## Start here
 
+You can also start with a use case: [your personal domain mailbox](/docs/en/personal-mailbox) or [a mailbox for your assistant](/docs/en/assistant-mailbox).
+
 1. [Explore the mailbox](/docs/en/experience): try reading, organizing and composing sample mail without signing in.
 2. [Check costs and preparation](/docs/en/costs): choose a domain and understand the free setup and sending options.
 3. [Deploy and connect delivery](/docs/en/deployment): create the application, complete Web setup, then configure routing and a sending provider.

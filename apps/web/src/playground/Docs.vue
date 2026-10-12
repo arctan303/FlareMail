@@ -175,6 +175,7 @@ import { setThemeMode } from '@/utils/theme.js';
 import { applyBrandToDocument, normalizeBrand } from '@/utils/brand.js';
 import { DOC_GROUPS, DOC_ITEMS, getDoc } from './docs.js';
 import { renderMarkdown } from './markdown.js';
+import { applyMetadata, docMetadata, previewMetadata, PUBLIC_ORIGIN } from './seo.js';
 import { normalizeInstanceOrigin, personalizeCliDocs, CLI_EXAMPLE_ORIGIN } from '@/utils/cli-docs.js';
 
 const route = useRoute(), router = useRouter(), settings = useSettingStore(), ui = useUiStore();
@@ -285,6 +286,9 @@ watch(
     menuOpen.value = false;
     applyBrandToDocument(settings.settings, (current.value?.[lang.value] || '404') + ' · ' + (en.value ? 'Docs' : '文档'));
     await nextTick();
+    applyMetadata(current.value && source.value
+      ? docMetadata({lang:lang.value, slug:slug.value, rendered:renderMarkdown(getDoc(lang.value, slug.value), lang.value), origin:PUBLIC_ORIGIN})
+      : previewMetadata(lang.value, PUBLIC_ORIGIN), document);
     if (route.hash) {
       const id = route.hash.slice(1);
       activeHeadingId.value = id;

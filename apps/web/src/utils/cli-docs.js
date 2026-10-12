@@ -1,6 +1,6 @@
 import {buildCliAgentPrompt} from './cli-agent-prompt.js';
 
-export const CLI_DOCS_SITE = 'https://flaremail-demo.pages.dev';
+export const CLI_DOCS_SITE = 'https://flaremail.arcinks.com';
 export const CLI_EXAMPLE_ORIGIN = 'https://mail.example.com';
 
 // Accept origins only. The restricted alphabet also keeps substituted shell examples safe.

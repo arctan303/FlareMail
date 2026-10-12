@@ -16,6 +16,8 @@ Changes since v1.1.0 include security hardening, mail webhooks, CLI improvements
 - CLI lists add unread filters and afterId incremental queries. Search covers subjects, addresses, text and HTML source. Details add a readable body while preserving text and bodySource, improving access to HTML-only messages.
 - README 与中英 Docs 按个人域名邮箱重新组织，突出无需 VPS、在线体验、网页部署和助手接入；移除 README 邮箱大截图，新增费用与准备，说明 Cloudflare 免费计划与 Resend 免费额度的组合及使用条件。
 - Reorganized the README and bilingual Docs around a personal domain mailbox: no VPS, direct online experience, Web deployment and assistant access. Removed the large README mailbox screenshot and added costs and preparation, including the Cloudflare free-plan and Resend free-allowance combination and its conditions.
+- 中文 README 增加英文简介，公开入口统一为 flaremail.arcinks.com；新增个人邮箱与助手收信的中英场景指南。Pages 为全部公开文档生成可直接阅读的 HTML、规范链接、语言对应链接、分享摘要和站点地图；体验邮箱与正式邮箱继续禁止索引。
+- Added an English introduction to the Chinese README and unified public links at flaremail.arcinks.com, with bilingual guides for personal and assistant mailboxes. Pages generates readable initial HTML, canonical and language links, sharing metadata and a sitemap for all public documents; the experience mailbox and real mailbox remain excluded from indexing.
 
 ### 安全与修复 / Security and fixes
 

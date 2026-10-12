@@ -6,7 +6,7 @@ test('the English agent prompt is the portable default', () => {
   const prompt = buildCliAgentPrompt('en', {
     brand: 'Acme Mail',
     apiBaseUrl: 'https://mail.example.com/api',
-    docUrl: 'https://flaremail-demo.pages.dev/docs/en/cli?instance=https%3A%2F%2Fmail.example.com',
+    docUrl: 'https://flaremail.arcinks.com/docs/en/cli?instance=https%3A%2F%2Fmail.example.com',
     token: '<TOKEN>',
   })
   assert.match(prompt, /You are a professional email management assistant/)

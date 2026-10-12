@@ -4,7 +4,7 @@
 
 <p align="center">
   <strong>A personal domain mailbox, without a VPS</strong><br />
-  Deploy in your own Cloudflare account, starting on the free plan.
+  Run in your own Cloudflare account, with CLI and agent access.
 </p>
 
 <p align="center">
@@ -16,8 +16,8 @@
 <p align="center">
   <a href="README.md">简体中文</a> ·
   <a href="README-en.md">English</a> ·
-  <a href="https://flaremail-demo.pages.dev/inbox">Try it online</a> ·
-  <a href="https://flaremail-demo.pages.dev/docs/en/introduction">Documentation</a> ·
+  <a href="https://flaremail.arcinks.com/inbox">Try it online</a> ·
+  <a href="https://flaremail.arcinks.com/docs/en/introduction">Documentation</a> ·
   <a href="https://github.com/arctan303/FlareMail/releases">Releases</a>
 </p>
 
@@ -25,7 +25,7 @@ FlareMail is an open-source domain mailbox for personal use, with everyday mail,
 
 ## Try it online
 
-**[Open the FlareMail experience →](https://flaremail-demo.pages.dev/inbox)**
+**[Open the FlareMail experience →](https://flaremail.arcinks.com/inbox)**
 
 No sign-in required. Try conversations, search, mailbox switching, composing replies and drafts, including on your phone. The experience uses sample data; simulated sends never deliver real mail, and refreshing restores the initial samples. See the [experience guide](apps/web/docs/en/experience.md).
 
@@ -54,11 +54,12 @@ Continue with the [deployment guide](apps/web/docs/en/deployment.md) and [costs 
 
 ## Documentation
 
-The [online documentation](https://flaremail-demo.pages.dev/docs/en/introduction) covers setup and everyday use. You can also browse the guides below by topic.
+The [online documentation](https://flaremail.arcinks.com/docs/en/introduction) covers setup and everyday use. You can also browse the guides below by topic.
 
 | Topic | Guides |
 | --- | --- |
 | Getting started | [Introduction](apps/web/docs/en/introduction.md) · [Costs and preparation](apps/web/docs/en/costs.md) · [Deployment](apps/web/docs/en/deployment.md) |
+| Use cases | [Your personal domain mailbox](apps/web/docs/en/personal-mailbox.md) · [A mailbox for your assistant](apps/web/docs/en/assistant-mailbox.md) |
 | Mail delivery and use | [Receiving](apps/web/docs/en/receiving.md) · [Sending](apps/web/docs/en/sending.md) · [Everyday use](apps/web/docs/en/usage.md) |
 | Settings and administration | [Configuration](apps/web/docs/en/configuration.md) · [Administration](apps/web/docs/en/administration.md) |
 | Assistants and integrations | [CLI / Agent and webhooks](apps/web/docs/en/cli.md) · [OAuth integration](apps/web/docs/en/oauth.md) |
