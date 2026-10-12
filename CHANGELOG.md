@@ -1,6 +1,23 @@
 # Changelog
 
-## 未发布 / Unreleased
+## v1.1.1 — 未发布 / Unreleased
+
+本节包含 v1.1.0 之后的安全加固、邮件 Webhook、CLI 改进与双语文档优化。
+
+Changes since v1.1.0 include security hardening, mail webhooks, CLI improvements and bilingual documentation.
+
+### 新增与改进 / Added and improved
+
+- 收件 Webhook：按自己的收件邮箱配置，在外部来信和站内投递保存完成后通知接收端。网页与 CLI 共同管理启停、删除、密钥轮换、测试、投递记录和失败重试；可选择通知全部发件人或地址白名单。
+- Incoming webhooks: Configure each of your mailboxes to notify a receiver after external or internal mail is saved. The Web and CLI share enable/disable, deletion, secret rotation, tests, delivery records and retries, with a choice of all senders or an address allowlist.
+- 回调仅发送事件 ID、邮件 ID 和收件邮箱，通过独立共享密钥验证。通知有限重试，失败不影响收信；接收端按事件 ID 去重、自行排队处理，正文仍使用个人 CLI Token 获取。
+- Callbacks carry only the event ID, mail ID and mailbox, authenticated with a separate shared secret. Bounded retries do not affect mail receipt. Receivers deduplicate by event ID and queue their own work; message bodies remain accessible through the personal CLI token.
+- CLI 列表新增未读过滤与 afterId 增量查询，搜索覆盖主题、地址、文本及 HTML 源文；详情新增可读 body，保留原纯文本 text 和正文来源 bodySource，改善纯 HTML 邮件读取。
+- CLI lists add unread filters and afterId incremental queries. Search covers subjects, addresses, text and HTML source. Details add a readable body while preserving text and bodySource, improving access to HTML-only messages.
+- README 与中英 Docs 按个人域名邮箱重新组织，突出无需 VPS、在线体验、网页部署和助手接入；移除 README 邮箱大截图，新增费用与准备，说明 Cloudflare 免费计划与 Resend 免费额度的组合及使用条件。
+- Reorganized the README and bilingual Docs around a personal domain mailbox: no VPS, direct online experience, Web deployment and assistant access. Removed the large README mailbox screenshot and added costs and preparation, including the Cloudflare free-plan and Resend free-allowance combination and its conditions.
+
+### 安全与修复 / Security and fixes
 
 - 凭据撤销：更换 Google 绑定保留发起会话并撤销其他网页会话；解绑撤销个人 CLI Token；改密原子作废尚未兑换的 OAuth 授权码并保护并发发行/兑换。Google 更换绑定保护需要数据库 326 更新。
 - Credential revocation: Replacing a Google link preserves the initiating session and revokes other browser sessions; unlinking revokes the personal CLI token; password changes atomically invalidate unused OAuth codes and guard concurrent issuance/redemption. Google-link replacement protection requires database update 326.
@@ -10,8 +27,22 @@
 - Hardened mail HTML, snippets, previews and editor parsing while retaining explicit consent for remote images. Verification-code extraction uses linear processing; private inline attachments are checked against quotas before reads, and repeated references share object retrieval.
 - 新内容边界：链接最长 8192 字符，超限保留文字并取消点击；单表最多 10000 展开格、单格行/列跨度最多 100，超限保留文本行列分隔；Web/CLI 发送与回复整包最多 32 MiB，流式拒绝超限，现有附件规则不变。
 - New content boundaries: Links allow up to 8192 characters, retaining text without a clickable destination above the limit. Tables allow 10000 expanded cells and cell row/column spans up to 100, retaining text separators above the limit. Web/CLI send and reply bodies allow 32 MiB with streamed rejection; existing attachment rules remain unchanged.
-- 本地验证通过 Worker 451/451、Web 147/147、正式/Pages 构建及真实编辑器 92/92。本轮已有 16 项修复完成独立审查；新增链接、表格和整包边界 3 项的最终独立审查被平台过滤中断，仍待审查闭环，不作为稳定发布通过。
-- Local validation passed Worker 451/451, Web 147/147, production/Pages builds and 92/92 real-editor checks. Sixteen fixes completed independent review; final independent review of the three new link, table and request-body boundaries was interrupted by platform filtering and remains pending, rather than approved for a stable release.
+
+### 升级与兼容性 / Upgrade and compatibility
+
+- 数据库目标版本由 325 升至 **327**：326 补充凭据撤销保护，327 增加 Webhook 数据结构。更新前备份数据库、附件和配置；部署后由管理员在“系统设置 → 系统维护”应用补丁，保留原邮件、成员和存储资源。
+- The target schema advances from 325 to **327**: 326 adds credential-revocation protection, and 327 adds webhook storage. Back up the database, attachments and configuration before updating, then apply patches under System settings → Maintenance while keeping existing mail, members and storage resources.
+- 未配置 Webhook 时不会发送通知，也不补发历史邮件。地址白名单仅匹配 From 邮箱，不代表发件人身份认证；通知次数不等于助手启动次数。配置变更取消旧版本排队事件，已在途请求无法撤回。
+- No webhook notifications are sent without configuration, and historical mail is not replayed. Address allowlists match the From mailbox and do not authenticate sender identity; notification counts do not equal assistant invocations. Configuration changes cancel queued events from older revisions, but cannot recall requests already in flight.
+- CLI 保留原响应封装与 text 字段，新增字段与查询参数可按需采用。现有实例需要升级至 327 才能使用 Webhook；仅回滚代码不会撤销数据库补丁。
+- The CLI retains its response envelope and text field; new fields and query parameters are optional. Existing instances need schema 327 for webhooks. Rolling back code does not undo database patches.
+
+### 验证与已知限制 / Validation and known limitations
+
+- 安全加固此前通过 Worker 451/451、Web 147/147、正式/Pages 构建及真实编辑器 92/92；16 项修复完成独立审查。新增链接、表格和整包边界 3 项的最终独立审查被平台过滤中断，仍待完成，不作为稳定发布通过。
+- Earlier security validation passed Worker 451/451, Web 147/147, production/Pages builds and 92/92 real-editor checks; sixteen fixes completed independent review. Final independent review of the three new link, table and request-body boundaries was interrupted by platform filtering and remains pending, rather than approved for stable release.
+- Webhook 变更通过 Worker 469/469、Web 148/148、部署配置检查、双构建和浏览器验收，独立审查的修复项已关闭。真实 IPv6 回调与助手唤醒仍需接收端联调；当前版本未部署到生产，也未执行生产数据库升级。
+- Webhook changes passed Worker 469/469, Web 148/148, deployment configuration checks, both builds and browser checks; independent review fixes are closed. Real IPv6 callbacks and assistant wakeups still need receiver integration. This version has not been deployed to production, and production database upgrades have not been run.
 
 ## v1.1.0 — 2026-09-23
 

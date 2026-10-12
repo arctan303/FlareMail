@@ -1,7 +1,8 @@
 export const DOC_GROUPS = [
-    {zh:'快速开始',en:'Quick start',items:[
-        {slug:'introduction',zh:'项目介绍',en:'Introduction'},
+    {zh:'开始使用',en:'Start here',items:[
+        {slug:'introduction',zh:'认识 FlareMail',en:'Meet FlareMail'},
         {slug:'experience',zh:'在线体验',en:'Online experience'},
+        {slug:'costs',zh:'费用与准备',en:'Costs & preparation'},
         {slug:'deployment',zh:'部署邮箱',en:'Deploy your mailbox'},
     ]},
     {zh:'配置',en:'Configuration',items:[
@@ -11,7 +12,7 @@ export const DOC_GROUPS = [
         {slug:'administration',zh:'管理员配置',en:'Administrator setup'},
     ]},
     {zh:'使用与集成',en:'Usage & integrations',items:[
-        {slug:'usage',zh:'使用指南',en:'User guide'},
+        {slug:'usage',zh:'日常使用',en:'Everyday use'},
         {slug:'cli',zh:'CLI / Agent',en:'CLI / Agent'},
         {slug:'oauth',zh:'OAuth 接入',en:'OAuth integration'},
     ]},

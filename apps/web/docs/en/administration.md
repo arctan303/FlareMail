@@ -1,8 +1,8 @@
 # Administrator setup
 
-Complete [deployment](/docs/en/deployment) and external mail tests before adding members or optional features. Administrators manage accounts and system configuration; each member accesses their own mail.
+For personal use, your own mailbox account also manages the instance. Complete [deployment](/docs/en/deployment) and external mail tests to start using it. Configure branding, Google sign-in and invited members when needed.
 
-## Add invited members
+## Add invited members (optional)
 
 Add a user from the sidebar's Users page, providing an email address, name, initial password and applicable quotas. Register the domain under System settings → Mail domains and configure its receiving route and sending provider first.
 

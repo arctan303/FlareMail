@@ -1,4 +1,6 @@
-# User guide
+# Everyday use
+
+Once delivery tests pass, this is your own domain mailbox. Start by reading and replying with your primary address, then add addresses, organize contacts or [connect your assistant](/docs/en/cli) as needed. You can use it on your own without adding members or configuring optional sign-in methods.
 
 ## Read and organize
 

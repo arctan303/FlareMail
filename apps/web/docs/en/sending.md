@@ -2,6 +2,8 @@
 
 Choose an instance-wide provider under System settings → Mail delivery. New installations default to Resend; Cloudflare Email Sending is a Beta alternative. Switching preserves the other provider's configuration and never enables automatic fallback after a failure.
 
+For the free setup, choose Resend, verify your sending domain and send a test message. For Cloudflare sending, first check Workers Paid and domain onboarding requirements. Neither path needs a VPS; [costs and preparation](/docs/en/costs) explains the allowances and prerequisites.
+
 ## Resend
 
 1. Add a sender domain you own, such as example.com, to Resend. Configure its DNS records and wait for verification.

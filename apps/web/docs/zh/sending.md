@@ -2,6 +2,8 @@
 
 在系统设置 → 邮件收发选择全站发信通道。新安装默认 Resend；Cloudflare Email Sending 为 Beta 备选。选择通道不会清除另一通道的配置，失败也不会自动切换服务。
 
+从免费方案开始可选择 Resend，验证自己的发件域名后再发送测试邮件。如果希望发信也使用 Cloudflare，先确认 Workers Paid 与域名开通条件。两种路径均无需 VPS，[费用与准备](/docs/zh/costs)说明各自额度与前提。
+
 ## Resend
 
 1. 在 Resend 账号中添加你拥有的发件域名，例如 example.com，按要求配置 DNS 并等待验证通过。
