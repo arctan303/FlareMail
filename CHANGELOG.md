@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.1.1 — 未发布 / Unreleased
+## v1.1.1 — 2026-10-13
 
 本节包含 v1.1.0 之后的安全加固、邮件 Webhook、CLI 改进与双语文档优化。
 
@@ -40,13 +40,15 @@ Changes since v1.1.0 include security hardening, mail webhooks, CLI improvements
 - No webhook notifications are sent without configuration, and historical mail is not replayed. Address allowlists match the From mailbox and do not authenticate sender identity; notification counts do not equal assistant invocations. Configuration changes cancel queued events from older revisions, but cannot recall requests already in flight.
 - CLI 保留原响应封装与 text 字段，新增字段与查询参数可按需采用。现有实例需要升级至 327 才能使用 Webhook；仅回滚代码不会撤销数据库补丁。
 - The CLI retains its response envelope and text field; new fields and query parameters are optional. Existing instances need schema 327 for webhooks. Rolling back code does not undo database patches.
+- 已有定制 Wrangler 配置需保留每日任务并加入每分钟 `* * * * *` Cron，以及时补发失败通知；公开模板已包含该配置。完整升级步骤见中英更新文档。
+- Existing custom Wrangler configurations should retain the daily task and add an every-minute `* * * * *` Cron for timely webhook recovery. Public templates already include it. See the bilingual update guide for the complete upgrade steps.
 
 ### 验证与已知限制 / Validation and known limitations
 
 - 安全加固此前通过 Worker 451/451、Web 147/147、正式/Pages 构建及真实编辑器 92/92；16 项修复已完成独立审查。本次完整 1.1.1 候选独立审查通过，覆盖新增链接、表格和发送整包 3 项边界，并独立通过 Worker 59 项、Web 8 项专项验证。
 - Earlier security validation passed Worker 451/451, Web 147/147, production/Pages builds and 92/92 real-editor checks; sixteen fixes completed independent review. Independent review of the complete 1.1.1 candidate passed, including the three new link, table and request-body boundaries, with 59 Worker and 8 Web focused checks independently passing.
-- Webhook 变更通过 Worker 469/469、Web 148/148、部署配置检查、双构建和浏览器验收，独立审查的修复项已关闭。真实 IPv6 回调与助手唤醒仍需接收端联调；当前版本未部署到生产，也未执行生产数据库升级。
-- Webhook changes passed Worker 469/469, Web 148/148, deployment configuration checks, both builds and browser checks; independent review fixes are closed. Real IPv6 callbacks and assistant wakeups still need receiver integration. This version has not been deployed to production, and production database upgrades have not been run.
+- Webhook 变更通过 Worker 469/469、Web 148/148、部署配置检查、双构建和浏览器验收，独立审查的修复项已关闭。真实 IPv6 回调与助手唤醒仍需接收端联调；发版不自动升级实例数据库，补丁须由管理员应用。
+- Webhook changes passed Worker 469/469, Web 148/148, deployment configuration checks, both builds and browser checks; independent review fixes are closed. Real IPv6 callbacks and assistant wakeups still need receiver integration. A release does not automatically upgrade instance databases; administrators must apply the patches.
 - 双语公开文档与搜索分享变更通过 Web 153/153、正式/Pages 构建、36 篇文档产物检查及浏览器验证；dev Worker 和 Pages 预览部署已回验成功，匿名邮件与 Webhook 配置接口仍要求认证。
 - Bilingual documentation and search/share changes passed 153/153 Web tests, production/Pages builds, checks for 36 document artifacts and browser verification. Dev Worker and Pages preview deployments were verified successfully; anonymous access to mail and webhook configuration still requires authentication.
 

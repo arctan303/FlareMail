@@ -107,7 +107,7 @@ URL 仅接受公网 HTTPS 域名与 443 端口，不接受 IP 字面量、内网
 {"event":"email.received","eventId":"稳定事件ID","emailId":1001,"mailbox":"xiaoa@example.com"}
 ```
 
-请求头 `X-FlareMail-Webhook-Secret` 携带共享密钥，无正文和 CLI Token。接收端验证密钥，按 eventId 去重，可靠入队后尽快返回任意 2xx，再用自己的 CLI Token 按 emailId 取正文。`webhook.test` 的 emailId 为 null，不应当成新邮件。每封邮件一个事件，助手自行排队、合并和决定唤醒；已确认仅表示接收端 HTTP 确认，不表示助手已完成，也不自动标记已读。
+请求头 `X-FlareMail-Webhook-Secret` 携带共享密钥；JSON 通知不包含邮件正文、附件或 CLI Token。接收端验证密钥，按 eventId 去重，可靠入队后尽快返回任意 2xx，再用自己的 CLI Token 按 emailId 取正文。`webhook.test` 的 emailId 为 null，不应当成新邮件。每封邮件一个事件，助手自行排队、合并和决定唤醒；已确认仅表示接收端 HTTP 确认，不表示助手已完成，也不自动标记已读。
 
 立即尝试通知，失败由每分钟 Cron 补发（每轮最多 3 个）。单次超时 8 秒，每个自动周期最多 5 次，间隔约 1 分钟、5 分钟、30 分钟、2 小时，受调度/积压影响；创建后最多重试 24 小时。确认丢失可能导致重复投递，eventId 不变；手动重试开启新一轮有限尝试，复用事件 ID。
 

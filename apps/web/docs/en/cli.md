@@ -107,7 +107,7 @@ External and internal mail generate a POST only after mail and attachments are s
 {"event":"email.received","eventId":"stable-event-id","emailId":1001,"mailbox":"xiaoa@example.com"}
 ```
 
-The `X-FlareMail-Webhook-Secret` header carries the shared secret. No body or CLI Token is sent. Verify the secret, deduplicate by eventId, enqueue durably and promptly return any 2xx; then fetch emailId with your own CLI Token. `webhook.test` has emailId null and is not new mail. Each message has one event; the receiver decides queueing, batching and waking. An acknowledged delivery does not confirm assistant completion or mark mail as read.
+The `X-FlareMail-Webhook-Secret` header carries the shared secret. The JSON notification contains no email body, attachments or CLI Token. Verify the secret, deduplicate by eventId, enqueue durably and promptly return any 2xx; then fetch emailId with your own CLI Token. `webhook.test` has emailId null and is not new mail. Each message has one event; the receiver decides queueing, batching and waking. An acknowledged delivery does not confirm assistant completion or mark mail as read.
 
 Delivery is attempted immediately. Every-minute Cron recovers failed work, up to 3 events per run. Each request times out after 8 seconds. Each automatic cycle allows 5 attempts with approximate delays of 1 minute, 5 minutes, 30 minutes and 2 hours, affected by scheduling/backlog. Events expire after 24 hours. A lost acknowledgment can cause duplicates with the same eventId; manual retry starts another finite cycle with that ID.
 
