@@ -14,6 +14,7 @@ import attService from './att-service';
 import settingService from './setting-service';
 import accountService from './account-service';
 import userService from './user-service';
+import webhookService from './webhook-service';
 
 const RESEND_MESSAGE_ID_TIMEOUT_MS = 5000;
 const RESEND_MESSAGE_ID_MAX_ATTEMPTS = 3;
@@ -409,7 +410,8 @@ export const emailSendService = {
 				userId: accountRow?.userId || 0,
 				accountId: accountRow?.accountId || 0,
 				type: emailConst.type.RECEIVE,
-				status: accountRow ? emailConst.status.RECEIVE : emailConst.status.NOONE,
+				status: emailConst.status.SAVING,
+				isDel: isDel.DELETE,
 				toEmail: address,
 				toName: emailUtils.getName(address),
 			};
@@ -430,6 +432,8 @@ export const emailSendService = {
 					};
 					await orm(c).insert(att).values(attValues).run();
 				}
+				await webhookService.completeReceive(c, accountRow ? emailConst.status.RECEIVE : emailConst.status.NOONE, receivedRow.emailId);
+				webhookService.kick(c, receivedRow.emailId);
 				deliveredCount++;
 			} catch (error) {
 				failedCount++;
@@ -437,6 +441,7 @@ export const emailSendService = {
 				if (receivedRow) {
 					try {
 						await orm(c).update(email).set({
+							isDel: isDel.NORMAL,
 							status: emailConst.status.FAILED,
 							message: JSON.stringify({ message: 'Internal attachment metadata could not be stored completely.' }),
 						}).where(eq(email.emailId, receivedRow.emailId)).run();

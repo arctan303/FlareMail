@@ -5,6 +5,7 @@ import {useSettingStore} from '@/store/setting.js';
 import {applyBrandToDocument} from '@/utils/brand.js';
 import i18n from '@/i18n/index.js';
 import ReadonlySettings from './ReadonlySettings.vue';
+import { applyMetadata, previewMetadata, PUBLIC_ORIGIN } from './seo.js';
 
 const mail=(path,name,title,component)=>({path,name,component,meta:{title,name,menu:true}});
 const router=createRouter({
@@ -35,5 +36,10 @@ router.afterEach(to=>{
     const ui=useUiStore(),settings=useSettingStore();
     ui.accountShow=false;
     applyBrandToDocument(settings.settings,to.name==='docs'?(settings.lang==='en'?'Documentation':'文档'):i18n.global.t(to.meta.title||'inbox'));
+    if(to.name!=='docs') {
+        const title=document.title;
+        applyMetadata(previewMetadata(settings.lang,PUBLIC_ORIGIN),document);
+        document.title=title;
+    }
 });
 export default router;

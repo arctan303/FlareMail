@@ -34,13 +34,21 @@ Alternatively, upload the locally built apps/web/dist-pages directory. The real 
 
 Pages supports SPA routing by default. The output has no top-level 404.html so document deep links and mail routes work on refresh.
 
+## Search and sharing
+
+The build produces HTML containing each Chinese and English article, with its own title, description, language alternatives and sharing metadata. The document sitemap is at `/sitemap.xml`. Crawling is allowed for public documentation and the static resources it needs; experience mailbox pages remain excluded from indexing. The real mailbox build keeps its existing indexing restrictions.
+
+The default canonical origin is `https://flaremail.arcinks.com`. When hosting your own documentation, set the build environment variable `VITE_PUBLIC_SITE_URL` to its HTTPS origin, such as `https://docs.example.com`, without a path, query or fragment. Canonical links, language alternatives, sharing URLs and the sitemap all use this origin.
+
+After binding a domain, rebuild with that origin and check `/robots.txt`, `/sitemap.xml` and the HTML of an article. Binding a domain alone does not change metadata in an earlier build. Search engines decide when to index content. Pages preview deployments may add indexing restrictions, so check responses from the production site.
+
 [Cloudflare build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/) · [SPA routing](https://developers.cloudflare.com/pages/configuration/serving-pages/)
 
 ## Maintain documentation
 
-Edit the matching Markdown in apps/web/docs/zh and apps/web/docs/en, then rebuild. Add new articles to the apps/web/src/playground/docs.js directory registry; use the same slug in both languages.
+Edit the matching Markdown in apps/web/docs/zh and apps/web/docs/en, then rebuild. Add new articles to the registry at apps/web/src/playground/doc-catalog.js; use the same slug in both languages. The documentation UI and static build share this registry.
 
-Online experience: [flaremail-demo.pages.dev](https://flaremail-demo.pages.dev). For the existing Direct Upload project, build locally and upload:
+Online experience: [flaremail.arcinks.com](https://flaremail.arcinks.com). For the existing Direct Upload project, build locally and upload:
 
 ```sh
 npx --yes pnpm@10.34.5 build:pages

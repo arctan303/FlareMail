@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { parse, compileScript } from 'vue/compiler-sfc'
 import { ref, reactive, computed, nextTick } from 'vue'
+import { mailSnippet } from '../src/utils/mail-snippet.js'
 
 // Execute the component's real setup logic with browser/services replaced by
 // controlled boundaries. No copied handlers or source-string assertions.
@@ -20,7 +21,7 @@ async function mountList(overrides = {}) {
     emailDelete: async ids => { requests.push(['delete', ids]) }, ...overrides }
   const noop = () => {}
   const env = {
-    ref, reactive, computed, nextTick, h: noop, watch: noop,
+    ref, reactive, computed, nextTick, h: noop, watch: noop, mailSnippet,
     onActivated: noop, onMounted: noop, onBeforeUnmount: noop, onDeactivated: noop, onUnmounted: noop,
     defineProps: () => props, defineExpose: noop, defineEmits: () => (...args) => events.push(args),
     useRoute: () => ({ query: {} }), useRouter: () => ({}),
@@ -48,6 +49,17 @@ test('draft row deletion targets the local draft instead of the server email API
   await settle()
   assert.deepEqual(list.events, [['delete-draft', [9]]])
   assert.deepEqual(list.requests, [])
+})
+
+test('mail list derives inert preview text from received markup', async () => {
+  const list = await mountList({ getEmailList: async () => ({ list: [{ emailId: 9, content: '<!-- x --!><IMAGE src="https://tracker.invalid/pixel"> --><p>Received &amp; safe</p>' }], total: 1 }) })
+  assert.match(list.emailList[0].formatText, /Received & safe/)
+  assert.doesNotMatch(list.emailList[0].formatText, /tracker.invalid|<IMAGE/)
+})
+
+test('mail list retains the existing HTML-first preview when both bodies exist', async () => {
+  const list = await mountList({ getEmailList: async () => ({ list: [{ emailId: 9, content: '<p>HTML preview</p>', text: 'Plain alternative' }], total: 1 }) })
+  assert.equal(list.emailList[0].formatText, 'HTML preview')
 })
 
 for (const action of ['next page', 'manual refresh']) {

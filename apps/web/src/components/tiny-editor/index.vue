@@ -16,7 +16,8 @@ import loading from "@/components/loading/index.vue";
 import {useI18n} from 'vue-i18n'
 import {useUiStore} from '@/store/ui.js'
 import {useSettingStore} from '@/store/setting.js'
-import {createEditorLifecycle} from './editor-lifecycle.js'
+import {createEditorLifecycle, installEditorCommentFilter} from './editor-lifecycle.js'
+import {installEditorContentBudgets} from './content-budgets.js'
 import {QUOTE_SELECTOR, MAIL_QUOTE_CSS} from '@/utils/mail-quotes.js'
 
 defineExpose({
@@ -135,6 +136,8 @@ function initEditor() {
     license_key: 'gpl',
     noneditable_class: 'mceNonEditable',
     setup: (ed) => {
+      installEditorCommentFilter(ed);
+      installEditorContentBudgets(ed);
       editor.value = ed;
       lifecycle.attach(ed);
       ed.on('init', () => {

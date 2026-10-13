@@ -1,14 +1,16 @@
 # Deploy your mailbox
 
-Use the Cloudflare deployment page to get started without installing Git or Node.js or opening a local terminal. One Worker serves the website, APIs and email handler. After Web setup, connect incoming and outgoing mail.
+Turn your domain into an everyday mailbox in three stages: **deploy the application → create your mailbox → connect mail delivery**. Use Cloudflare's Web deployment without buying a VPS, installing Git or Node.js, or opening a local terminal.
+
+A free Cloudflare account can get started, with Resend's free allowance for sending. Check [costs and preparation](/docs/en/costs) for domain and service choices, then follow the steps below.
 
 ## Prepare your account and domain
 
-- A Cloudflare account.
+- A Cloudflare account; the free plan can deploy the application.
 - A GitHub account to keep your own source and deployment configuration.
 - An email domain using Cloudflare DNS, such as example.com.
 - A password manager to generate and save your installation secret.
-- A sending service: new installations default to Resend; [Cloudflare Email Sending (Beta)](/docs/en/sending) is also available. Providers have separate quotas and pricing.
+- A sending service: new installations default to Resend, with a free allowance available. Cloudflare Email Sending is another option; sending to arbitrary external addresses requires Workers Paid. [Sending setup](/docs/en/sending)
 
 `owner@example.com` is an email address; `https://mail.example.com` is the website and API origin. Start with the generated workers.dev address and optionally bind your own website domain later.
 
@@ -56,7 +58,7 @@ A website domain does not configure email delivery. Continue with [administrator
 
 ## Command-line deployment (advanced)
 
-Use this for local builds or managing configuration yourself. Install Git and Node.js ≥ 22.12 (24 recommended); commands use the pinned pnpm 10.34.5. The fixed v1.0.0 tag uses this route and does not contain the later deployment-button support.
+Use this for local builds or managing configuration yourself. Install Git and Node.js ≥ 22.12 (24 recommended); commands use the pinned pnpm 10.34.5.
 
 ### Get the source
 
@@ -70,11 +72,11 @@ npx --yes pnpm@10.34.5 install --frozen-lockfile
 
 Alternatively, download and extract the source ZIP, then install from the directory containing package.json. Run all commands below from this repository root.
 
-To pin the first release, download the [v1.0.0 source ZIP](https://github.com/arctan303/FlareMail/archive/refs/tags/v1.0.0.zip), or run after cloning and before installing dependencies:
+To pin a version, choose a published tag in [Releases](https://github.com/arctan303/FlareMail/releases) and download its source, or run the commands below after cloning and before installing dependencies, replacing the placeholder with that tag:
 
 ~~~sh
-git fetch origin tag v1.0.0
-git switch --detach v1.0.0
+git fetch origin --tags
+git switch --detach <target-version-tag>
 ~~~
 
 This pins the source to that tag rather than following stable branch updates. Read the next Release and [update guide](/docs/en/updates) before upgrading.
@@ -108,3 +110,5 @@ Wrangler automatic provisioning is currently Beta. It creates D1/KV and writes r
 A successful deployment prints the Worker URL. Open it to reach the setup wizard. Resolve deployment errors before proceeding; avoid repeatedly creating replacement resources.
 
 After command-line deployment, continue with Complete Web setup and Connect mail above.
+
+Once delivery tests pass, start with [everyday use](/docs/en/usage). See [CLI / Agent](/docs/en/cli) when you want your assistant to manage mail, and follow [updates and backups](/docs/en/updates) to preserve your resources later.

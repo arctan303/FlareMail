@@ -2,6 +2,8 @@
 
 Choose an instance-wide provider under System settings → Mail delivery. New installations default to Resend; Cloudflare Email Sending is a Beta alternative. Switching preserves the other provider's configuration and never enables automatic fallback after a failure.
 
+For the free setup, choose Resend, verify your sending domain and send a test message. For Cloudflare sending, first check Workers Paid and domain onboarding requirements. Neither path needs a VPS; [costs and preparation](/docs/en/costs) explains the allowances and prerequisites.
+
 ## Resend
 
 1. Add a sender domain you own, such as example.com, to Resend. Configure its DNS records and wait for verification.
@@ -39,6 +41,8 @@ npx --yes pnpm@10.34.5 run deploy
 Adding the binding alone does not select the provider. Local simulated bindings do not deliver real mail. Do not add remote = true for ordinary local testing. [Platform setup](https://developers.cloudflare.com/email-service/get-started/send-emails/)
 
 ## Attachments and size
+
+Web and CLI send/reply requests allow at most 32 MiB for the complete HTTP body, including text, encoded attachments and JSON overhead. Oversized requests return 413 before full reading or parsing. This request limit does not increase attachment or provider limits.
 
 Application sending allows up to 10 attachments including inline images, 10 MiB per file and 20 MiB in total. The Cloudflare provider also applies a conservative 5 MiB estimate for the entire encoded message, leaving less room for attachments. Providers may impose additional quotas, recipient or content limits. [Cloudflare limits](https://developers.cloudflare.com/email-service/platform/limits/)
 

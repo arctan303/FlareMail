@@ -1,8 +1,8 @@
 # Administrator setup
 
-Complete [deployment](/docs/en/deployment) and external mail tests before adding members or optional features. Administrators manage accounts and system configuration; each member accesses their own mail.
+For personal use, your own mailbox account also manages the instance. Complete [deployment](/docs/en/deployment) and external mail tests to start using it. Configure branding, Google sign-in and invited members when needed.
 
-## Add invited members
+## Add invited members (optional)
 
 Add a user from the sidebar's Users page, providing an email address, name, initial password and applicable quotas. Register the domain under System settings → Mail domains and configure its receiving route and sending provider first.
 
@@ -22,6 +22,8 @@ https://mail.example.com/oauth/bind/callback
 4. Members first sign in with their mailbox password and link their Google account in personal settings. They can then sign in with Google.
 
 Google sign-in does not create mailbox members. The entry switch differs from account linking: with credentials configured, personal linking and unlinking remain available when the entry is disabled. Unlinking invalidates existing sessions and the personal CLI token, requiring another sign-in. Update the Google redirects when changing your web domain. [Google setup](https://developers.google.com/identity/protocols/oauth2/web-server)
+
+Replacing a linked Google account preserves the browser session that started the change and signs out all other existing browser sessions, including password sign-ins. First linking and linking the same account again keep those sessions. Older installations must apply database update 326 before replacing a link.
 
 ## Turnstile (optional)
 

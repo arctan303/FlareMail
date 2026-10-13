@@ -121,7 +121,7 @@ test('unknown operations and external origins reject instead of falling through 
 });
 test('drafts and attachment rows persist during navigation and reset in a new instance',async()=>{
   const db=createMemoryDb('en');
-  const id=await db.draft.add({subject:'Draft',createTime:Date.now(),receiveEmail:[]});
+  const id=await db.draft.add({userId:1,subject:'Draft',createTime:Date.now(),receiveEmail:[]});
   await db.att.update(id,{attachments:[{filename:'sample.txt',content:btoa('sample')}]});
   await db.draft.update(id,{subject:'Edited draft'});
   assert.equal((await db.draft.get(id)).subject,'Edited draft');assert.equal((await db.att.get(id)).attachments.length,1);

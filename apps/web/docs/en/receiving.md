@@ -1,6 +1,8 @@
 # Incoming mail
 
-Cloudflare Email Routing delivers messages to the FlareMail Worker, which stores them for the matching mailbox user. Registering domains or addresses in FlareMail does not create public routing rules.
+This step brings external mail into your mailbox: use Cloudflare Email Routing to send domain mail to your deployed FlareMail Worker, then test with a message from another mailbox.
+
+Email Routing is available on the free plan; handling and storing messages still uses application resources. See [costs and preparation](/docs/en/costs). After adding domains and addresses in FlareMail, complete the public routing steps below.
 
 ## Enable routing
 

@@ -6,6 +6,7 @@ import { dbInit } from '../src/init/init';
 import cryptoUtils from '../src/utils/crypto-utils';
 import KvConst from '../src/const/kv-const';
 import userService from '../src/service/user-service';
+import sessionService from '../src/service/session-service';
 import { markInstalled } from './installed-instance';
 
 function createTestContext() {
@@ -88,6 +89,33 @@ beforeAll(async () => {
 });
 
 describe('session-scoped recent authentication', () => {
+	it('revokes the authoritative index before cleanup and leaves orphaned sessions unusable', async () => {
+		const email = 'recent-revoke-cleanup-failure@example.com';
+		const password = 'recent-revoke-cleanup-password';
+		const userId = await createUser(email, password);
+		const cookies = [await login(email, password), await login(email, password)];
+		const hashes = await Promise.all(cookies.map(sessionHash));
+		const deletions = [];
+		const c = { env: { ...env, kv: {
+			get: (...args) => env.kv.get(...args),
+			delete: async key => {
+				deletions.push(key);
+				if (key.startsWith(KvConst.SESSION)) throw new Error('Injected session cleanup failure');
+				return env.kv.delete(key);
+			},
+		} } };
+		await expect(sessionService.revokeAll(c, userId)).rejects.toThrow('Injected session cleanup failure');
+		expect(deletions[0]).toBe(KvConst.AUTH_INFO + userId);
+		expect(await env.kv.get(KvConst.AUTH_INFO + userId)).toBeNull();
+		for (const hash of hashes) {
+			expect(await env.kv.get(KvConst.SESSION + hash)).not.toBeNull();
+			expect(await sessionService.resolveByHash({ env }, hash)).toBeNull();
+		}
+		const freshCookie = await login(email, password);
+		expect(await sessionService.resolveByHash({ env }, await sessionHash(freshCookie))).not.toBeNull();
+		for (const hash of hashes) expect(await sessionService.resolveByHash({ env }, hash)).toBeNull();
+	});
+
 	it('grants password logins the configured one-day server-side confirmation window', async () => {
 		const email = 'recent-login@example.com';
 		const password = 'recent-login-password';

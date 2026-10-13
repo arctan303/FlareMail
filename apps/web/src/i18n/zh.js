@@ -1213,5 +1213,23 @@ const zh = {
     sysMailCfBinding: "部署时添加 send_email 绑定，名称为 email；本地测试使用模拟绑定，不会发送真实邮件。",
     sysMailCfDocs: "查看 Cloudflare 配置说明",
     sysMailProviderPending: "请先在「系统维护」升级数据库，再修改发信通道。当前邮件服务仍使用原通道。",
+    legacyDraftCount: '此设备有 {count} 份未标记归属的旧草稿，暂未显示。',
+    recoverLegacyDrafts: '恢复旧草稿',
+    legacyDraftRecoveryNotice: '旧版本未记录这些草稿的用户归属。如果此设备曾由多人使用，可能包含他人的内容。请仅认领你自己的草稿；认领后它仅属于当前账号。',
+    legacyDraftNumber: '旧草稿 {number}',
+    claimLegacyDraft: '认领到当前账号',
+    legacyDraftClaimed: '旧草稿已恢复到当前账号',
+    schemaPatch326: '网页会话撤销保护',
+    schemaPatch327: '邮箱 Webhook 与持久投递记录',
+    webhook: {
+        title: '邮件 Webhook', description: '新邮件就绪后通知助手。每个邮箱独立配置，CLI 与此处管理同一份设置。',
+        enabled: '启用通知', senders: '通知范围', all: '所有发件人', allowlist: '指定发件人', addresses: '发件邮箱（每行一个）',
+        filterHint: '发件人过滤可选。指定列表为空时不通知。仅匹配 From 邮箱地址，不代表身份认证；所有邮件仍会正常接收。',
+        secret: 'Webhook 密钥', secretHint: '留空保留原密钥；首次保存时自动生成', secretOnce: '新密钥：请现在显示并保存，之后无法再次查看。',
+        reload: '刷新', rotate: '轮换密钥', test: '发送测试', remove: '删除配置', removeConfirm: '删除此邮箱的 Webhook 配置并取消排队中的投递？',
+        deliveries: '投递记录', deliveryHint: '记录保留 7 天。已送达表示接收端已返回 HTTP 确认；助手自行管理任务队列与去重。',
+        empty: '暂无投递记录', event: '事件', status: '状态 / 次数', retry: '重试', more: '加载更多', failedAction: '请求失败，请刷新后重试。',
+        pending: '排队中', sending: '发送中', delivered: '已确认', failed: '失败', cancelled: '已取消',
+    },
 }
 export default zh

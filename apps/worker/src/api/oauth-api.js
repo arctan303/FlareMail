@@ -88,12 +88,12 @@ app.get('/oauth/bind/callback', async (c) => {
 	try {
 		const code = c.req.query('code');
 		const state = c.req.query('state');
-		const { sub, email, userId, sessionHash } = await oauthService.verifyCallback(c, code, state, '/oauth/bind/callback');
+		const { sub, email, userId, sessionHash, bindingEpoch, bindingSub } = await oauthService.verifyCallback(c, code, state, '/oauth/bind/callback');
 		if (!userId || !sessionHash) {
 			throw new BizError('OAuth request is invalid or expired', 400);
 		}
-		await recentAuthService.requireByHash(c, sessionHash, userId);
-		await oauthService.bind(c, userId, sub, email);
+		const session = await recentAuthService.requireByHash(c, sessionHash, userId);
+		await oauthService.bind(c, userId, sub, email, session, { bindingEpoch, bindingSub });
 		return c.redirect('/settings?oauth=bound');
 	} catch (error) {
 		if (error instanceof BizError) {

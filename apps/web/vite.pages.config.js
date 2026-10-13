@@ -1,16 +1,21 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import path from 'node:path';
 import baseConfig from './vite.config.js';
+import { publicDocsPlugin } from './build/public-docs.js';
+import { publicOrigin } from './src/playground/seo.js';
 
 // Only Pages substitutes the request, routing and storage layers.
 export default defineConfig(async context => {
     const config = await baseConfig(context);
     const local = file => path.resolve(import.meta.dirname, 'src/playground', file);
+    const origin = publicOrigin(loadEnv(context.mode, import.meta.dirname, 'VITE_').VITE_PUBLIC_SITE_URL);
     return {
         ...config,
         base: '/',
+        define: {...config.define, 'import.meta.env.VITE_PUBLIC_SITE_URL': JSON.stringify(origin)},
         plugins: [
             ...config.plugins.filter(plugin => !Array.isArray(plugin) && !plugin.name?.includes('pwa')),
+            publicDocsPlugin({origin}),
             {
                 name: 'pages-entry',
                 enforce: 'pre',
@@ -26,11 +31,10 @@ export default defineConfig(async context => {
                 },
                 transformIndexHtml: { order: 'pre', handler(html) {
                     return html.replace('/src/main.js', '/src/playground/main.js')
-                        .replace(/\s*<link rel="manifest"[^>]*>/, '')
-                        .replace('noindex, nofollow, noarchive, nosnippet', 'index, follow');
+                        .replace(/\s*<link rel="manifest"[^>]*>/, '');
                 } },
                 generateBundle() {
-                    this.emitFile({ type: 'asset', fileName: '_headers', source: '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n' });
+                    this.emitFile({ type: 'asset', fileName: '_headers', source: '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n/docs/*\n  X-Robots-Tag: index, follow\n' });
                 },
             },
         ],

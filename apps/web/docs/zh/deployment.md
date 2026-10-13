@@ -1,14 +1,16 @@
 # 部署自己的邮箱
 
-推荐使用 Cloudflare 的一键部署页面：无需在本机安装 Git、Node.js 或打开终端。一个 Worker 提供网页、API 和邮件处理；网页安装完成后，再接通收信和发信。
+把自己的域名接成一个可日常使用的邮箱：**部署应用 → 创建自己的邮箱 → 接通收发**。推荐使用 Cloudflare 网页部署，无需购买 VPS，也无需在本机安装 Git、Node.js 或打开终端。
+
+免费 Cloudflare 账号可以开始，发信可搭配 Resend 免费额度。先看[费用与准备](/docs/zh/costs)确认域名和服务选择，再按下面步骤完成安装。
 
 ## 准备账号与域名
 
-- 一个 Cloudflare 账号。
+- 一个 Cloudflare 账号，免费账号也可部署。
 - 一个 GitHub 账号，用于保存你自己的源码与部署配置。
 - 使用 Cloudflare DNS 的邮箱域名，例如 example.com。
 - 一个密码管理器，用于生成并保存安装凭据。
-- 发信服务：新安装默认 Resend，也可选择 [Cloudflare Email Sending（Beta）](/docs/zh/sending)。服务额度与费用各自计算。
+- 发信服务：新安装默认 Resend，可从免费额度开始；也可选择 Cloudflare Email Sending，向任意外部地址发信需要 Workers Paid。[发信配置](/docs/zh/sending)
 
 `owner@example.com` 是邮箱地址；`https://mail.example.com` 是网页和 API 地址。可以先使用部署生成的 workers.dev 地址，再绑定网页域名。
 
@@ -56,7 +58,7 @@ R2 为可选项，默认使用现有 KV 对象存储路径；如需 R2，建议�
 
 ## 命令行部署（高级方式）
 
-适用于需要本地构建或自行管理配置的用户。需要 Git、Node.js ≥ 22.12（推荐 24）；以下使用锁定的 pnpm 10.34.5。固定 v1.0.0 标签仍按此方式部署，该标签不包含后来新增的一键部署入口。
+适用于需要本地构建或自行管理配置的用户。需要 Git、Node.js ≥ 22.12（推荐 24）；以下使用锁定的 pnpm 10.34.5。
 
 ### 取得源码
 
@@ -72,11 +74,11 @@ npx --yes pnpm@10.34.5 install --frozen-lockfile
 
 也可下载源码 ZIP，解压后在包含 package.json 的仓库根目录执行安装命令。以下命令均从该根目录运行。
 
-需要固定在首版时，可直接下载 [v1.0.0 源码 ZIP](https://github.com/arctan303/FlareMail/archive/refs/tags/v1.0.0.zip)，或在克隆后、安装依赖前执行：
+需要固定版本时，在 [Releases](https://github.com/arctan303/FlareMail/releases) 选择已发布的标签并下载对应源码，或在克隆后、安装依赖前执行以下命令，将占位符替换为该标签：
 
 ~~~sh
-git fetch origin tag v1.0.0
-git switch --detach v1.0.0
+git fetch origin --tags
+git switch --detach <目标版本标签>
 ~~~
 
 此时源码固定在该标签，不会跟随稳定分支更新；升级请先阅读新版 Release 和[更新维护](/docs/zh/updates)。
@@ -110,3 +112,5 @@ Wrangler 自动资源配置目前为 Beta：首次部署创建 D1/KV，并把资
 成功时终端会给出 Worker 地址。打开它应看到安装向导；若部署报错，先处理终端错误，不要反复创建新资源。
 
 完成命令行部署后，按本文上方的「完成 Web 初始化」和「接通邮件」继续。
+
+收发测试通过后，就可以[开始日常使用](/docs/zh/usage)。需要助手管理邮件时阅读 [CLI / Agent](/docs/zh/cli)；以后更新应用，按[更新与备份](/docs/zh/updates)保留原有资源。

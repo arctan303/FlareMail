@@ -1,5 +1,17 @@
 # FAQ
 
+## Do I need to buy a server?
+
+No VPS is required. The website, APIs, mail handler, database and storage run in your Cloudflare account. Bring your email domain and configure incoming routing and a sending provider.
+
+## Can I use a free Cloudflare account?
+
+Yes, it can deploy the application. Start with Cloudflare's free plan and Resend's free sending allowance for light personal use, with your domain provided separately. Sending to arbitrary external addresses through Cloudflare requires Workers Paid. Runtime and usage allowances apply; see [costs and preparation](/docs/en/costs).
+
+## Do I need to add members if it is just for me?
+
+No. The administrator mailbox created in the setup wizard is your own mailbox. Add more addresses for yourself, or invite members later if needed.
+
 ## Does the experience deliver real mail?
 
 No. It is a static frontend with sample data and no real Worker or mail service. Refresh restores the initial data; settings are primarily for viewing.

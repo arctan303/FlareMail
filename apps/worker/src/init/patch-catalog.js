@@ -16,9 +16,11 @@ export const SCHEMA_PATCH_CATALOG = [
 	{ version: 323, label: 'v3.23', descKey: 'schemaPatch323' },
 	{ version: 324, label: 'v3.24', descKey: 'schemaPatch324' },
 	{ version: 325, label: 'v3.25', descKey: 'schemaPatch325' },
+	{ version: 326, label: 'v3.26', descKey: 'schemaPatch326' },
+	{ version: 327, label: 'v3.27', descKey: 'schemaPatch327' },
 ];
 
-export const LATEST_SCHEMA_VERSION = 325;
+export const LATEST_SCHEMA_VERSION = 327;
 
 export function getPatchMeta(version) {
 	const numeric = Number(version);

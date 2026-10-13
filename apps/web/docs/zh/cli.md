@@ -55,7 +55,9 @@ curl 'https://mail.example.com/api/cli/emails?page=1&size=20&type=0&accountId=1'
 | size | 每页数量，默认 20，范围 1–50 |
 | type | 0 为收件箱（默认），1 为已发送 |
 | accountId | 可选，正整数，按自己的邮箱 ID 筛选；省略则查询自己的所有邮箱 |
-| q | 可选，搜索主题、发件人、收件人或发件人名称；最多 48 字节 UTF-8 |
+| q | 可选，搜索主题、发件人、收件人、发件人名称、text 正文与 HTML 源文；最多 48 字节 UTF-8。不是附件或语义搜索，HTML 标签/实体可能影响匹配 |
+| unread | 可选，true 仅未读，false 仅已读；省略则全部 |
+| afterId | 可选，非负整数，仅返回 ID 大于该值的邮件，按 ID 升序；用于增量补查 |
 
 响应使用 `code`、`message`、`data` 包装。示例：
 
@@ -70,7 +72,46 @@ curl 'https://mail.example.com/api/cli/emails?page=1&size=20&type=0&accountId=1'
 }
 ```
 
-邮件详情 `data` 包含 `id`、`from`、`to`、`cc`、`subject`、`date`、纯文本 `body` 及 `attachments`。每个附件包含 `filename`、`size`、`mimeType`、`url`；相对 `url` 使用你的邮箱站点地址拼接，继续携带相同 Token 下载。
+邮件详情新增原 MIME 纯文本 `text`、`bodySource`（html 或 text）。`body` 有可读 HTML 时优先转换 HTML，保留段落、列表及链接目标；否则使用 text。不会加载远程内容、执行 HTML 或识别图片文字。附件包含 `filename`、`size`、`mimeType`、`url`；相对 `url` 使用邮箱站点地址拼接，继续携带 Token 下载。
+
+增量补查从 `afterId=0&page=1` 开始，处理完一页再持久化 `nextAfterId`，随后用新游标继续请求 `page=1`。空列表或游标未前进时结束本轮，稍后再查。若较早邮件仍保存附件，`scanPending=true`，游标不会越过它；较晚邮件可能重复返回，按邮件 ID 去重。afterId 模式只允许 page=1。省略 afterId 时仍按 ID 降序。未读状态会变化，补齐所有邮件时不要加 unread 过滤。
+
+## 收件 Webhook
+
+数据库升级到 v3.27 后可用。默认无配置、不通知，每个邮箱独立配置。个人设置 → 安全与凭证 → 邮件 Webhook 与 CLI 管理同一份设置，无需先在网页创建。
+
+| 方法 | 地址（在 /api 下） | 用途 |
+| --- | --- | --- |
+| GET | /cli/webhooks/:accountId | 读取设置与 revision，不返回已有密钥 |
+| PUT | /cli/webhooks/:accountId | 完整设置 revision、url、enabled、mode、allowlist、可选 secret |
+| DELETE | /cli/webhooks/:accountId?revision=当前值 | 删除设置及密钥，取消排队事件；保留版本号避免旧操作覆盖新设置 |
+| POST | /cli/webhooks/:accountId/secret | 传 {"revision":当前值}，轮换密钥 |
+| POST | /cli/webhooks/:accountId/test | 测试已保存端点，停用时也可测试 |
+| GET | /cli/webhooks/:accountId/deliveries | 最近 50 条；用返回的 nextBefore 作为 before 继续分页 |
+| POST | /cli/webhooks/:accountId/deliveries/:eventId/retry | 重试 24 小时内、配置版本仍一致的 failed 事件 |
+
+先 GET 取得 revision（从未配置为 0），再 PUT。必须明确选择 mode：`all` 通知所有发件人，`allowlist` 通知指定地址；空列表不通知，未匹配邮件仍正常接收。列表最多 100 个完整邮箱，去首尾空格、不区分大小写、匹配 MIME From 邮箱地址，不匹配显示名称。**这只是地址过滤，不是发件身份认证或防冒充保证**；邮件内容不因此成为可信指令。
+
+```sh
+curl --fail-with-body -sS -X PUT 'https://mail.example.com/api/cli/webhooks/1' \
+  -H 'Authorization: Bearer <YOUR_CLI_TOKEN>' \
+  -H 'Content-Type: application/json' \
+  --data '{"revision":0,"url":"https://assistant.example.com/mail","enabled":true,"mode":"allowlist","allowlist":["owner@example.com"]}'
+```
+
+URL 仅接受公网 HTTPS 域名与 443 端口，不接受 IP 字面量、内网域名、URL 内凭据或片段，不跟随重定向。域名可解析到 IPv6；真实 Worker 到 IPv6 端点的连通性仍需部署后测试。secret 为独立的 32–256 个无空格可打印 ASCII 字符，不能复用 CLI Token。首次不传时自动生成，只在生成/轮换响应显示一次；之后修改不传即保留，读取和投递记录不返回密钥。
+
+外部来信和站内投递在邮件及附件保存完成后 POST 以下 JSON（v1 字段契约，接收端应忽略未知字段）：
+
+```json
+{"event":"email.received","eventId":"稳定事件ID","emailId":1001,"mailbox":"xiaoa@example.com"}
+```
+
+请求头 `X-FlareMail-Webhook-Secret` 携带共享密钥；JSON 通知不包含邮件正文、附件或 CLI Token。接收端验证密钥，按 eventId 去重，可靠入队后尽快返回任意 2xx，再用自己的 CLI Token 按 emailId 取正文。`webhook.test` 的 emailId 为 null，不应当成新邮件。每封邮件一个事件，助手自行排队、合并和决定唤醒；已确认仅表示接收端 HTTP 确认，不表示助手已完成，也不自动标记已读。
+
+立即尝试通知，失败由每分钟 Cron 补发（每轮最多 3 个）。单次超时 8 秒，每个自动周期最多 5 次，间隔约 1 分钟、5 分钟、30 分钟、2 小时，受调度/积压影响；创建后最多重试 24 小时。确认丢失可能导致重复投递，eventId 不变；手动重试开启新一轮有限尝试，复用事件 ID。
+
+记录包含 pending/sending/delivered/failed/cancelled、attempts、httpStatus、固定 error 原因及时间，终态 7 天后清理，不保存目标响应正文。测试/重试共用发送频控，其余共用查询频控。任何配置修改都会增加 revision 并取消旧版本待发事件，不补发历史邮件；已在途的 HTTP 请求无法撤回。409 时先刷新再决定修改。通知失败不影响收信，可用 afterId 低频补查。
 
 ## 发送与回复
 

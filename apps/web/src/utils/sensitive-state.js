@@ -2,18 +2,19 @@ const USER_SCOPED_STORAGE_KEYS = [
     'email',
     'writer',
     'user-params',
+    'tinymce-url-history',
 ];
 
 const USER_STATE_INVALIDATION_KEY = 'mail-user-state-epoch';
 let syncInstalled = false;
 
 export function clearUserScopedStorage() {
-    try {
-        for (const key of USER_SCOPED_STORAGE_KEYS) {
+    for (const key of USER_SCOPED_STORAGE_KEYS) {
+        try {
             localStorage.removeItem(key);
+        } catch {
+            // Continue clearing other caches if a single key is unavailable.
         }
-    } catch {
-        // A page reload still clears in-memory state when browser storage is unavailable.
     }
 }
 

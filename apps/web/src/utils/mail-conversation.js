@@ -37,13 +37,7 @@ export function createConversationRequestGate() {
   }
 }
 
-export function conversationSnippet(message, maxLength = 120) {
-  const source = String(message?.text || '') || String(message?.content || '')
-  const text = source.replace(/<br\s*\/?\s*>/gi, ' ').replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
-  const compact = text.replace(/\s+/g, ' ').trim()
-  return compact.length > maxLength ? `${compact.slice(0, maxLength).trimEnd()}…` : compact
-}
+export { mailSnippet as conversationSnippet } from './mail-snippet.js'
 
 export function conversationAllowsUnread(showUnread, message) {
   return Boolean(showUnread) && Number(message?.type) === 0

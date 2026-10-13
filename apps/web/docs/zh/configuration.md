@@ -2,6 +2,8 @@
 
 新安装仅需一个应用 Secret：`SETUP_SECRET`。域名、发信凭据与可选功能主要在 Web 后台配置；DNS、资源绑定和第三方平台验证仍需在相应平台完成。
 
+第一次使用，先按[部署指南](/docs/zh/deployment)完成收发测试；这里用于查找设置位置和按需选择存储，不必一次配置所有可选功能。免费方案与额度见[费用与准备](/docs/zh/costs)。
+
 ## 设置在哪里
 
 | 位置 | 用途 |
@@ -12,7 +14,7 @@
 | 系统设置 → 登录与授权 | Google、Turnstile、OAuth Provider及额外来源 |
 | 系统设置 → 站点品牌 | 名称、图标、登录页与 PWA 外观 |
 | 系统设置 → 系统维护 | 数据库版本检查与受控升级 |
-| 个人设置 | 密码、语言、别名、转发、Google 绑定、CLI Token |
+| 个人设置 | 密码、语言、别名、转发、Google 绑定、CLI Token、收件 Webhook |
 
 敏感修改按提示确认管理员或用户自己的密码。保存某个配置区不会代替其他区的保存；留意未保存提示。具体操作见[管理员配置](/docs/zh/administration)、[收信](/docs/zh/receiving)和[发信](/docs/zh/sending)。
 

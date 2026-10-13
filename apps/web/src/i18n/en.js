@@ -1046,5 +1046,23 @@ const en = {
     sysMailCfBinding: "Add a send_email binding named email when deploying. Local tests use a simulated binding and do not send real mail.",
     sysMailCfDocs: "Cloudflare setup instructions",
     sysMailProviderPending: "Upgrade the database under Maintenance before changing the provider. Mail keeps using the previous provider.",
+    legacyDraftCount: 'This device has {count} legacy drafts without an owner. They are hidden.',
+    recoverLegacyDrafts: 'Recover legacy drafts',
+    legacyDraftRecoveryNotice: 'Older versions did not record who owned these drafts. If this device was shared, they may contain someone else’s content. Only claim your own drafts; claiming assigns them to your current account.',
+    legacyDraftNumber: 'Legacy draft {number}',
+    claimLegacyDraft: 'Claim for this account',
+    legacyDraftClaimed: 'Legacy draft recovered for this account',
+    schemaPatch326: 'Browser session revocation protection',
+    schemaPatch327: 'Mailbox webhooks and durable delivery records',
+    webhook: {
+        title: 'Mail webhooks', description: 'Notify your assistant when new mail is ready. Each mailbox has independent settings; the CLI manages the same configuration.',
+        enabled: 'Enable notifications', senders: 'Notify for', all: 'All senders', allowlist: 'Selected senders', addresses: 'Sender addresses (one per line)',
+        filterHint: 'Sender filtering is optional. An empty selected-senders list sends no notifications. It compares the From address, not a verified identity; all mail is still received.',
+        secret: 'Webhook secret', secretHint: 'Leave blank to keep the secret, or generate one for a new configuration', secretOnce: 'New secret: reveal and save it now. It will not be shown again.',
+        reload: 'Refresh', rotate: 'Rotate secret', test: 'Send test', remove: 'Delete configuration', removeConfirm: 'Delete this mailbox’s webhook settings and cancel queued deliveries?',
+        deliveries: 'Delivery records', deliveryHint: 'Records are retained for 7 days. Delivery confirms the receiver’s HTTP acknowledgment; your assistant manages its own queue and deduplication.',
+        empty: 'No delivery records', event: 'Event', status: 'Status / attempts', retry: 'Retry', more: 'Load more', failedAction: 'Request failed. Refresh and try again.',
+        pending: 'Queued', sending: 'Sending', delivered: 'Acknowledged', failed: 'Failed', cancelled: 'Cancelled',
+    },
 }
 export default en

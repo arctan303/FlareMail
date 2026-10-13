@@ -1,6 +1,8 @@
 # 收信配置
 
-收信由 Cloudflare Email Routing 将来信交给 FlareMail Worker，再按收件地址保存到对应用户。应用内添加域名和邮箱，不会自动创建公网邮件路由。
+这一步让外部邮件真正到达你的邮箱：用 Cloudflare Email Routing 将域名来信交给已部署的 FlareMail Worker。完成后，用另一个邮箱发送一封测试邮件。
+
+Email Routing 在免费计划可用，邮件处理和保存仍受应用额度限制，见[费用与准备](/docs/zh/costs)。应用内添加域名和邮箱后，也要完成下面的公网路由配置。
 
 ## 启用域名路由
 

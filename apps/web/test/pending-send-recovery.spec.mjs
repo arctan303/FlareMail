@@ -14,6 +14,7 @@ function table() {
   let nextId = 1
   return {
     rows,
+    async get(id) { return structuredClone(rows.get(id)) },
     async add(value) {
       const id = value.draftId || nextId++
       rows.set(id, { ...value, draftId: id })
@@ -37,7 +38,7 @@ function table() {
 function database({ transactional = true } = {}) {
   const draft = table()
   const att = table()
-  const db = { draft, att, transactionCount: 0 }
+  const db = { userId: 7, draft, att, transactionCount: 0 }
   if (transactional) {
     db.transaction = async (_mode, _draft, _att, operation) => {
       db.transactionCount += 1
@@ -76,14 +77,15 @@ test('pending send persists a reload-safe draft and attachments before the count
   assert.equal(db.draft.rows.get(1).requestId, snapshot.requestId)
   assert.deepEqual(db.att.rows.get(1), {
     draftId: 1,
+    userId: 7,
     attachments: snapshot.attachments,
   })
 })
 
 test('an existing recovery draft is updated, then removed with its attachments after success', async () => {
   const db = database({ transactional: false })
-  db.draft.rows.set(9, { draftId: 9, subject: 'Old' })
-  db.att.rows.set(9, { draftId: 9, attachments: [] })
+  db.draft.rows.set(9, { draftId: 9, userId: 7, subject: 'Old' })
+  db.att.rows.set(9, { draftId: 9, userId: 7, attachments: [] })
 
   const saved = await persistPendingSendDraft(db, { ...snapshot, draftId: 9 }, { userId: 7, now: 5678 })
   assert.equal(saved.draftId, 9)

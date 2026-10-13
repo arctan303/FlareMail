@@ -55,7 +55,9 @@ Default rate limits are shared per user: queries, reads, marking and deletion us
 | size | Page size from 1–50; default 20 |
 | type | 0 for incoming mail (default), 1 for sent mail |
 | accountId | Optional positive integer; filters one of your mailboxes. Omit to query all your mailboxes |
-| q | Optional search across subject, sender, recipient or sender name; at most 48 UTF-8 bytes |
+| q | Search subject, sender, recipient, sender name, text body and HTML source; at most 48 UTF-8 bytes. No attachment or semantic search; tags/entities affect matching |
+| unread | Optional: true for unread, false for read; omit for both |
+| afterId | Optional nonnegative integer; return IDs greater than the cursor in ascending order |
 
 JSON responses use a `code`, `message`, `data` envelope. Example:
 
@@ -70,7 +72,46 @@ JSON responses use a `code`, `message`, `data` envelope. Example:
 }
 ```
 
-A message detail's `data` contains `id`, `from`, `to`, `cc`, `subject`, `date`, plain-text `body` and `attachments`. Each attachment has `filename`, `size`, `mimeType`, and `url`. Resolve relative URLs against your mailbox origin and send the same Bearer token when downloading.
+A message detail includes original MIME plain text in `text` and `bodySource` (html or text). `body` prefers readable HTML converted with paragraphs, lists and link destinations, falling back to text. It does not load remote content, execute HTML or recognize text in images. Each attachment has `filename`, `size`, `mimeType`, and `url`. Resolve relative URLs against your mailbox origin and send the same Bearer token.
+
+For incremental recovery, start with `afterId=0&page=1`. Process a page, persist `nextAfterId`, then request that cursor with `page=1`. End the current pass when the list is empty or the cursor stops advancing, and check again later. If an earlier message is still saving attachments, `scanPending=true` and the cursor cannot cross it; later messages may repeat, so deduplicate by message ID. Incremental scans require page=1. Without afterId, ordering remains descending by ID. Avoid unread filtering when recovering all mail, since read state can change.
+
+## Incoming mail webhooks
+
+Available after database patch v3.27. No configuration means no notifications. Settings are independent per mailbox. Personal settings → Security & credentials → Mail webhooks and the CLI manage the same data; no Web setup is required first.
+
+| Method | Path (under /api) | Purpose |
+| --- | --- | --- |
+| GET | /cli/webhooks/:accountId | Read settings and revision; never returns an existing secret |
+| PUT | /cli/webhooks/:accountId | Set revision, url, enabled, mode, allowlist and optional secret |
+| DELETE | /cli/webhooks/:accountId?revision=current | Delete settings/secret and cancel queued events; retain a revision tombstone |
+| POST | /cli/webhooks/:accountId/secret | Rotate secret with {"revision":current} |
+| POST | /cli/webhooks/:accountId/test | Test the saved endpoint, even when disabled |
+| GET | /cli/webhooks/:accountId/deliveries | Latest 50 records; pass nextBefore as before for the next page |
+| POST | /cli/webhooks/:accountId/deliveries/:eventId/retry | Retry a failed event younger than 24 hours with an unchanged configuration revision |
+
+GET the revision first (0 when never configured), then PUT. Explicitly choose `mode`: `all` or `allowlist`. An empty allowlist sends no notifications; excluded messages are still received. Up to 100 full addresses are trimmed and matched case-insensitively against MIME From addresses, never display names. **Address filtering does not authenticate senders or guarantee protection from spoofing.** Mail content remains untrusted input.
+
+```sh
+curl --fail-with-body -sS -X PUT 'https://mail.example.com/api/cli/webhooks/1' \
+  -H 'Authorization: Bearer <YOUR_CLI_TOKEN>' \
+  -H 'Content-Type: application/json' \
+  --data '{"revision":0,"url":"https://assistant.example.com/mail","enabled":true,"mode":"allowlist","allowlist":["owner@example.com"]}'
+```
+
+Use a public HTTPS hostname on port 443. IP literals, internal hostnames, URL credentials and fragments are rejected; redirects are not followed. Hostnames resolving to IPv6 are accepted; verify actual Worker-to-IPv6 connectivity with a test after deployment. Secrets are separate from CLI Tokens: 32–256 printable ASCII characters without spaces. Omit secret on creation to generate one, returned only once; rotation also returns it once. Omit secret on updates to retain it. Reads and delivery records never return secrets.
+
+External and internal mail generate a POST only after mail and attachments are saved (v1 fields; receivers should ignore unknown fields):
+
+```json
+{"event":"email.received","eventId":"stable-event-id","emailId":1001,"mailbox":"xiaoa@example.com"}
+```
+
+The `X-FlareMail-Webhook-Secret` header carries the shared secret. The JSON notification contains no email body, attachments or CLI Token. Verify the secret, deduplicate by eventId, enqueue durably and promptly return any 2xx; then fetch emailId with your own CLI Token. `webhook.test` has emailId null and is not new mail. Each message has one event; the receiver decides queueing, batching and waking. An acknowledged delivery does not confirm assistant completion or mark mail as read.
+
+Delivery is attempted immediately. Every-minute Cron recovers failed work, up to 3 events per run. Each request times out after 8 seconds. Each automatic cycle allows 5 attempts with approximate delays of 1 minute, 5 minutes, 30 minutes and 2 hours, affected by scheduling/backlog. Events expire after 24 hours. A lost acknowledgment can cause duplicates with the same eventId; manual retry starts another finite cycle with that ID.
+
+Records show pending/sending/delivered/failed/cancelled, attempts, httpStatus, fixed error reasons and timestamps. Terminal records are cleaned after 7 days; response bodies are not retained. Tests/retries share send rate limits; other operations share query limits. Every configuration update increments revision and cancels older queued events without backfilling historical mail. An HTTP request already in flight cannot be recalled. On 409, refresh before editing. Notification failure does not prevent mail receipt; use afterId for occasional recovery.
 
 ## Send and reply
 

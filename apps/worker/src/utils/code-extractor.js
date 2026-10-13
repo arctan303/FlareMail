@@ -28,6 +28,91 @@ const INVALID_NUMBER_SET = new Set([
 	'3000', '3306', '5432', '6379', '8000', '8080', '8443', '8888', '9000'
 ]);
 
+// These patterns use whitespace only as separators. Collapse runs in the
+// matching copy so overlapping whitespace quantifiers cannot backtrack over
+// arbitrary gaps. Keep the original text for the fallback proximity window.
+function matchingText(text) {
+	return text.replace(/\s+/g, ' ');
+}
+
+const SHORT_TEXT_LIMIT = 12;
+const cappedText = text => text.slice(0, SHORT_TEXT_LIMIT + 1);
+
+function textSummary(raw) {
+	let start = 0;
+	let end = raw.length;
+	while (start < end && /\s/.test(raw[start])) start++;
+	while (end > start && /\s/.test(raw[end - 1])) end--;
+	return {
+		text: cappedText(raw.slice(start, Math.min(end, start + SHORT_TEXT_LIMIT + 1))),
+		leading: raw.slice(0, Math.min(start, SHORT_TEXT_LIMIT + 1)),
+		trailing: start === end ? '' : raw.slice(Math.max(end, raw.length - SHORT_TEXT_LIMIT - 1)),
+	};
+}
+
+function appendSummary(parent, child) {
+	if (!child.text) {
+		if (parent.text) parent.trailing = cappedText(parent.trailing + child.leading);
+		else parent.leading = cappedText(parent.leading + child.leading);
+	} else {
+		if (parent.text) {
+			parent.text = cappedText(parent.text + parent.trailing + child.leading + child.text);
+		} else {
+			parent.leading = cappedText(parent.leading + child.leading);
+			parent.text = child.text;
+		}
+		parent.trailing = child.trailing;
+	}
+}
+
+// Compute each subtree's trimmed text once. Leading/trailing whitespace is
+// retained until it becomes internal text; 13 characters suffice to prove
+// that an element cannot be one of the existing <=12-character candidates.
+function shortElementTexts(document) {
+	const texts = new Map();
+	const stack = [{ node: document, child: document.firstChild, summary: textSummary('') }];
+	while (stack.length) {
+		const frame = stack[stack.length - 1];
+		if (frame.child) {
+			const child = frame.child;
+			frame.child = child.nextSibling;
+			stack.push({ node: child, child: child.firstChild, summary: textSummary('') });
+			continue;
+		}
+		const summary = frame.node.nodeType === 3 || frame.node.nodeType === 4
+			? textSummary(frame.node.nodeValue || '') : frame.summary;
+		texts.set(frame.node, summary.text);
+		stack.pop();
+		if (stack.length) appendSummary(stack[stack.length - 1].summary, summary);
+	}
+	return texts;
+}
+
+function strongContextCodes(text, anchors, candidates) {
+	const found = new Set();
+	if (!candidates.size) return found;
+	for (const match of text.matchAll(anchors)) {
+		let separator = true;
+		let opener = false;
+		for (let index = match.index + match[0].length;
+			index < text.length && (separator || opener); index++) {
+			// A code can start anywhere the old two separator classes can end,
+			// including an i/s run. Probe only the existing 4..8 code lengths.
+			const token = text.slice(index, index + 8).match(/^[0-9a-z]{4,8}/i)?.[0] || '';
+			for (let length = 4; length <= token.length; length++) {
+				const code = token.slice(0, length).toLowerCase();
+				if (candidates.has(code)) found.add(code);
+			}
+			const char = text[index];
+			opener = (opener || separator) && /[【\["“'‘`\s]/.test(char);
+			separator = separator && /[\s:：为是is]/i.test(char);
+		}
+	}
+	// The anchor initials are outside both separator classes, so these scans
+	// cannot share an unbounded gap. Total work remains linear in text length.
+	return found;
+}
+
 const codeExtractor = {
 	/**
 	 * 从邮件的主题、纯文本或 HTML 内容中提取验证码
@@ -116,6 +201,7 @@ const codeExtractor = {
 	 * 从邮件主题中提取验证码
 	 */
 	extractFromSubject(subject) {
+		subject = matchingText(subject);
 		const patterns = [
 			// 中文/英文前置引导：验证码是 123456 / verification code is 123456 / Code: 123456
 			/(?:验证码|校验码|动态码|安全码|授权码|确认码|激活码|安全代码|通行码|口令|verification\s*code|verify\s*code|security\s*code|confirmation\s*code|authorization\s*code|login\s*code|otp|passcode|access\s*code|pin\s*code)[\s:：为是is-]*(?:[【\[「『"“'‘\x60\s]*)([A-Z]{1,3}-[0-9]{4,8}|[0-9]{3}\s+[0-9]{3}|[0-9a-zA-Z]{4,8})(?:[】\]」』"”'’\x60\s]*)/i,
@@ -144,6 +230,7 @@ const codeExtractor = {
 	 * 从正文上下文锚点提取验证码
 	 */
 	extractFromBodyContext(text) {
+		text = matchingText(text);
 		const patterns = [
 			// 中文前置引导：验证码：123456 / 验证码为 123456 / 验证码是“392014”
 			/(?:验证码|校验码|动态码|安全码|授权码|确认码|激活码|安全代码|动态密码|通行口令|口令)[\s:：为是is-]*(?:[【\[「『"“'‘\x60\s]*)([A-Z]{1,3}-[0-9]{4,8}|[0-9]{3}\s+[0-9]{3}|[0-9a-zA-Z]{4,8})(?:[】\]」』"”'’\x60\s]*)/i,
@@ -182,10 +269,24 @@ const codeExtractor = {
 
 		// 挑选可能渲染验证码的视觉元素
 		const candidateElements = document.querySelectorAll('div, p, span, td, th, h1, h2, h3, b, strong, font, a');
+		const shortTexts = shortElementTexts(document);
+		const contextCandidates = new Set();
+		for (const el of candidateElements) {
+			const innerText = shortTexts.get(el) || '';
+			if (innerText.length < 4 || innerText.length > SHORT_TEXT_LIMIT) continue;
+			const candidate = this.normalizeCandidate(innerText);
+			if (/^[a-z]{4,8}$/.test(candidate) || /^(?:199\d|20[0-3]\d)$/.test(candidate)) {
+				contextCandidates.add(candidate);
+			}
+		}
+		const strongContext = {
+			years: strongContextCodes(fullText, /(?:验证码|校验码|动态码|code|otp)/gi, contextCandidates),
+			alpha: strongContextCodes(fullText, /(?:验证码|code|otp|pin)/gi, contextCandidates),
+		};
 
 		for (const el of candidateElements) {
 			// 只看直接子文本或短纯文本
-			const innerText = el.textContent ? el.textContent.trim() : '';
+			const innerText = shortTexts.get(el) || '';
 			if (!innerText || innerText.length < 4 || innerText.length > 12) {
 				continue;
 			}
@@ -208,7 +309,7 @@ const codeExtractor = {
 
 			// 如果元素有视觉突出特征，或者在验证码语境下拥有独立样式块
 			if ((isLargeFont || (isBold && hasVerificationContext) || isLetterSpaced || hasCodeClass)) {
-				if (this.isValidCode(candidate, fullText)) {
+				if (this.isValidCode(candidate, fullText, strongContext)) {
 					return candidate;
 				}
 			}
@@ -260,7 +361,7 @@ const codeExtractor = {
 	/**
 	 * 校验提取结果的有效性（排除年份、端口号、常见单词、UUID/时间等假阳性）
 	 */
-	isValidCode(code, contextText = '') {
+	isValidCode(code, contextText = '', strongContext) {
 		if (!code || typeof code !== 'string') return false;
 
 		// 长度必须在 4 到 8 位之间（连字符前缀格式如 G-123456 最长可达 10 位）
@@ -294,8 +395,10 @@ const codeExtractor = {
 		// 3. 常见年份过滤（1990 ~ 2035）
 		if (/^(?:199\d|20[0-3]\d)$/.test(code)) {
 			// 只有当上下文有极其明确强烈的 "验证码是 2026" / "code: 2026" 等模式时才允许
-			const strongYearPattern = new RegExp('(?:验证码|校验码|动态码|code|otp)[\\s:：为是is]*[【\\["“\'‘`\\s]*' + code + '[】\\]"”\'’`\\s]*', 'i');
-			if (!strongYearPattern.test(contextText)) {
+			const isStrongYear = strongContext
+				? strongContext.years.has(code)
+				: strongContextCodes(contextText, /(?:验证码|校验码|动态码|code|otp)/gi, new Set([code])).has(code);
+			if (!isStrongYear) {
 				return false;
 			}
 		}
@@ -304,8 +407,10 @@ const codeExtractor = {
 		if (/^[a-zA-Z]+$/.test(code)) {
 			// 若全为小写且不是在明确验证码引导词下，可能只是普通英文单词
 			if (/^[a-z]+$/.test(code) && code.length >= 4) {
-				const strongAlphaPattern = new RegExp('(?:验证码|code|otp|pin)[\\s:：为是is]*[【\\["“\'‘`\\s]*' + code + '[】\\]"”\'’`\\s]*', 'i');
-				if (!strongAlphaPattern.test(contextText)) {
+				const isStrongAlpha = strongContext
+					? strongContext.alpha.has(lowerCode)
+					: strongContextCodes(contextText, /(?:验证码|code|otp|pin)/gi, new Set([lowerCode])).has(lowerCode);
+				if (!isStrongAlpha) {
 					return false;
 				}
 			}

@@ -2,6 +2,8 @@
 
 在系统设置 → 邮件收发选择全站发信通道。新安装默认 Resend；Cloudflare Email Sending 为 Beta 备选。选择通道不会清除另一通道的配置，失败也不会自动切换服务。
 
+从免费方案开始可选择 Resend，验证自己的发件域名后再发送测试邮件。如果希望发信也使用 Cloudflare，先确认 Workers Paid 与域名开通条件。两种路径均无需 VPS，[费用与准备](/docs/zh/costs)说明各自额度与前提。
+
 ## Resend
 
 1. 在 Resend 账号中添加你拥有的发件域名，例如 example.com，按要求配置 DNS 并等待验证通过。
@@ -39,6 +41,8 @@ npx --yes pnpm@10.34.5 run deploy
 仅添加绑定不会改变当前通道。项目本地模拟绑定不投递真实邮件；不要为普通本地测试添加 remote = true。[平台配置](https://developers.cloudflare.com/email-service/get-started/send-emails/)
 
 ## 附件与大小
+
+网页及 CLI 的发送、回复请求，完整 HTTP 请求体最多 32 MiB，包含正文、附件编码和 JSON 开销。超限会在完整读取或解析前返回 413。此整包上限不增加附件或服务商的限额。
 
 应用发信最多 10 个附件（含内嵌图片），单个不超过 10 MiB，合计不超过 20 MiB。Cloudflare 通道还按整封邮件的编码后估算体积提前限制为 5 MiB，因此实际可用附件体积更小。服务商可能另有额度、收件人数或内容限制。[Cloudflare 限制](https://developers.cloudflare.com/email-service/platform/limits/)
 

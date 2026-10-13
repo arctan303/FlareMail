@@ -7,6 +7,7 @@ import sessionService from './session-service';
 import settingService from './setting-service';
 import { userConst } from '../const/entity-const';
 import { getCookie, setCookie } from 'hono/cookie';
+import { sessionEpoch } from '../security/session-epoch';
 
 const GOOGLE_AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
@@ -218,6 +219,11 @@ const oauthService = {
 		};
 		if (userId) {
 			record.userId = userId;
+			const user = await userService.selectByIdIncludeDel(c, userId);
+			const initiating = sessionHash && await sessionService.resolveByHash(c, sessionHash);
+			if (!user || !initiating || initiating.userId !== userId) throw new BizError('Recent authentication required', 428);
+			record.bindingEpoch = sessionEpoch(user.sessionEpoch);
+			record.bindingSub = user.googleSub || '';
 		}
 		if (sessionHash) {
 			record.sessionHash = sessionHash;
@@ -279,6 +285,8 @@ const oauthService = {
 			email: payload.email || '',
 			userId: record.userId || null,
 			sessionHash: record.sessionHash || null,
+			bindingEpoch: sessionEpoch(record.bindingEpoch),
+			bindingSub: record.bindingSub,
 			returnTo: record.returnTo || '',
 		};
 	},
@@ -301,20 +309,32 @@ const oauthService = {
 			return null;
 		}
 		await userService.updateUserInfo(c, userRow.userId);
-		await sessionService.create(c, userRow.userId, await cryptoUtils.hashSecret(userRow.password));
+		await sessionService.create(c, userRow.userId, await cryptoUtils.hashSecret(userRow.password), {
+			...userRow, googleLoginSub: sub,
+		});
 		return userRow.userId;
 	},
 
-	async bind(c, userId, sub, email) {
+	async bind(c, userId, sub, email, session = null, bindingSnapshot = null) {
 		const userRow = await userService.selectByIdIncludeDel(c, userId);
 		if (!userRow || userRow.isDel !== 0 || userRow.status === userConst.status.BAN) {
 			throw new BizError('User not found or unavailable', 404);
+		}
+		if (session && (session.userId !== userId || !session.credentialFingerprint
+			|| session.credentialFingerprint !== await cryptoUtils.hashSecret(userRow.password))) {
+			throw new BizError('Recent authentication required', 428);
+		}
+		if (session && (!await sessionService.resolveByHash(c, session.hash)
+			|| (bindingSnapshot && (sessionEpoch(bindingSnapshot.bindingEpoch) !== sessionEpoch(userRow.sessionEpoch)
+				|| bindingSnapshot.bindingSub !== (userRow.googleSub || ''))))) {
+			throw new BizError('Recent authentication required', 428);
 		}
 		const existing = await userService.selectByGoogleSubIncludeDel(c, sub);
 		if (existing && existing.userId !== userId) {
 			throw new BizError('This Google account is already bound to another user', 409);
 		}
-		await userService.updateGoogleBinding(c, userId, sub, email);
+		const replaced = await userService.updateGoogleBinding(c, userId, sub, email, userRow.password, userRow, session?.hash, sessionEpoch(session?.sessionEpoch));
+		if (replaced) await sessionService.revokeOthers(c, userId, session.hash);
 	},
 
 	async unbind(c, userId) {

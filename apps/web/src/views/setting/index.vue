@@ -37,6 +37,7 @@
         <div v-show="activeSection === 'security'" class="section-panel">
           <GoogleOauthCard :run-sensitive="runSensitive" />
           <CliTokenCard :run-sensitive="runSensitive" />
+          <WebhookCard v-if="activeSection === 'security'" />
         </div>
       </transition>
 
@@ -69,6 +70,7 @@ import ThemeCard from './components/ThemeCard.vue'
 import AliasManagerCard from './components/AliasManagerCard.vue'
 import EmailForwardingCard from './components/EmailForwardingCard.vue'
 import CliTokenCard from './components/CliTokenCard.vue'
+import WebhookCard from './components/WebhookCard.vue'
 import GoogleOauthCard from './components/GoogleOauthCard.vue'
 import PasswordChangeDialog from './components/PasswordChangeDialog.vue'
 import RecentAuthDialog from './components/RecentAuthDialog.vue'

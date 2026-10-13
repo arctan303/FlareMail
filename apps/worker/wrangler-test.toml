@@ -83,7 +83,7 @@ namespace_id = "1008"
 simple = { limit = 10, period = 60 }
 
 [triggers]
-crons = ["0 16 * * *"]	#每天晚上12点执行每日任务,刷新分析缓存
+crons = ["0 16 * * *", "* * * * *"] # Daily maintenance and webhook retry recovery
 
 
 [secrets]

@@ -1,4 +1,6 @@
-# User guide
+# Everyday use
+
+Once delivery tests pass, this is your own domain mailbox. Start by reading and replying with your primary address, then add addresses, organize contacts or [connect your assistant](/docs/en/cli) as needed. You can use it on your own without adding members or configuring optional sign-in methods.
 
 ## Read and organize
 
@@ -24,7 +26,11 @@ Saving Reply-To requires the administrator to apply database update 325. Older d
 
 Download attachments and preview images. Real mailboxes block external images until explicitly allowed; the experience never loads these external images. See [sending setup](/docs/en/sending) for limits and troubleshooting.
 
+Links in mail and the editor allow URLs up to 8192 characters. Longer links retain their text without a clickable destination. Each table allows at most 10000 expanded cells and each cell's row/column span at most 100; larger tables become plain text with their visible text preserved. These rules also apply to quoted mail, pasted content, Source and restored drafts.
+
 Use Save draft at the bottom of the composer, even before completing recipients, subject or body. Saving stores the body and attachments and closes the window. Closing a new message also offers to save; closing an existing draft updates it. A failed save keeps your edits open. Real drafts are stored in the current browser's IndexedDB and do not sync across devices; clearing site data can lose them. Experience drafts live only in the current page and reset on refresh.
+
+Real drafts are isolated by a stable user ID and survive an email-address change. Reassigning that address to someone else does not give them access to the previous user's drafts. Older drafts with an owner marker migrate automatically; unowned drafts stay hidden until explicitly claimed from the Drafts page. Claim only drafts you recognize as yours. Session expiry and 401 responses preserve drafts; explicitly signing out clears the current user's local drafts and attachments.
 
 ## Contacts and mailbox addresses
 
@@ -36,6 +42,6 @@ Personal settings let you add aliases, change sender names, pin addresses for so
 
 Personal settings manage language, forwarding, CLI tokens and Google linking. Forwarding destinations require Cloudflare verification; see [receiving setup](/docs/en/receiving). Google linking requires prior [administrator setup](/docs/en/administration).
 
-Changing your password invalidates old credentials, sessions and the personal CLI token. Sign in again and generate a new token if needed. See [CLI / Agent](/docs/en/cli) for scripts.
+Changing your password invalidates old credentials, sessions, the personal CLI token and previously unredeemed OAuth authorization codes. Sign in again and generate a new token if needed. See [CLI / Agent](/docs/en/cli) for scripts.
 
 The lower-left user menu provides themes and shortcut help. Press C to compose, Ctrl / Command + K to search, and ? for shortcuts.

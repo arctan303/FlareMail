@@ -2,6 +2,8 @@
 
 A new installation needs one application Secret: `SETUP_SECRET`. Domains, sending credentials and optional features are mainly configured in the Web console. DNS, resource bindings and third-party verification still require platform setup.
 
+For your first mailbox, complete the delivery tests in the [deployment guide](/docs/en/deployment). Use this page to find settings and choose storage when needed; optional features can wait. See [costs and preparation](/docs/en/costs) for the free setup and allowances.
+
 ## Where to configure
 
 | Location | Purpose |
@@ -12,7 +14,7 @@ A new installation needs one application Secret: `SETUP_SECRET`. Domains, sendin
 | System settings → Sign-in & authorization | Google, Turnstile, OAuth Provider and additional origins |
 | System settings → Site brand | Names, icons, login page and PWA appearance |
 | System settings → Maintenance | Schema inspection and controlled upgrades |
-| Personal settings | Password, language, aliases, forwarding, Google binding and CLI token |
+| Personal settings | Password, language, aliases, forwarding, Google binding, CLI token and incoming webhooks |
 
 Confirm your administrator or personal password when a sensitive operation requests it. Saving one configuration area does not save every other area; check unsaved indicators. See [administrator configuration](/docs/en/administration), [incoming mail](/docs/en/receiving) and [outgoing mail](/docs/en/sending).
 

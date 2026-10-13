@@ -161,6 +161,7 @@ import { Icon } from "@iconify/vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { emailUnread as apiEmailUnread } from "@/request/email.js";
 import { applyConversationRead, conversationMemberIds, conversationSubject } from '@/utils/mail-conversation.js';
+import { mailSnippet } from '@/utils/mail-snippet.js';
 
 
 const { t } = useI18n();
@@ -422,26 +423,8 @@ const accountShow = computed(() => {
 });
 
 function htmlToText(email) {
-  if (email.content) {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = email.content.replace(/<(img|iframe|object|embed|video|audio|source|link)[^>]*>/gi, '');
-    const scriptsAndStyles = tempDiv.querySelectorAll('script, style, title');
-    scriptsAndStyles.forEach(el => el.remove());
-    let text = tempDiv.textContent || tempDiv.innerText || '';
-    text = text.replace(/\s+/g, ' ').trim();
-    return cleanSpace(text);
-  }
-  if (email.text) {
-    return cleanSpace(email.text);
-  }
-  return '';
-}
-
-function cleanSpace(text) {
-  return text
-    .replace(/[\u200B-\u200F\uFEFF\u034F\u200B-\u200F\u00A0\u3000\u00AD]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // Preserve the inbox's HTML-first preview; conversation summaries use text first.
+  return mailSnippet(email.content ? { content: email.content } : email, Infinity);
 }
 
 const accountStore = useAccountStore();

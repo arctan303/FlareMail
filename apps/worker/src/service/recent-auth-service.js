@@ -4,6 +4,9 @@ import constant from '../const/constant';
 import sessionService from './session-service';
 import confirmationPolicyService from './confirmation-policy-service';
 import { isAdmin } from '../security/admin-identity';
+import userService from './user-service';
+import cryptoUtils from '../utils/crypto-utils';
+import { isDel, userConst } from '../const/entity-const';
 
 // Version 2 replaces both the fixed ten-minute and administrator-only proofs.
 const RECENT_AUTH_VERSION = 2;
@@ -77,7 +80,14 @@ const recentAuthService = {
 		if (!session || session.userId !== userId) {
 			throw new BizError('Recent authentication required', 428);
 		}
-		return this.require(c, session, userId);
+		const userRow = await userService.selectByIdIncludeDel(c, userId);
+		if (!userRow || userRow.isDel !== isDel.NORMAL || userRow.status === userConst.status.BAN
+			|| !session.credentialFingerprint
+			|| session.credentialFingerprint !== await cryptoUtils.hashSecret(userRow.password)) {
+			throw new BizError('Recent authentication required', 428);
+		}
+		await this.require(c, session, userId);
+		return session;
 	},
 
 	async revoke(c, sessionOrHash) {

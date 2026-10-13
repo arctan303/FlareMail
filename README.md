@@ -3,57 +3,71 @@
 </h1>
 
 <p align="center">
-  <strong>使用自己的域名，拥有邀请制的私有邮箱</strong><br />
-  A private mailbox on your own domain, shared by invitation.
+  <strong>无需 VPS 的个人域名邮箱</strong><br />
+  部署在自己的 Cloudflare 账号，支持 CLI 与助手接入。<br />
+  <em>Personal domain email in your Cloudflare account. No VPS required.</em>
+</p>
+
+<p align="center">
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.1.1-blue" alt="Version: 1.1.1" /></a>
+  <a href="THIRD-PARTY-NOTICES.md"><img src="https://img.shields.io/badge/License-AGPL%203.0-blue.svg" alt="License: AGPL 3.0" /></a>
+  <img src="https://img.shields.io/badge/Platform-Cloudflare%20Workers-F38020.svg?logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
 </p>
 
 <p align="center">
   <a href="README.md">简体中文</a> ·
-  <a href="README-en.md">English</a>
+  <a href="README-en.md">English</a> ·
+  <a href="https://flaremail.arcinks.com/inbox">在线体验</a> ·
+  <a href="https://flaremail.arcinks.com/docs/zh/introduction">使用文档</a> ·
+  <a href="https://github.com/arctan303/FlareMail/releases">Releases</a>
 </p>
 
-<p align="center">
-  <a href="THIRD-PARTY-NOTICES.md"><img src="https://img.shields.io/badge/License-AGPL%203.0-blue.svg" alt="License: AGPL 3.0" /></a>
-  <img src="https://img.shields.io/badge/Platform-Cloudflare%20Workers-F38020.svg?logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
-  <img src="https://img.shields.io/badge/i18n-中%20%2F%20EN-blueviolet.svg" alt="i18n: 中 / EN" />
-</p>
+FlareMail 是面向个人的开源域名邮箱，支持日常收发、多个邮箱地址和助手接入。网页、API 与邮件处理部署为一个 Cloudflare Worker，邮件数据保存在你自己的 Cloudflare 账号，无需购买或维护 VPS。
 
-FlareMail 是部署在自己 Cloudflare 账号上的**私有域名邮箱**。使用自己的域名收发邮件，以邀请制与家人或小团队共享；管理员添加受邀成员，每个人独立访问自己的邮件。
+## 在线体验
 
-正式首版 **[v1.0.0](https://github.com/arctan303/FlareMail/releases/tag/v1.0.0)**。建议先在线体验，再部署给自己或少量受邀成员使用。
+**[打开 FlareMail 在线体验 →](https://flaremail.arcinks.com/inbox)**
 
-<p align="center">
-  <a href="https://flaremail-demo.pages.dev/inbox">在线体验</a> ·
-  <a href="https://flaremail-demo.pages.dev/docs/zh/introduction">阅读文档</a> ·
-  <a href="https://flaremail-demo.pages.dev/docs/zh/deployment">部署自己的邮箱</a>
-</p>
+无需登录，可直接尝试阅读会话、搜索邮件、切换邮箱、撰写回复和管理草稿，也支持手机访问。体验使用示例数据，模拟发送不会投递真实邮件，刷新后恢复初始数据。详见[体验说明](apps/web/docs/zh/experience.md)。
 
-![FlareMail 邮箱界面（示例数据）](assets/screenshots/inbox-zh.png)
+## 功能
 
-## 主要能力
+- **域名与邮箱地址**：管理多个域名和地址，为个人联系、项目或助手分配邮箱；需要时可邀请家人或成员使用。
+- **日常邮件**：收发、回复、转发、附件、搜索、星标、联系人与会话阅读，支持草稿保存和发送撤销。
+- **Web 客户端**：响应式布局、中英双语、深浅色主题、快捷键和可安装的 PWA。
+- **CLI / Agent**：通过个人 Token 查询、读取、发送和回复邮件；HTML 邮件提供可读正文，支持未读过滤与增量查询。
+- **收件 Webhook**：新邮件就绪后通知接收端，可选全部发件人或地址白名单；网页和 CLI 均可管理配置、密钥、测试通知与投递记录。
+- **管理与定制**：网页管理域名、成员、品牌、Google 登录和 OAuth 授权；附件可按需使用私有 R2 存储。
 
-- **自己的域名邮箱**：多域名、多邮箱地址，收发、回复、转发、附件、星标和联系人。
-- **来往邮件会话**：同一回复链一个列表入口，新来信整段显示未读；打开即可查看收发往来，历史引用可折叠，原文完整保留。
-- **邀请制使用**：管理员管理受邀成员，成员各自使用自己的邮箱。
-- **完整 Web 界面**：中英双语、深浅色主题、响应式布局、键盘快捷键及 PWA。
-- **按需配置**：Web 安装与管理、自定义品牌、Google 登录和敏感操作二次确认。
-- **脚本与 Agent 接入**：个人令牌用于邮件查询、发送与回复；另支持第一方网站 OAuth 授权。
+## 快速部署
 
-## 先体验，再部署
-
-[在线体验](https://flaremail-demo.pages.dev/inbox)直接进入使用示例数据的邮箱，无需登录。可以阅读和整理邮件、写信、查看设置；刷新恢复初始数据，模拟发送不会投递真实邮件。设置以展示为主，语言可以切换。
-
-部署正式邮箱需要自己的 Cloudflare 账号与邮箱域名。前端、API 和邮件处理统一由**单个 Worker** 提供服务，使用 D1 和 KV，R2 为可选对象存储。应用内登记域名后，还需配置收信路由和发信服务。
+准备自己的 **Cloudflare 账号、GitHub 账号，以及使用 Cloudflare DNS 的域名**，即可通过网页部署，无需在本机安装开发工具。
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/arctan303/FlareMail)
 
-推荐使用 Cloudflare 网页一键部署，无需本机命令行。部署后在 Web 向导创建管理员，再接通收发信；已有实例按更新指南保留原资源。
+1. **部署应用**：按 Cloudflare 页面提示创建 Worker、D1 和 KV，设置并保存独立的安装凭据。
+2. **初始化邮箱**：打开部署后的地址，使用 Web 向导创建管理员和邮箱域名。
+3. **接通收发**：配置域名收信路由和发信服务，再用外部邮箱验证收信与回复。
 
-从[部署指南](https://flaremail-demo.pages.dev/docs/zh/deployment)开始。更多说明见[使用指南](https://flaremail-demo.pages.dev/docs/zh/usage)、[配置说明](https://flaremail-demo.pages.dev/docs/zh/configuration)、[CLI / Agent](https://flaremail-demo.pages.dev/docs/zh/cli)和[更新维护](https://flaremail-demo.pages.dev/docs/zh/updates)。文档源码位于 [apps/web/docs/zh](apps/web/docs/zh)。
+Cloudflare 免费计划可用于托管应用和收信，发信可搭配 Resend 免费额度。域名另行准备，各服务有使用额度；R2 可选。**一键部署完成应用安装，收发信还需要域名配置。**
+
+继续阅读[完整部署指南](apps/web/docs/zh/deployment.md)和[费用与准备](apps/web/docs/zh/costs.md)。部署按钮使用稳定分支 `main`；已有实例请按[更新维护](apps/web/docs/zh/updates.md)升级并保留原资源。
+
+## 文档
+
+[在线文档](https://flaremail.arcinks.com/docs/zh/introduction)提供完整使用指引，也可按主题阅读下方文档。
+
+| 主题 | 文档 |
+| --- | --- |
+| 开始使用 | [项目介绍](apps/web/docs/zh/introduction.md) · [费用与准备](apps/web/docs/zh/costs.md) · [部署指南](apps/web/docs/zh/deployment.md) |
+| 使用场景 | [个人域名邮箱](apps/web/docs/zh/personal-mailbox.md) · [给助手一个邮箱](apps/web/docs/zh/assistant-mailbox.md) |
+| 邮件收发 | [收信配置](apps/web/docs/zh/receiving.md) · [发信配置](apps/web/docs/zh/sending.md) · [日常使用](apps/web/docs/zh/usage.md) |
+| 设置与管理 | [配置说明](apps/web/docs/zh/configuration.md) · [管理员指南](apps/web/docs/zh/administration.md) |
+| 助手与集成 | [CLI / Agent 与 Webhook](apps/web/docs/zh/cli.md) · [OAuth 接入](apps/web/docs/zh/oauth.md) |
+| 维护与排错 | [更新、备份与恢复](apps/web/docs/zh/updates.md) · [常见问题](apps/web/docs/zh/faq.md) |
+| 开发与体验站 | [本地运行与开发](apps/web/docs/zh/getting-started.md) · [部署体验站](apps/web/docs/zh/pages.md) |
 
 ## 本地开发
-
-`main` 保持最新稳定版本，`dev` 用于日常开发。参与开发请从 `dev` 创建工作分支；分支门禁、双语日志、标签与 Release 规则见[发布流程](RELEASING.md)。
 
 需要 Node.js ≥ 22.12，使用锁定的 pnpm 10.34.5。在仓库根目录安装依赖：
 
@@ -61,23 +75,23 @@ FlareMail 是部署在自己 Cloudflare 账号上的**私有域名邮箱**。使
 npx --yes pnpm@10.34.5 install --frozen-lockfile
 ```
 
-先按[本地运行与开发](apps/web/docs/zh/getting-started.md)准备实例配置，再启动正式邮箱：
+按[本地运行与开发](apps/web/docs/zh/getting-started.md)准备实例配置，再启动正式邮箱：
 
 ```sh
 npx --yes pnpm@10.34.5 dev
 ```
 
-仅开发静态体验站与 Docs，运行 `dev:pages`；使用 `build:pages` 构建至 `apps/web/dist-pages`。详见[部署体验站](apps/web/docs/zh/pages.md)。
+- `apps/web`：Vue 3、Vite 与 Element Plus 前端。
+- `apps/worker`：Cloudflare Workers、Hono 后端与数据库迁移。
+- `apps/web/docs`：双语使用文档。
 
-Vue 前端位于 `apps/web`，后端位于 `apps/worker`；正式前端构建输出至 `apps/worker/dist`。私有配置、凭据和运行数据不进入源码仓库。
+正式前端构建输出至 `apps/worker/dist`，随 Worker 一起部署。仅开发静态体验站与 Docs 时使用 `dev:pages`，通过 `build:pages` 构建至 `apps/web/dist-pages`。私有配置、凭据和运行数据不进入源码仓库。
 
-首版范围与部署注意事项见[发布说明](CHANGELOG.md)。
+## 反馈与贡献
 
-## 反馈与交流
+通过 [Issues](https://github.com/arctan303/FlareMail/issues) 反馈问题，通过 [Discussions](https://github.com/arctan303/FlareMail/discussions) 交流使用。安全漏洞请按 [SECURITY.md](SECURITY.md) 私密报告。
 
-通过 [Issues](https://github.com/arctan303/FlareMail/issues) 反馈问题，通过 [Discussions](https://github.com/arctan303/FlareMail/discussions) 交流使用。安全漏洞请按 [SECURITY.md](SECURITY.md) 私密报告。后续计划随实际进展公布。
-
-## 贡献与许可
+`main` 保持已发布的稳定版本，`dev` 用于日常开发。参与开发请从 `dev` 创建工作分支；分支门禁、双语日志、标签与 Release 规则见[发布流程](RELEASING.md)。提交前按改动范围运行相关测试与构建：
 
 ```sh
 npx --yes pnpm@10.34.5 test:web
@@ -86,6 +100,8 @@ npx --yes pnpm@10.34.5 build
 npx --yes pnpm@10.34.5 build:pages
 ```
 
+## 许可证
+
 FlareMail 自身源码采用 [MIT](LICENSE)，完整分发物整体按 **AGPL-3.0-or-later** 提供，见[第三方通知](THIRD-PARTY-NOTICES.md)。
 
-FlareMail 是一方产品之一，历时三个月开发。维护者已将它作为日常主力邮箱使用，并将持续维护。
+FlareMail 是一方产品之一，维护者将其作为日常主力邮箱使用。

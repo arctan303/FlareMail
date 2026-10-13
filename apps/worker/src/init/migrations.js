@@ -3,6 +3,7 @@ import { hasCloudflareEmail, normalizeMailProvider } from '../service/mail-provi
 import { normalizeConfirmation } from '../service/confirmation-policy-service';
 import { emailConst } from '../const/entity-const';
 import { ensureMigrationTable } from './schema';
+import { webhookSchemaStatements, webhookSchemaValid } from './webhook-schema';
 import { managedDomains } from '../utils/managed-domain-utils';
 import {
 	normalizeAllowedOrigins,
@@ -49,6 +50,18 @@ function credentialPair(first, second, label) {
 
 export const migrations = {
 	ensureMigrationTable,
+	async v3_27Applied(c) {
+		return await this.hasTable(c, 'schema_migrations') && await this.hasMigrationMarker(c, 327) && await webhookSchemaValid(c);
+	},
+	async v3_27UpgradePending(c) {
+		return await this.hasTable(c, 'schema_migrations') && !await this.hasMigrationMarker(c, 327) && await webhookSchemaValid(c, true);
+	},
+	async v3_27DB(c) {
+		if (await this.v3_27Applied(c)) return;
+		if (!await this.v3_27UpgradePending(c)) throw new Error('Webhook migration requires manual recovery.');
+		await c.env.db.batch([...webhookSchemaStatements(c.env.db), c.env.db.prepare('INSERT OR IGNORE INTO schema_migrations(version) VALUES (327)')]);
+		if (!await this.v3_27Applied(c)) throw new Error('Webhook migration requires manual recovery.');
+	},
 
 	async hasMigrationMarker(c, version) {
 		const row = await c.env.db.prepare(
@@ -1509,6 +1522,65 @@ export const migrations = {
 			c.env.db.prepare('INSERT OR IGNORE INTO schema_migrations(version) VALUES (325)'),
 		]);
 		if (!await this.v3_25Applied(c)) throw new Error('Reply-To migration requires manual recovery.');
+	},
+
+	async v3_26ColumnsValid(c, allowMissing = false) {
+		if (!await this.hasTable(c, 'user')) return false;
+		const columns = (await c.env.db.prepare("PRAGMA table_info('user')").all()).results || [];
+		const epoch = columns.find(column => column.name === 'session_epoch');
+		const preserved = columns.find(column => column.name === 'preserved_session_hash');
+		const defaultValue = column => String(column?.dflt_value ?? '').replace(/^['"]|['"]$/g, '');
+		return ((!epoch && allowMissing) || (epoch?.type?.toUpperCase() === 'INTEGER'
+			&& Number(epoch.notnull) === 1 && defaultValue(epoch) === '0'))
+			&& ((!preserved && allowMissing) || (preserved?.type?.toUpperCase() === 'TEXT'
+				&& Number(preserved.notnull) === 1 && defaultValue(preserved) === ''));
+	},
+
+	async v3_26RevocationValid(c, allowMissing = false) {
+		const table = await this.hasTable(c, 'session_revocation');
+		const index = await c.env.db.prepare("SELECT tbl_name FROM sqlite_master WHERE type = 'index' AND name = 'idx_session_revocation_expires'").first();
+		if (!table) return allowMissing && !index;
+		const columns = (await c.env.db.prepare("PRAGMA table_info('session_revocation')").all()).results || [];
+		const hash = columns.find(column => column.name === 'session_hash');
+		const owner = columns.find(column => column.name === 'user_id');
+		const expiry = columns.find(column => column.name === 'expires_at');
+		if (columns.length !== 3 || hash?.type?.toUpperCase() !== 'TEXT' || Number(hash.notnull) !== 1 || Number(hash.pk) !== 1
+			|| owner?.type?.toUpperCase() !== 'INTEGER' || Number(owner.notnull) !== 1 || Number(owner.pk) !== 0
+			|| expiry?.type?.toUpperCase() !== 'INTEGER' || Number(expiry.notnull) !== 1 || Number(expiry.pk) !== 0) return false;
+		if (!index) return allowMissing;
+		const declared = ((await c.env.db.prepare("PRAGMA index_list('session_revocation')").all()).results || [])
+			.find(row => row.name === 'idx_session_revocation_expires');
+		const keys = (await c.env.db.prepare("PRAGMA index_info('idx_session_revocation_expires')").all()).results || [];
+		return index.tbl_name === 'session_revocation' && Number(declared?.unique) === 0 && Number(declared?.partial) === 0
+			&& keys.length === 1 && keys[0].name === 'expires_at';
+	},
+
+	async v3_26Applied(c) {
+		return await this.hasTable(c, 'schema_migrations') && await this.hasMigrationMarker(c, 326)
+			&& await this.v3_26ColumnsValid(c) && await this.v3_26RevocationValid(c);
+	},
+
+	async v3_26UpgradePending(c) {
+		return await this.hasTable(c, 'schema_migrations') && !await this.hasMigrationMarker(c, 326)
+			&& await this.v3_26ColumnsValid(c, true) && await this.v3_26RevocationValid(c, true);
+	},
+
+	async v3_26DB(c) {
+		if (await this.v3_26Applied(c)) return;
+		if (!await this.v3_26UpgradePending(c)) throw new Error('Session epoch migration requires manual recovery.');
+		const names = new Set(((await c.env.db.prepare("PRAGMA table_info('user')").all()).results || []).map(column => column.name));
+		const statements = [];
+		if (!names.has('session_epoch')) statements.push(c.env.db.prepare('ALTER TABLE user ADD COLUMN session_epoch INTEGER NOT NULL DEFAULT 0'));
+		if (!names.has('preserved_session_hash')) statements.push(c.env.db.prepare("ALTER TABLE user ADD COLUMN preserved_session_hash TEXT NOT NULL DEFAULT ''"));
+		statements.push(c.env.db.prepare(`CREATE TABLE IF NOT EXISTS session_revocation (
+			session_hash TEXT NOT NULL PRIMARY KEY,
+			user_id INTEGER NOT NULL,
+			expires_at INTEGER NOT NULL
+		)`));
+		statements.push(c.env.db.prepare('CREATE INDEX IF NOT EXISTS idx_session_revocation_expires ON session_revocation(expires_at)'));
+		statements.push(c.env.db.prepare('INSERT OR IGNORE INTO schema_migrations(version) VALUES (326)'));
+		await c.env.db.batch(statements);
+		if (!await this.v3_26Applied(c)) throw new Error('Session epoch migration requires manual recovery.');
 	},
 
 	async ensurePhase5Columns(c) {

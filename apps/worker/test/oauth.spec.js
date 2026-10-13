@@ -5,6 +5,8 @@ import worker from '../src';
 import { dbInit } from '../src/init/init';
 import cryptoUtils from '../src/utils/crypto-utils';
 import KvConst from '../src/const/kv-const';
+import oauthService from '../src/service/oauth-service';
+import userService from '../src/service/user-service';
 import { markInstalled } from './installed-instance';
 
 const CLIENT_ID = 'test-client-id';
@@ -581,6 +583,113 @@ describe('Google OAuth login and binding', () => {
 		const row = await env.db.prepare('SELECT google_sub AS googleSub FROM user WHERE email = ?').bind(email).first();
 		expect(row.googleSub).toBe('');
 		await env.db.prepare('UPDATE admin_confirmation SET enabled = 1 WHERE id = 1').run();
+	});
+
+	it.each([1, 0])('rejects a stale bind session when password reset cannot delete its auth index (policy %s)', async enabled => {
+		await ensureGoogleConfigured(1);
+		await env.db.prepare('UPDATE admin_confirmation SET enabled = ? WHERE id = 1').bind(enabled).run();
+		try {
+			const email = `oauth-bind-reset-kv-failure-${enabled}@example.com`;
+			const password = 'oauth-bind-reset-before';
+			const userId = await createLegacyUser(email, password);
+			const cookie = await login(email, password);
+			const hash = await sessionHash(cookie);
+			const bindStart = await startOAuth('/oauth/bind/start', cookie);
+			const previousPassword = (await userService.selectById({ env }, userId)).password;
+			const failedRevocationEnv = {
+				...oauthEnv,
+				kv: {
+					get: (...args) => env.kv.get(...args),
+					put: (...args) => env.kv.put(...args),
+					delete: async key => {
+						if (key === KvConst.AUTH_INFO + userId || key.startsWith(KvConst.SESSION)
+							|| key.startsWith(KvConst.RECENT_AUTH) || key.startsWith(KvConst.ADMIN_CONFIRMATION)) {
+							throw new Error('Injected revocation failure');
+						}
+						return env.kv.delete(key);
+					},
+				},
+			};
+			const reset = await api('/api/my/resetPassword', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json', Origin: 'http://localhost', Cookie: cookie },
+				body: JSON.stringify({ password: 'oauth-bind-reset-after' }),
+			}, failedRevocationEnv);
+			expect(reset.status).toBe(500);
+			expect((await userService.selectById({ env }, userId)).password).not.toBe(previousPassword);
+			expect(await env.kv.get(KvConst.SESSION + hash)).not.toBeNull();
+			expect(await env.kv.get(KvConst.AUTH_INFO + userId)).not.toBeNull();
+
+			stubGoogleFetch(await makeIdToken({ nonce: bindStart.nonce, sub: `reset-kv-failure-sub-${enabled}` }));
+			const callback = await api(`/oauth/bind/callback?code=test-code&state=${bindStart.state}`, callbackOptions(bindStart), oauthEnv);
+			expect(callback.headers.get('location')).toContain('/settings?oauth_err=reauth_required');
+			expect((await userService.selectById({ env }, userId)).googleSub).toBe('');
+		} finally {
+			await env.db.prepare('UPDATE admin_confirmation SET enabled = 1 WHERE id = 1').run();
+		}
+	});
+
+	it.each([1, 0])('rejects binding when the password changes between validation and the D1 update (policy %s)', async enabled => {
+		await ensureGoogleConfigured(1);
+		await env.db.prepare('UPDATE admin_confirmation SET enabled = ? WHERE id = 1').bind(enabled).run();
+		let updateSpy;
+		try {
+			const email = `oauth-bind-password-race-${enabled}@example.com`;
+			const password = 'oauth-bind-password-race-before';
+			const userId = await createLegacyUser(email, password);
+			const cookie = await login(email, password);
+			const bindStart = await startOAuth('/oauth/bind/start', cookie);
+			const updateGoogleBinding = userService.updateGoogleBinding;
+			updateSpy = vi.spyOn(userService, 'updateGoogleBinding').mockImplementation(async (...args) => {
+				await env.db.prepare('UPDATE user SET password = ? WHERE user_id = ?')
+					.bind('changed-during-bind-validation', userId).run();
+				return updateGoogleBinding(...args);
+			});
+			stubGoogleFetch(await makeIdToken({ nonce: bindStart.nonce, sub: `password-race-sub-${enabled}` }));
+			const callback = await api(`/oauth/bind/callback?code=test-code&state=${bindStart.state}`, callbackOptions(bindStart), oauthEnv);
+			expect(callback.headers.get('location')).toContain('/settings?oauth_err=reauth_required');
+			expect((await userService.selectById({ env }, userId)).googleSub).toBe('');
+		} finally {
+			updateSpy?.mockRestore();
+			await env.db.prepare('UPDATE admin_confirmation SET enabled = 1 WHERE id = 1').run();
+		}
+	});
+
+	it.each([false, true])('unbind invalidates the CLI token and all sessions when cleanup fails: %s', async cleanupFails => {
+		await ensureGoogleConfigured(1);
+		const email = `oauth-unbind-cli-${cleanupFails}@example.com`;
+		const password = 'oauth-unbind-cli-password';
+		const userId = await createLegacyUser(email, password);
+		await oauthService.bind({ env }, userId, `oauth-unbind-cli-sub-${cleanupFails}`, 'bound@gmail.com');
+		const cookie = await login(email, password);
+		const secondCookie = await login(email, password);
+		const token = await userService.genCliToken({ env }, userId);
+		const cliOptions = { headers: { Authorization: `Bearer ${token}` } };
+		expect((await api('/api/cli/accounts', cliOptions)).status).toBe(200);
+		const runtimeEnv = cleanupFails ? {
+			...oauthEnv,
+			kv: {
+				get: (...args) => env.kv.get(...args),
+				put: (...args) => env.kv.put(...args),
+				delete: async key => {
+					if (key.startsWith(KvConst.SESSION)) throw new Error('Injected session cleanup failure');
+					return env.kv.delete(key);
+				},
+			},
+		} : oauthEnv;
+		const unbind = await api('/oauth/unbind', {
+			method: 'POST', headers: { Origin: 'http://localhost', Cookie: cookie },
+		}, runtimeEnv);
+		expect(unbind.status).toBe(cleanupFails ? 500 : 200);
+		expect((await userService.selectById({ env }, userId))).toMatchObject({ googleSub: '', googleEmail: '', cliToken: '' });
+		expect((await api('/api/cli/accounts', cliOptions)).status).toBe(401);
+		for (const oldCookie of [cookie, secondCookie]) {
+			expect((await api('/api/my/loginUserInfo', { headers: { Cookie: oldCookie } })).status).toBe(401);
+		}
+		expect(await env.kv.get(KvConst.AUTH_INFO + userId)).toBeNull();
+		const freshCookie = await login(email, password);
+		expect((await api('/api/my/loginUserInfo', { headers: { Cookie: freshCookie } })).status).toBe(200);
+		expect((await api('/api/cli/accounts', cliOptions)).status).toBe(401);
 	});
 
 	it('rejects an in-flight login callback after the switch is turned off', async () => {

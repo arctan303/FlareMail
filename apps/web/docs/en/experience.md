@@ -1,6 +1,8 @@
 # Online experience
 
-Open the inbox directly without signing in. All messages, addresses, members, contacts and settings are sample data.
+Get a feel for everyday use before deploying. [Open the mailbox experience](/inbox) without signing in; messages and accounts are sample data.
+
+Start by opening a conversation, then try searching, switching addresses and composing a message. You can use your phone too. Simulated sends never deliver real mail, and refreshing restores the samples.
 
 ## What to try
 
@@ -22,4 +24,4 @@ Primary-address migration requires your own mailbox instance. External mail imag
 
 Use sample information when exploring.
 
-[Deploy your own mailbox](/docs/en/deployment).
+Ready to use your domain? Check [costs and preparation](/docs/en/costs), then [deploy your mailbox](/docs/en/deployment).

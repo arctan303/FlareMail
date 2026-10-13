@@ -17,6 +17,7 @@ import { assertObjectDeleteQueue } from '../utils/delete-queue-utils';
 import { isAdmin, resolvePermKeys } from '../security/admin-identity';
 import managedDomainService from './managed-domain-service';
 import localeService from './locale-service';
+import { selectSecurityUser, sessionEpoch, sessionEpochColumns } from '../security/session-epoch';
 
 const userService = {
 
@@ -101,18 +102,23 @@ const userService = {
 		const passwordError = cryptoUtils.passwordPolicyError(password);
 		if (passwordError) throw new BizError(passwordError);
 		const { salt, hash } = await cryptoUtils.hashPassword(password);
-		await orm(c).update(user).set({ password: hash, salt, cliToken: '' }).where(eq(user.userId, userId)).run();
+		await c.env.db.batch([
+			c.env.db.prepare("UPDATE user SET password = ?, salt = ?, cli_token = '' WHERE user_id = ?").bind(hash, salt, userId),
+			c.env.db.prepare('DELETE FROM oauth_authorization_code WHERE user_id = ? AND used_at IS NULL').bind(userId),
+		]);
 		await sessionService.revokeAll(c, userId);
 	},
 
 	async upgradePasswordHash(c, userId, password, previousHash, previousSalt) {
 		const { salt, hash } = await cryptoUtils.hashPassword(password);
-		const updated = await orm(c).update(user).set({ password: hash, salt }).where(and(
-			eq(user.userId, userId),
-			eq(user.password, previousHash),
-			eq(user.salt, previousSalt),
-		)).returning({ password: user.password }).get();
-		return updated?.password || null;
+		const [updated] = await c.env.db.batch([
+			c.env.db.prepare('UPDATE user SET password = ?, salt = ? WHERE user_id = ? AND password = ? AND salt = ? RETURNING password')
+				.bind(hash, salt, userId, previousHash, previousSalt),
+			c.env.db.prepare(`DELETE FROM oauth_authorization_code WHERE user_id = ? AND used_at IS NULL
+				AND EXISTS (SELECT 1 FROM user WHERE user_id = ? AND password = ? AND salt = ?)`)
+				.bind(userId, userId, hash, salt),
+		]);
+		return updated.results?.[0]?.password || null;
 	},
 
 	selectByEmail(c, email) {
@@ -128,12 +134,12 @@ const userService = {
 		return userId;
 	},
 
-	selectByEmailIncludeDel(c, email) {
-		return orm(c).select().from(user).where(sql`${user.email} COLLATE NOCASE = ${email}`).get();
+	async selectByEmailIncludeDel(c, email) {
+		return selectSecurityUser(c, 'email COLLATE NOCASE = ?', [email]);
 	},
 
-	selectByIdIncludeDel(c, userId) {
-		return orm(c).select().from(user).where(eq(user.userId, userId)).get();
+	async selectByIdIncludeDel(c, userId) {
+		return selectSecurityUser(c, 'user_id = ?', [userId]);
 	},
 
 	selectById(c, userId) {
@@ -144,13 +150,9 @@ const userService = {
 			.get();
 	},
 
-	selectByGoogleSub(c, sub) {
+	async selectByGoogleSub(c, sub) {
 		if (!sub) return Promise.resolve(null);
-		return orm(c).select().from(user).where(
-			and(
-				eq(user.googleSub, sub),
-				eq(user.isDel, isDel.NORMAL)))
-			.get();
+		return selectSecurityUser(c, 'google_sub = ? AND is_del = 0', [sub]);
 	},
 
 	selectByGoogleSubIncludeDel(c, sub) {
@@ -158,12 +160,35 @@ const userService = {
 		return orm(c).select().from(user).where(eq(user.googleSub, sub)).get();
 	},
 
-	async updateGoogleBinding(c, userId, sub, email) {
-		await orm(c).update(user).set({ googleSub: sub, googleEmail: email }).where(eq(user.userId, userId)).run();
+	async updateGoogleBinding(c, userId, sub, email, validatedPassword, snapshot, preservedHash = '', initiatingEpoch = sessionEpoch(snapshot.sessionEpoch)) {
+		const previousSub = snapshot.googleSub || '';
+		const replacement = !!previousSub && previousSub !== sub;
+		const columns = await sessionEpochColumns(c);
+		if (replacement && (!columns.epoch || !columns.preserved || !columns.revocations || !columns.migrated || !preservedHash)) {
+			throw new BizError('Database upgrade and recent authentication required', 428);
+		}
+		const epochSet = replacement ? ', session_epoch = session_epoch + 1, preserved_session_hash = ?' : '';
+		const epochGuard = columns.epoch ? ' AND session_epoch = ?'
+			: ' AND NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version = 326)';
+		const keptGuard = preservedHash && initiatingEpoch < sessionEpoch(snapshot.sessionEpoch)
+			? ' AND preserved_session_hash = ?' : '';
+		const revokedGuard = columns.revocations && preservedHash
+			? ' AND NOT EXISTS (SELECT 1 FROM session_revocation WHERE session_hash = ? AND expires_at > ?)' : '';
+		const values = [sub, email, ...(replacement ? [preservedHash] : []), userId, validatedPassword,
+			previousSub, ...(columns.epoch ? [sessionEpoch(snapshot.sessionEpoch)] : []), ...(keptGuard ? [preservedHash] : []),
+			...(revokedGuard ? [preservedHash, Date.now()] : [])];
+		const updated = await c.env.db.prepare(`UPDATE user SET google_sub = ?, google_email = ?${epochSet}
+			WHERE user_id = ? AND password = ? AND COALESCE(google_sub, '') = ?${epochGuard}${keptGuard}${revokedGuard}
+			AND is_del = 0 AND status = 0 RETURNING user_id AS userId`).bind(...values).first();
+		if (!updated) throw new BizError('Recent authentication required', 428);
+		return replacement;
 	},
 
 	async clearGoogleBinding(c, userId) {
-		await orm(c).update(user).set({ googleSub: '', googleEmail: '' }).where(eq(user.userId, userId)).run();
+		const columns = await sessionEpochColumns(c);
+		await c.env.db.prepare(`UPDATE user SET google_sub = '', google_email = '', cli_token = ''
+			${columns.epoch ? ', session_epoch = session_epoch + 1' : ''}
+			${columns.preserved ? ", preserved_session_hash = ''" : ''} WHERE user_id = ?`).bind(userId).run();
 	},
 
 	async delete(c, userId) {

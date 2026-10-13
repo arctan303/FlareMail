@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import codeExtractor from '../src/utils/code-extractor';
+import { parseHTML } from 'linkedom';
 
 describe('codeExtractor Verification Code Recognition', () => {
 	describe('1. Global Major Platforms', () => {
@@ -247,6 +248,59 @@ describe('codeExtractor Verification Code Recognition', () => {
 				text: 'Please review the NULL handling in the CODE repository.'
 			};
 			expect(codeExtractor.extract(email)).toBe('');
+		});
+	});
+
+	describe('7. Resource-safe extraction without message truncation', () => {
+		it('handles long nonmatching whitespace gaps in linear time', () => {
+			const gap = ' '.repeat(500000);
+			const started = performance.now();
+			expect(codeExtractor.extract({ subject: `Verification code${gap}!`, text: `验证码${gap}!` })).toBe('');
+			expect(performance.now() - started).toBeLessThan(2000);
+		});
+
+		it('preserves unlimited gaps, grouped codes, multilingual forms, and subject priority', () => {
+			const gap = ' \n\t'.repeat(50000);
+			expect(codeExtractor.extract({ subject: `Verification${gap}code:${gap}123${gap}456`, text: '验证码是999999' })).toBe('123456');
+			for (const text of [
+				`验证码是${gap}“392014”`,
+				`確認コード:${gap}849201`,
+				`인증${gap}코드:${gap}394820`,
+				`849102${gap}（登录验证码）`,
+				`918234${gap}is${gap}your${gap}security${gap}code`,
+			]) expect(codeExtractor.extract({ text })).not.toBe('');
+		});
+
+		it('keeps fallback proximity measured in original body characters', () => {
+			expect(codeExtractor.extract({ text: `648291${' '.repeat(300)}valid for 10 minutes` })).toBe('');
+		});
+
+		it('never rereads nested element textContent during DOM candidate traversal', () => {
+			const depth = 6000;
+			const { document } = parseHTML(`<html><body>${'<div>'.repeat(depth)}${'x'.repeat(depth)}${'</div>'.repeat(depth)}</body></html>`);
+			for (const el of document.querySelectorAll('div')) {
+				Object.defineProperty(el, 'textContent', { get() { throw new Error('subtree reread'); } });
+			}
+			expect(codeExtractor.extractFromDomHeuristics(document)).toBe('');
+		});
+
+		it('preserves nested candidate order and whitespace inside short subtrees', () => {
+			const { document } = parseHTML('<html><body><div class="otp">  <span>123 </span><span>456</span>  </div><div class="otp">654321</div></body></html>');
+			expect(codeExtractor.extractFromDomHeuristics(document)).toBe('123456');
+			const long = parseHTML('<html><body><div class="otp"><span>123 </span>      <span>456</span></div><div class="otp">654321</div></body></html>').document;
+			expect(codeExtractor.extractFromDomHeuristics(long)).toBe('654321');
+		});
+
+		it('preserves strong year and lowercase contexts, including separator letters', () => {
+			for (const [code, text, expected] of [
+				['2026', 'code: “2026”', true],
+				['2026', 'Copyright 2026', false],
+				['abcd', 'PIN: abcd', true],
+				['abcd', 'normal abcd', false],
+				['isis', 'code: isisis', true],
+			]) expect(codeExtractor.isValidCode(code, text)).toBe(expected);
+			const { document } = parseHTML('<html><body><p>pin: “abcd”</p><div class="otp">abcd</div></body></html>');
+			expect(codeExtractor.extractFromDomHeuristics(document)).toBe('abcd');
 		});
 	});
 });

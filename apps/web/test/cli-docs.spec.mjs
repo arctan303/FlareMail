@@ -5,7 +5,7 @@ import {normalizeInstanceOrigin,cliDocsUrl,personalizeCliDocs,CLI_EXAMPLE_ORIGIN
 import {renderMarkdown} from '../src/playground/markdown.js';
 
 test('docs links use local preview or central Pages and only carry the origin',()=>{
-  for(const [instance,base] of [['http://127.0.0.1:3001','http://127.0.0.1:4174'],['http://localhost:8787','http://127.0.0.1:4174'],['https://mail.example.org','https://flaremail-demo.pages.dev']]){
+  for(const [instance,base] of [['http://127.0.0.1:3001','http://127.0.0.1:4174'],['http://localhost:8787','http://127.0.0.1:4174'],['https://mail.example.org','https://flaremail.arcinks.com']]){
     for(const lang of ['zh','en']){
       const link=new URL(cliDocsUrl(instance,lang));
       assert.equal(link.origin,base);assert.equal(link.pathname,'/docs/'+lang+'/cli');

@@ -4,6 +4,7 @@ import { attConst, emailConst, isDel, settingConst } from '../const/entity-const
 import { and, desc, eq, gt, inArray, lt, count, asc, ne, or, like, sql } from 'drizzle-orm';
 import { star } from '../entity/star';
 import settingService from './setting-service';
+import webhookService from './webhook-service';
 import accountService from './account-service';
 import BizError from '../error/biz-error';
 import emailUtils from '../utils/email-utils';
@@ -328,7 +329,7 @@ const emailService = {
 			throw new BizError(t('noSendProvider'), 503);
 		}
 
-		let { imageDataList, html } = await attService.toImageUrlHtml(c, content, userId);
+		let { imageDataList, html } = await attService.toImageUrlHtml(c, content, userId, attachments);
 		html = sanitizeEmailHtml(html, { blockRemoteImages: false });
 		validatePreparedAttachments([...imageDataList, ...attachments]);
 
@@ -723,10 +724,8 @@ const emailService = {
 	},
 
 	async completeReceive(c, status, emailId) {
-		return await orm(c).update(email).set({
-			isDel: isDel.NORMAL,
-			status: status
-		}).where(eq(email.emailId, emailId)).returning().get();
+		await webhookService.completeReceive(c, status, emailId);
+		return orm(c).select().from(email).where(eq(email.emailId, emailId)).get();
 	},
 
 	async completeReceiveAll(c) {
