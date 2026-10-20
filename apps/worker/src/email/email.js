@@ -14,6 +14,8 @@ import codeExtractor from '../utils/code-extractor';
 import { selectPersistedAdmin } from '../security/admin-identity';
 import { inboundAttachmentLimitReason, inboundRawLimitReason } from '../utils/inbound-mail-limits';
 import webhookService from '../service/webhook-service';
+import managedDomainService from '../service/managed-domain-service';
+import { markExternalIngress } from '../utils/mail-ingress';
 
 export async function email(message, env, ctx) {
 	try {
@@ -34,6 +36,10 @@ export async function email(message, env, ctx) {
 
 		if (receive === settingConst.receive.CLOSE) {
 			message.setReject('Service suspended');
+			return;
+		}
+		if (!await managedDomainService.containsEmail({ env }, message.to)) {
+			message.setReject('Recipient mail domain is disabled or not configured');
 			return;
 		}
 
@@ -125,7 +131,12 @@ export async function email(message, env, ctx) {
 			}
 		}
 
+		if (!await managedDomainService.containsEmail({ env }, message.to)) {
+			message.setReject('Recipient mail domain is disabled or not configured');
+			return;
+		}
 		let emailRow = await emailService.receive({ env }, params, cidAttachments, r2Domain);
+		await markExternalIngress({env},emailRow.emailId);
 		attachments.forEach(attachment => {
 			attachment.emailId = emailRow.emailId;
 			attachment.userId = emailRow.userId;
@@ -163,13 +174,15 @@ export async function email(message, env, ctx) {
 		webhookService.kick({ env, executionCtx: ctx }, emailRow.emailId);
 
 		if (
+			!(parsedEmail.headers || []).some(header => String(header.key).toLowerCase() === 'x-flaremail-forwarded' && String(header.value).trim() === '1') &&
 			userRow &&
 			userRow.isDel === isDel.NORMAL &&
 			userRow.status === 0 &&
 			userRow.forwardStatus === settingConst.forwardStatus.OPEN &&
 			userRow.forwardEmail
 		) {
-			const isForwardingAllowed = account ? account.forwardStatus === 0 : userRow.mainForwardStatus === 0;
+			const isPrimary = !account || account.email.toLowerCase() === userRow.email.toLowerCase();
+			const isForwardingAllowed = isPrimary ? userRow.mainForwardStatus === 0 : account.forwardStatus === 0;
 			if (isForwardingAllowed) {
 				try {
 					await message.forward(userRow.forwardEmail);
@@ -180,6 +193,10 @@ export async function email(message, env, ctx) {
 		}
 
 	} catch (error) {
+		if (/Managed domain is inactive\./i.test(String(error?.cause?.cause?.message || error?.cause?.message || error?.message || ''))) {
+			message.setReject('Recipient mail domain is disabled or not configured');
+			return;
+		}
 		console.error('Failed to receive email', error?.message || error?.name || 'unknown error');
 		throw error;
 	}

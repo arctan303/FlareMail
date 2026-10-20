@@ -27,6 +27,19 @@
         </el-button>
       </div>
 
+      <div class="default-sender-form" v-loading="defaultSenderLoading">
+        <label id="default-sender-label">{{ $t('mailRecovery.defaultSender') }}</label>
+        <p class="card-desc">{{ $t('mailRecovery.defaultSenderDescription') }}</p>
+        <div class="inline-form">
+          <el-select v-model="defaultSenderId" :aria-label="$t('mailRecovery.defaultSender')" :disabled="defaultSenderLoading || defaultSenderSaving" :placeholder="$t('mailRecovery.chooseSender')">
+            <el-option v-for="item in activeSenderAccounts" :key="item.accountId" :value="item.accountId" :label="item.email" />
+          </el-select>
+          <el-button type="primary" :loading="defaultSenderSaving" :disabled="!defaultSenderId || defaultSenderLoading" @click="saveDefaultSender">{{ $t('save') }}</el-button>
+          <el-button :disabled="defaultSenderLoading || defaultSenderSaving" @click="fetchDefaultSender">{{ $t('mailRecovery.refresh') }}</el-button>
+        </div>
+        <p v-if="defaultSenderError" class="default-sender-error" role="alert">{{ defaultSenderError }}</p>
+      </div>
+
       <!-- 邮箱列表与昵称配置 -->
       <div class="alias-table-wrapper" v-loading="listLoading">
         <el-table :data="accounts" style="width: 100%" class="alias-table" :empty-text="$t('noMailboxYet')">
@@ -113,6 +126,28 @@
           </el-table-column>
         </el-table>
       </div>
+      <div class="deleted-aliases">
+        <el-button text @click="toggleDeletedAliases">{{ $t(showDeletedAliases ? 'mailRecovery.hideAliases' : 'mailRecovery.showAliases') }}</el-button>
+        <section v-if="showDeletedAliases" v-loading="deletedLoading" class="deleted-alias-section">
+          <h4>{{ $t('mailRecovery.aliasesTitle') }}</h4>
+          <p class="card-desc">{{ $t('mailRecovery.aliasesDescription') }}</p>
+          <p v-if="deletedError" class="default-sender-error" role="alert">{{ deletedError }}</p>
+          <el-table :data="deletedAccounts" :empty-text="$t('mailRecovery.aliasesEmpty')">
+            <el-table-column prop="email" :label="$t('mailboxAddress')" min-width="200" />
+            <el-table-column :label="$t('action')" min-width="160" align="right">
+              <template #default="{ row }">
+                <span v-if="!row.domainActive" class="inactive-domain">{{ $t('mailRecovery.inactiveDomain') }}</span>
+                <el-button size="small" type="primary" link :disabled="!row.domainActive || !!restoringAliasId" :loading="restoringAliasId === row.accountId" @click="restoreDeletedAlias(row)">{{ $t('mailRecovery.restore') }}</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="deleted-alias-pagination">
+            <span>{{ $t('mailRecovery.aliasesPage', { page: deletedPage, total: deletedTotal }) }}</span>
+            <el-button size="small" :disabled="deletedPage <= 1 || deletedLoading" @click="changeDeletedPage(-1)">{{ $t('mailRecovery.previous') }}</el-button>
+            <el-button size="small" :disabled="deletedPage * 20 >= deletedTotal || deletedLoading" @click="changeDeletedPage(1)">{{ $t('mailRecovery.next') }}</el-button>
+          </div>
+        </section>
+      </div>
     </div>
   </div>
 </template>
@@ -121,13 +156,14 @@
 import { reactive, ref, computed, watch, onMounted } from 'vue'
 import { Icon } from "@iconify/vue"
 import { useUserStore } from "@/store/user.js"
-import { accountAdd, accountList, accountSetName, accountDelete, accountSetAsTop } from "@/request/account.js"
+import { accountAdd, accountList, accountSetName, accountDelete, accountSetAsTop, accountGetDefaultSend, accountSetDefaultSend } from "@/request/account.js"
 import { migratePrimaryEmail } from "@/request/setting.js"
 import { isEmail } from "@/utils/verify-utils.js"
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from "vue-i18n"
 import { setAuthenticatedSession } from '@/utils/session-state.js'
 import { invalidateUserScopedStateAcrossTabs } from '@/utils/sensitive-state.js'
+import { deletedAliases, restoreAlias } from '@/request/mail-recovery.js'
 
 const props = defineProps({
   runSensitive: {
@@ -151,6 +187,75 @@ const listLoading = ref(false)
 const accounts = ref([])
 const editingId = ref(null)
 const editName = ref('')
+const showDeletedAliases = ref(false)
+const deletedLoading = ref(false)
+const deletedAccounts = ref([])
+const deletedPage = ref(1)
+const deletedTotal = ref(0)
+const restoringAliasId = ref(null)
+const deletedError = ref('')
+const defaultSenderId = ref(null)
+const defaultSenderLoading = ref(false)
+const defaultSenderSaving = ref(false)
+const defaultSenderError = ref('')
+const activeSenderAccounts = computed(() => accounts.value.filter(row => domainList.value.includes('@' + row.email?.split('@').at(-1)?.toLowerCase())))
+
+async function fetchDefaultSender() {
+  defaultSenderLoading.value = true
+  defaultSenderError.value = ''
+  try {
+    const current = await accountGetDefaultSend()
+    defaultSenderId.value = current?.accountId || null
+    userStore.user.defaultSendAccount = current || null
+    if (!current) defaultSenderError.value = t('mailRecovery.noActiveSender')
+  } catch (error) {
+    defaultSenderError.value = error?.message || t('mailRecovery.defaultSenderLoadFailed')
+  } finally { defaultSenderLoading.value = false }
+}
+
+async function saveDefaultSender() {
+  if (defaultSenderSaving.value || !activeSenderAccounts.value.some(row => row.accountId === defaultSenderId.value)) return
+  defaultSenderSaving.value = true
+  defaultSenderError.value = ''
+  try {
+    await accountSetDefaultSend(defaultSenderId.value)
+    await fetchDefaultSender()
+    if (!defaultSenderError.value) ElMessage.success(t('mailRecovery.defaultSenderSaved'))
+  } catch (error) { defaultSenderError.value = error?.message || t('mailRecovery.defaultSenderSaveFailed') }
+  finally { defaultSenderSaving.value = false }
+}
+
+async function fetchDeletedAliases() {
+  deletedLoading.value = true
+  deletedError.value = ''
+  try {
+    const result = await deletedAliases(deletedPage.value, 20)
+    deletedAccounts.value = result.list || []
+    deletedTotal.value = result.total || 0
+    if (!deletedAccounts.value.length && deletedPage.value > 1) { deletedPage.value -= 1; await fetchDeletedAliases() }
+  } catch (error) { deletedError.value = error?.message || t('mailRecovery.operationFailed') }
+  finally { deletedLoading.value = false }
+}
+
+function toggleDeletedAliases() {
+  showDeletedAliases.value = !showDeletedAliases.value
+  if (showDeletedAliases.value) fetchDeletedAliases()
+}
+
+function changeDeletedPage(delta) { deletedPage.value += delta; fetchDeletedAliases() }
+
+async function restoreDeletedAlias(row) {
+  if (restoringAliasId.value || !row.domainActive) return
+  restoringAliasId.value = row.accountId
+  try {
+    await restoreAlias(row.accountId)
+    await fetchAccounts()
+    await fetchDeletedAliases()
+    await fetchDefaultSender()
+    ElMessage.success(t('mailRecovery.aliasRestored'))
+  } catch (error) { deletedError.value = error?.message || t('mailRecovery.operationFailed') }
+  finally { restoringAliasId.value = null }
+}
 
 function isPrimary(row) {
   return row.email?.toLowerCase() === userStore.user?.email?.toLowerCase()
@@ -178,16 +283,20 @@ function copyEmail(email) {
 async function fetchAccounts() {
   listLoading.value = true
   try {
-    const res = await accountList(0, 100)
-    if (res && Array.isArray(res.list)) {
-      accounts.value = res.list
-      userStore.user.accountList = res.list
-      userStore.user.accountCount = res.list.length
-    } else if (Array.isArray(res)) {
-      accounts.value = res
-      userStore.user.accountList = res
-      userStore.user.accountCount = res.length
+    const all = []
+    let last = null
+    while (true) {
+      const res = await accountList(last?.accountId || 0, 100, last?.sort)
+      const batch = Array.isArray(res) ? res : (res?.list || [])
+      if (!batch.length) break
+      const fresh = batch.filter(row => !all.some(item => item.accountId === row.accountId))
+      all.push(...fresh)
+      if (batch.length < 100 || !fresh.length) break
+      last = batch[batch.length - 1]
     }
+    accounts.value = all
+    userStore.user.accountList = all
+    userStore.user.accountCount = all.length
   } catch (e) {
     console.error(e)
   } finally {
@@ -197,6 +306,7 @@ async function fetchAccounts() {
 
 onMounted(() => {
   fetchAccounts()
+  fetchDefaultSender()
 })
 
 function startEdit(row) {
@@ -239,6 +349,8 @@ async function delAccount(row, index) {
     accounts.value.splice(index, 1)
     userStore.user.accountCount = accounts.value.length
     userStore.user.accountList = accounts.value
+    if (showDeletedAliases.value) await fetchDeletedAliases()
+    await fetchDefaultSender()
     ElMessage({ message: t('delSuccessMsg'), type: 'success', plain: true })
   } catch (e) {
     console.error(e)
@@ -515,4 +627,9 @@ async function promoteToPrimary(row) {
     }
   }
 }
+.deleted-alias-section { border-top: 1px solid var(--line); padding-top: 14px; h4 { margin: 0 0 8px; color: var(--text-strong); } }
+.deleted-alias-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 12px; span { margin-right: auto; color: var(--muted); font-size: 12px; } }
+.inactive-domain { margin-right: 8px; color: var(--muted); font-size: 12px; }
+.default-sender-form { padding: 14px 0; border-top: 1px solid var(--line); label { display: block; margin-bottom: 6px; font-weight: 600; color: var(--text-strong); } .el-select { width: min(100%, 360px); } }
+.default-sender-error { margin: 8px 0 0; color: var(--el-color-danger); font-size: 13px; }
 </style>

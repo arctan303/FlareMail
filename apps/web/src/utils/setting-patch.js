@@ -22,7 +22,9 @@ export function buildSettingPatch(section, form, baseline, extras = {}) {
     }
     if (section === 'auth' && extras.googleClientSecret?.trim()) result.googleClientSecret = extras.googleClientSecret.trim();
     if (section === 'mail' || section === 'channels') {
-        const tokens = Object.fromEntries(Object.entries(extras.resendTokens || {}).filter(([, value]) => value));
+        const tokens = Object.fromEntries(Object.entries(extras.resendTokens || {})
+            .filter(([, value]) => value === null || Boolean(value))
+            .map(([domain, value]) => [domain, value === null ? '' : value]));
         if (Object.keys(tokens).length) result.resendTokens = tokens;
     }
     return result;

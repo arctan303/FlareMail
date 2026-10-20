@@ -437,12 +437,31 @@ const userService = {
 
 		const { salt, hash } = await saltHashUtils.hashPassword(password);
 
-		const type = 1;
-		const userId = await userService.insert(c, { email, password: hash, salt, type, sendLimit: 50 });
-
-		await userService.updateUserInfo(c, userId, true);
-
-		await accountService.insert(c, { userId: userId, email, type, name: emailUtils.getName(email), allReceive: 1, isDefaultSend: 1 });
+		const activeIp = reqUtils.getIp(c);
+		const { os, browser, device } = reqUtils.getUserAgent(c);
+		// Keep the identity and its primary mailbox in one transaction. A domain
+		// may be disabled after the preflight; either guard can then reject the
+		// batch without leaving an identity that has no primary mailbox.
+		try {
+			await c.env.db.batch([
+				c.env.db.prepare(`
+					INSERT INTO user (email, password, salt, type, send_limit,
+						create_ip, active_ip, active_time, os, browser, device)
+					VALUES (?, ?, ?, 1, 50, ?, ?, ?, ?, ?, ?)
+				`).bind(email, hash, salt, activeIp, activeIp,
+					dayjs().format('YYYY-MM-DD HH:mm:ss'), os, browser, device),
+				c.env.db.prepare(`
+					INSERT INTO account (user_id, email, name, all_receive, is_default_send)
+					SELECT user_id, ?, ?, 1, 1 FROM user
+					WHERE email = ? COLLATE NOCASE AND password = ? AND salt = ?
+				`).bind(email, emailUtils.getName(email), email, hash, salt),
+			]);
+		} catch (error) {
+			if (/Managed domain is inactive\./i.test(String(error?.message || ''))) {
+				throw new BizError(t('domainInactive'), 403);
+			}
+			throw error;
+		}
 	},
 
 	async createInitialAdmin(c, params) {
@@ -598,11 +617,35 @@ const userService = {
 	},
 
 	async genCliToken(c, userId) {
+		// Web callers must retain the credential snapshot authenticated by the
+		// middleware. Re-reading after an asynchronous token hash must not grant
+		// an old request the authority of a migrated identity.
+		const authenticated = c.get?.('user');
+		const session = c.get?.('session');
+		const snapshot = authenticated || await this.selectByIdIncludeDel(c, userId);
+		if (!snapshot || snapshot.userId !== Number(userId) || snapshot.isDel !== isDel.NORMAL
+			|| snapshot.status !== userConst.status.NORMAL
+			|| ((authenticated || session) && (!session || !sessionService.matchesEpoch(session, snapshot)))) {
+			throw new BizError(t('authExpired'), 401);
+		}
+		const columns = await sessionEpochColumns(c);
 		const bytes = new Uint8Array(32);
 		crypto.getRandomValues(bytes);
 		const token = 'cl_' + cryptoUtils.toBase64Url(bytes);
 		const tokenHash = await cryptoUtils.hashSecret(token);
-		await orm(c).update(user).set({ cliToken: `sha256$${tokenHash}` }).where(eq(user.userId, userId)).run();
+		const epochCondition = columns.epoch ? ' AND session_epoch = ?' : '';
+		const preservedCondition = columns.preserved ? ' AND preserved_session_hash = ?' : '';
+		const revocationCondition = session && columns.revocations ? ` AND NOT EXISTS (
+			SELECT 1 FROM session_revocation WHERE session_hash = ? AND expires_at > ?
+		)` : '';
+		const updated = await c.env.db.prepare(`UPDATE user SET cli_token = ?
+			WHERE user_id = ? AND password = ? AND email = ? COLLATE NOCASE AND is_del = 0 AND status = 0
+			${epochCondition}${preservedCondition}${revocationCondition}`)
+			.bind(`sha256$${tokenHash}`, userId, snapshot.password, snapshot.email,
+				...(columns.epoch ? [sessionEpoch(snapshot.sessionEpoch)] : []),
+				...(columns.preserved ? [snapshot.preservedSessionHash || ''] : []),
+				...(session && columns.revocations ? [session.hash, Date.now()] : [])).run();
+		if (Number(updated.meta?.changes || 0) !== 1) throw new BizError(t('authExpired'), 401);
 		return token;
 	},
 

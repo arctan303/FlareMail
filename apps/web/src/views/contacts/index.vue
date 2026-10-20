@@ -265,6 +265,11 @@
             </div>
           </div>
         </div>
+        <div v-if="timelineError || timelineHasMore" class="timeline-pagination">
+          <p v-if="timelineError" role="alert">{{timelineError}}</p>
+          <p v-else>{{ $t('capabilities.historyPartial') }}</p>
+          <el-button :loading="timelineLoading" :disabled="timelineLoading" @click="loadEarlierTimeline">{{ $t('capabilities.loadMoreHistory') }}</el-button>
+        </div>
       </el-scrollbar>
 
       <!-- 空详情态引导 -->
@@ -357,7 +362,8 @@ import { useContactStore, UNGROUPED_GROUP } from '@/store/contact.js';
 import { useEmailStore } from '@/store/email.js';
 import { useAccountStore } from '@/store/account.js';
 import { useUiStore } from '@/store/ui.js';
-import { emailList } from '@/request/email.js';
+import { contactTimeline } from '@/request/contact-timeline.js';
+import { createContactTimelinePager } from '@/utils/contact-timeline.js';
 import { isEmail } from '@/utils/verify-utils.js';
 import MailDetailPane from '@/components/mail-detail/index.vue';
 
@@ -461,71 +467,27 @@ const filteredTimelineEmails = computed(() => {
   return timelineEmails.value;
 });
 
-// 加载联系人双向往来邮件 (智能识别子邮箱 + 全账户穿透)
-async function loadContactTimeline(contactEmail) {
-  if (!contactEmail) {
-    timelineEmails.value = [];
-    return;
-  }
-  timelineLoading.value = true;
+// Stable insertion-ID pagination; stale responses never cross contacts.
+const timelineHasMore = ref(false);
+const timelineError = ref('');
+const timelinePager = createContactTimelinePager(contactTimeline, state => {
+  timelineEmails.value = state.items;
+  timelineLoading.value = state.loading;
+  timelineHasMore.value = state.hasMore;
+  timelineError.value = state.error?.message || (state.error ? t('capabilities.historyFailed') : '');
+});
+function loadContactTimeline(contactEmail) {
   selectedTimelineEmail.value = null;
-  try {
-    const accountId = accountStore.currentAccountId || 0;
-    // 强制开启全账户穿透检索 (allReceive = 1)，汇集用户名下所有邮箱/子邮箱与该联系人的全部往来
-    const allReceive = 1;
-
-    // 提取子邮箱主前缀（例如 alex+work@domain.com -> alex@domain.com）
-    const cleanEmail = contactEmail.trim().toLowerCase();
-    const emailMatch = cleanEmail.match(/^([^@+]+)(?:\+[^@]*)?@([^@]+)$/);
-    const baseEmail = emailMatch ? `${emailMatch[1]}@${emailMatch[2]}` : cleanEmail;
-
-    // 并行拉取收信和发信列表（加大单次容量至 100 封，并按主邮箱精准搜索）
-    const [receiveRes, sendRes, baseReceiveRes, baseSendRes] = await Promise.all([
-      emailList(accountId, allReceive, null, 0, 100, 0, cleanEmail).catch(() => ({ list: [] })),
-      emailList(accountId, allReceive, null, 0, 100, 1, cleanEmail).catch(() => ({ list: [] })),
-      // 如果联系人邮箱带有 +tag，额外检索基础主邮箱确保 100% 覆盖
-      baseEmail !== cleanEmail
-        ? emailList(accountId, allReceive, null, 0, 100, 0, baseEmail).catch(() => ({ list: [] }))
-        : Promise.resolve({ list: [] }),
-      baseEmail !== cleanEmail
-        ? emailList(accountId, allReceive, null, 0, 100, 1, baseEmail).catch(() => ({ list: [] }))
-        : Promise.resolve({ list: [] })
-    ]);
-
-    const receives = [
-      ...(receiveRes?.list || []),
-      ...(baseReceiveRes?.list || [])
-    ].map(m => ({ ...m, direction: 'in' }));
-
-    const sends = [
-      ...(sendRes?.list || []),
-      ...(baseSendRes?.list || [])
-    ].map(m => ({ ...m, direction: 'out' }));
-
-    // 去重合并 (通过 emailId)
-    const emailMap = new Map();
-    [...receives, ...sends].forEach(m => {
-      if (m && m.emailId && !emailMap.has(m.emailId)) {
-        emailMap.set(m.emailId, m);
-      }
-    });
-
-    const combined = Array.from(emailMap.values());
-    combined.sort((a, b) => (b.createTime || 0) - (a.createTime || 0));
-    timelineEmails.value = combined;
-  } catch (e) {
-    console.error('加载联系人往来邮件失败', e);
-  } finally {
-    timelineLoading.value = false;
-  }
+  return timelinePager.reset(contactEmail);
 }
+function loadEarlierTimeline() { return timelinePager.more(); }
 
 // 监听选中联系人变化
 watch(() => activeContact.value?.email, (newEmail) => {
   if (newEmail) {
     loadContactTimeline(newEmail);
   } else {
-    timelineEmails.value = [];
+    timelinePager.reset('');
     selectedTimelineEmail.value = null;
   }
 }, { immediate: true });
@@ -539,7 +501,7 @@ function openTimelineEmail(emailItem) {
 }
 
 function handleTimelineEmailDelete(deletedEmailId) {
-  timelineEmails.value = timelineEmails.value.filter(e => e.emailId !== deletedEmailId);
+  timelinePager.remove(deletedEmailId);
   selectedTimelineEmail.value = null;
 }
 
@@ -669,6 +631,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  timelinePager.dispose();
   window.removeEventListener('resize', handleResize);
 });
 </script>

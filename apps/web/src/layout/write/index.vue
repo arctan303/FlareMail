@@ -49,6 +49,7 @@
               </template>
               <template #suffix>
                 <div class="recipient-suffix-actions">
+                  <button type="button" class="field-tool-btn" :aria-expanded="showCcBcc" @click.stop="showCcBcc = !showCcBcc">{{ $t('mailRecipients.showCcBcc') }}</button>
                   <el-tooltip :content="$t('chooseContact')" placement="top" :show-after="100">
                     <button type="button" class="field-tool-btn" @click.stop="openContacts">
                       <Icon icon="solar:users-group-rounded-linear" width="16" height="16" />
@@ -60,6 +61,17 @@
             </el-input-tag>
           </div>
         </div>
+
+        <template v-if="showCcBcc">
+          <div v-for="field in ['cc', 'bcc']" :key="field" class="compose-field-row">
+            <label class="field-label" :for="'compose-' + field">{{ $t(field) }}：</label>
+            <div class="field-input-wrapper">
+              <el-input-tag :id="'compose-' + field" v-model="form[field]" class="compose-tag-input"
+                :aria-label="$t(field)" :placeholder="$t('recipientPlaceholder')" @add-tag="value => addSecondaryTag(field, value)" />
+            </div>
+          </div>
+          <p class="bcc-privacy-hint">{{ $t('mailRecipients.bccPrivacy') }}</p>
+        </template>
 
         <!-- 主题输入行 -->
         <div class="compose-field-row">
@@ -85,7 +97,7 @@
             <el-button
               type="primary"
               class="arc-btn send-btn-primary"
-              :disabled="isDraftAccountInvalid"
+              :disabled="isDraftAccountInvalid || senderDomainDisabled"
               @click="sendEmail"
             >
               <Icon icon="solar:plain-2-linear" width="16" height="16" style="margin-right: 5px" />
@@ -121,6 +133,7 @@
             <div v-if="isDraftAccountInvalid" class="account-invalid-tip">
               {{ $t('senderMailboxInvalid') }}
             </div>
+            <div v-else-if="senderDomainDisabled" class="account-invalid-tip" role="status">{{ $t('domainManagement.senderDisabled') }}</div>
           </div>
         </div>
       </div>
@@ -148,7 +161,10 @@ import ComposeHeader from './components/ComposeHeader.vue'
 import ComposeAttachments from './components/ComposeAttachments.vue'
 import ComposeContactsModal from './components/ComposeContactsModal.vue'
 import {useUserStore} from "@/store/user.js";
-import {emailSend} from "@/request/email.js";
+import {useSettingStore} from '@/store/setting.js'
+import {isMailboxDomainEnabled} from '@/utils/domain-management.js'
+import {emailSend, mailIdentities} from "@/request/email.js";
+import {accountGetDefaultSend} from '@/request/account.js';
 import {isEmail} from "@/utils/verify-utils.js";
 import {useAccountStore} from "@/store/account.js";
 import {useEmailStore} from "@/store/email.js";
@@ -175,6 +191,8 @@ import {
   findComposeAccount,
   normalizeReplySubject,
   replyContext,
+  loadReplyAllContext,
+  composeRecipientSnapshot,
 } from "@/utils/compose-state.js";
 import {
   clearPendingSendDraft,
@@ -186,6 +204,7 @@ import {
 defineExpose({
   open,
   openReply,
+  openReplyAll,
   openForward,
   openDraft,
   clearContent
@@ -203,6 +222,7 @@ const accountStore = useAccountStore()
 const editor = ref({})
 const defValue = ref('')
 const userStore = useUserStore();
+const settingStore = useSettingStore()
 const show = ref(false);
 const percent = ref(0)
 let percentMessage = null
@@ -213,8 +233,9 @@ const undoCountdown = ref(5)
 const isDraftAccountInvalid = ref(false);
 const composeLoad = createComposeLoadGate();
 
-const accountOptions = computed(() => {
-  const list = (accountStore.accountList?.length ? accountStore.accountList : userStore.user.accountList) || [];
+const senderAccounts = computed(() => {
+  const list = [...(userStore.user.accountList || []), ...(accountStore.accountList || [])]
+    .filter((account, index, all) => all.findIndex(item => String(item.accountId) === String(account.accountId)) === index);
   if (userStore.user?.email) {
     const mainEmail = userStore.user.email;
     const hasMain = list.some(item => item.email?.toLowerCase() === mainEmail.toLowerCase());
@@ -232,6 +253,11 @@ const accountOptions = computed(() => {
     name: userStore.user?.name || ''
   }];
 });
+const accountOptions = computed(() => senderAccounts.value.map(account => ({
+  ...account,
+  disabled: !isMailboxDomainEnabled(account.email, userStore.user?.domainList, settingStore.settings?.domainList),
+})))
+const senderDomainDisabled = computed(() => !isMailboxDomainEnabled(form.sendEmail, userStore.user?.domainList, settingStore.settings?.domainList))
 
 function onSendAccountChange(val) {
   const selected = accountOptions.value.find(item => item.accountId === val);
@@ -244,10 +270,13 @@ function onSendAccountChange(val) {
 }
 const contactsTabRef = ref({})
 const showContacts = ref(false)
+const showCcBcc = ref(false)
 const mySelect = ref()
 let selectStatus = false
 const backReply = reactive({
   receiveEmail: [],
+  cc: [],
+  bcc: [],
   subject: '',
   content: '',
   sendType: ''
@@ -255,6 +284,8 @@ const backReply = reactive({
 const form = reactive({
   sendEmail: '',
   receiveEmail: [],
+  cc: [],
+  bcc: [],
   accountId: -1,
   name: '',
   subject: '',
@@ -266,6 +297,7 @@ const form = reactive({
   draftId: null,
   createTime: null,
   requestId: '',
+  requestHash: '',
 })
 
 const selectRecipientList = ref([])
@@ -351,6 +383,16 @@ function addTagChange(val) {
   if (selectStatus && has) openSelect()
 }
 
+function addSecondaryTag(field, value) {
+  form[field].splice(form[field].length - 1, 1)
+  const addresses = String(value || '').split(/[,，;；]/).map(item => item.trim()).filter(Boolean)
+  for (const address of addresses) {
+    // Preserve invalid input so send validation can explain it instead of
+    // silently dropping an intended recipient.
+    if (!form[field].some(existing => existing.toLowerCase() === address.toLowerCase())) form[field].push(address)
+  }
+}
+
 function clearContent() {
   ElMessageBox.confirm(t('clearContentConfirm'), {
     confirmButtonText: t('confirm'),
@@ -383,12 +425,25 @@ function chooseFile() {
 }
 
 async function sendEmail() {
+  if (senderDomainDisabled.value) {
+    ElMessage({ message: t('domainManagement.senderDisabled'), type: 'warning', plain: true })
+    return
+  }
   if (form.receiveEmail.length === 0) {
     ElMessage({
       message: t('emptyRecipientMsg'),
       type: 'error',
       plain: true,
     })
+    return
+  }
+  const recipients = [...form.receiveEmail, ...form.cc, ...form.bcc]
+  if (recipients.some(address => typeof address !== 'string' || address.length > 254 || !isEmail(address))) {
+    ElMessage.error(t('mailRecipients.invalidRecipient'))
+    return
+  }
+  if (new Set(recipients.map(address => address.trim().toLowerCase())).size > 20) {
+    ElMessage.error(t('mailRecipients.recipientLimit'))
     return
   }
 
@@ -421,15 +476,23 @@ async function sendEmail() {
     return
   }
 
-  if (!form.requestId) {
+  const requestBytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({
+    ...composeRecipientSnapshot(form), accountId: form.accountId, subject: form.subject,
+    text: form.text, content: form.content, attachments: form.attachments, sendType: form.sendType, emailId: form.emailId,
+  })))
+  const requestHash = Array.from(new Uint8Array(requestBytes)).map(value => value.toString(16).padStart(2, '0')).join('')
+  if (!form.requestId || form.requestHash !== requestHash) {
     form.requestId = crypto.randomUUID()
   }
+  form.requestHash = requestHash
 
   // Persist a recoverable snapshot before starting the undo countdown. A page
   // exit may cancel ordinary HTTP requests, but it must not destroy the draft.
   let formCopy = {
     sendEmail: form.sendEmail,
     receiveEmail: [...form.receiveEmail],
+    cc: [...form.cc],
+    bcc: [...form.bcc],
     accountId: form.accountId,
     name: form.name,
     subject: form.subject,
@@ -440,6 +503,7 @@ async function sendEmail() {
     attachments: form.attachments ? form.attachments.map(att => ({ ...att })) : [],
     draftId: form.draftId,
     requestId: form.requestId,
+    requestHash: form.requestHash,
     userId: userStore.user.userId,
   }
 
@@ -542,7 +606,8 @@ function undoSend() {
   // Restore form
   Object.assign(form, data)
   form.attachments = data.attachments ? [...data.attachments.map(a => ({ ...a }))] : []
-  form.receiveEmail = [...(data.receiveEmail || [])]
+  Object.assign(form, composeRecipientSnapshot(data))
+  showCcBcc.value = form.cc.length > 0 || form.bcc.length > 0
 
   show.value = true
   isMinimized.value = false
@@ -615,7 +680,8 @@ function executeSend(sendForm, {database, userId}) {
     // Restore form on failure
     Object.assign(form, sendForm);
     form.attachments = sendForm.attachments ? [...sendForm.attachments.map(a => ({ ...a }))] : [];
-    form.receiveEmail = [...(sendForm.receiveEmail || [])];
+    Object.assign(form, composeRecipientSnapshot(sendForm));
+    showCcBcc.value = form.cc.length > 0 || form.bcc.length > 0;
     const loadToken = composeLoad.begin();
     const restoredContent = sendForm.content || '';
     replaceEditorContent(restoredContent, loadToken);
@@ -642,6 +708,9 @@ function resetForm() {
   composeLoad.begin()
   form.userId = userStore.user.userId
   form.receiveEmail = []
+  form.cc = []
+  form.bcc = []
+  showCcBcc.value = false
   form.subject = ''
   form.content = ''
   form.manyType = null
@@ -651,9 +720,12 @@ function resetForm() {
   form.draftId = null
   form.createTime = null
   form.requestId = ''
+  form.requestHash = ''
   backReply.content = ''
   backReply.subject = ''
   backReply.receiveEmail = []
+  backReply.cc = []
+  backReply.bcc = []
   backReply.sendType = ''
   defValue.value = ''
   editor.value?.clearEditor?.()
@@ -694,13 +766,25 @@ function normalizeForwardSubject(subject) {
   return `Fwd: ${cleaned}`;
 }
 
-async function openReply(email) {
+async function openReply(email, all = false) {
   if (!canOpenComposer()) return;
   resetForm();
   const loadToken = composeLoad.begin();
   form.sendType = 'reply';
   form.emailId = email.emailId;
-  const reply = replyContext(email, accountOptions.value);
+  let reply;
+  try {
+    reply = all ? await loadReplyAllContext(email, accountOptions.value, {
+      owner: userStore.user.userId,
+      currentOwner: () => userStore.user.userId,
+      isCurrent: () => composeLoad.isCurrent(loadToken),
+      loadIdentities: mailIdentities,
+    }) : replyContext(email, accountOptions.value);
+  } catch (error) {
+    if (composeLoad.isCurrent(loadToken)) ElMessage.error(error?.message || t('requestFailedMsg'));
+    return;
+  }
+  if (!reply || !composeLoad.isCurrent(loadToken)) return;
   const matchedTarget = reply.account;
   if (matchedTarget) {
     form.accountId = matchedTarget.accountId;
@@ -709,6 +793,9 @@ async function openReply(email) {
   }
 
   form.receiveEmail = reply.recipients;
+  form.cc = reply.cc || [];
+  form.bcc = [];
+  showCcBcc.value = form.cc.length > 0;
 
   const rawSubject = (email.subject || '').replace(/{{code}}/g, email.code || '');
   form.subject = normalizeReplySubject(rawSubject);
@@ -718,7 +805,13 @@ async function openReply(email) {
   backReply.content = form.content;
   backReply.subject = form.subject;
   backReply.receiveEmail = [...form.receiveEmail];
+  backReply.cc = [...form.cc];
+  backReply.bcc = [...form.bcc];
   backReply.sendType = form.sendType;
+}
+
+function openReplyAll(email) {
+  return openReply(email, true)
 }
 
 async function openForward(email) {
@@ -765,9 +858,9 @@ function quotedEmailHtml(email) {
   }).html)
 }
 
-function open(targetAccountOrOptions, loadToken = null) {
+async function open(targetAccountOrOptions, loadToken = null) {
   if (!canOpenComposer()) return false;
-  if (loadToken == null) composeLoad.begin();
+  if (loadToken == null) loadToken = composeLoad.begin();
   isDraftAccountInvalid.value = false;
   isMinimized.value = false;
   let target = targetAccountOrOptions;
@@ -775,11 +868,27 @@ function open(targetAccountOrOptions, loadToken = null) {
     form.receiveEmail = [...target.receiveEmail];
     target = target.targetAccount;
   }
+  if ((!target || !target.email) && !form.draftId && !['reply', 'forward'].includes(form.sendType)) {
+    const owner = userStore.user.userId;
+    let preferred = userStore.user.defaultSendAccount;
+    if (preferred === undefined) {
+      try { preferred = await accountGetDefaultSend(); }
+      catch { preferred = null; }
+      if (owner !== userStore.user.userId || !composeLoad.isCurrent(loadToken) || !canOpenComposer()) return false;
+      if (preferred && Number(preferred.userId) !== Number(owner)) preferred = null;
+      userStore.user.defaultSendAccount = preferred;
+    }
+    if (preferred && Number(preferred.userId) !== Number(owner)) preferred = null;
+    const preferredOption = accountOptions.value.find(account =>
+      String(account.accountId) === String(preferred?.accountId) && !account.disabled);
+    if (preferredOption) target = preferredOption;
+  }
   if (!target || !target.email) {
+    const available = accountOptions.value.filter(account => !account.disabled);
     if (accountStore.currentAccount?.email) {
-      target = accountOptions.value.find(acc => acc.email?.toLowerCase() === accountStore.currentAccount.email.toLowerCase()) || accountOptions.value[0];
+      target = available.find(acc => acc.email?.toLowerCase() === accountStore.currentAccount.email.toLowerCase()) || available[0] || accountOptions.value[0];
     } else {
-      target = accountOptions.value[0];
+      target = available[0] || accountOptions.value[0];
     }
   }
   if (target) {
@@ -806,7 +915,8 @@ async function openDraft(draft) {
   resetForm();
   const loadToken = composeLoad.begin();
   Object.assign(form, { ...draft });
-  form.receiveEmail = [...(draft.receiveEmail || [])];
+  Object.assign(form, composeRecipientSnapshot(draft));
+  showCcBcc.value = form.cc.length > 0 || form.bcc.length > 0;
   form.attachments = (draft.attachments || []).map(attachment => ({ ...attachment }));
 
   const matched = findComposeAccount(accountOptions.value, {
@@ -902,7 +1012,7 @@ async function close() {
     return;
   }
 
-  if (!form.subject && !form.content && form.receiveEmail.length === 0 && !form.attachments?.length) {
+  if (!form.subject && !form.content && form.receiveEmail.length === 0 && form.cc.length === 0 && form.bcc.length === 0 && !form.attachments?.length) {
     show.value = false
     isMinimized.value = false
     resetForm()
@@ -912,7 +1022,8 @@ async function close() {
   if (form.sendType === 'reply' || form.sendType === 'forward') {
     if (form.content === backReply.content &&
         form.subject === backReply.subject &&
-        form.receiveEmail.toString() === backReply.receiveEmail.toString() && !form.attachments?.length
+        form.receiveEmail.toString() === backReply.receiveEmail.toString() &&
+        form.cc.toString() === backReply.cc.toString() && form.bcc.toString() === backReply.bcc.toString() && !form.attachments?.length
     ) {
       show.value = false
       isMinimized.value = false
@@ -949,6 +1060,8 @@ async function saveDraft() {
       ...toRaw(form),
       sendAccountId: form.accountId,
       receiveEmail: [...form.receiveEmail],
+      cc: [...form.cc],
+      bcc: [...form.bcc],
       attachments: form.attachments?.map(att => ({ ...att })) || [],
     }, { userId: owner });
     if (database !== db.value) return;
@@ -1025,5 +1138,12 @@ async function saveDraft() {
   &:active {
     background: color-mix(in srgb, var(--accent) 36%, transparent);
   }
+}
+
+.bcc-privacy-hint {
+  margin: 0;
+  padding: 4px 20px;
+  color: var(--muted);
+  font-size: 12px;
 }
 </style>

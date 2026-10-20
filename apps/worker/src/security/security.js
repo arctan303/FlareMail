@@ -11,6 +11,7 @@ import { t } from '../i18n/i18n'
 import app from '../hono/hono';
 
 const exclude = [
+	'/delivery/resend',
 	'/login',
 	'/oauth/authorize',
 	'/oauth/token',
@@ -103,7 +104,8 @@ app.use('*', async (c, next) => {
 		throw new BizError(t('authExpired'), 401);
 	}
 	const credentialFingerprint = await cryptoUtils.hashSecret(userRow.password);
-	if (!session.credentialFingerprint || session.credentialFingerprint !== credentialFingerprint) {
+	if (!sessionService.matchesEpoch(session, userRow)
+		|| !session.credentialFingerprint || session.credentialFingerprint !== credentialFingerprint) {
 		await sessionService.revokeCurrent(c);
 		throw new BizError(t('authExpired'), 401);
 	}

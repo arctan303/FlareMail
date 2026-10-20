@@ -22,6 +22,9 @@ import mailProviderService, { hasCloudflareEmail } from './mail-provider-service
 import { cloudflareRejection } from '../utils/cloudflare-mail';
 import verifyUtils from '../utils/verify-utils';
 import { conversationLimits, findConversation, groupConversations } from '../utils/mail-conversation';
+import managedDomainService from './managed-domain-service';
+import { sendPayloadHash } from '../utils/mail-recipients';
+import mailDeliveryService from './mail-delivery-service';
 
 const emailService = {
 	...emailSendService,
@@ -276,6 +279,8 @@ const emailService = {
 
 	async receive(c, params, cidAttList, r2domain) {
 		const { replyTo, ...emailParams } = params;
+		// Bcc is envelope-only recipient information, never part of a received copy.
+		emailParams.bcc = '[]';
 		emailParams.content = sanitizeEmailHtml(this.imgReplace(emailParams.content, cidAttList, r2domain));
 		const normalizedReplyTo = this.normalizeReplyTo(replyTo);
 		let row;
@@ -297,10 +302,10 @@ const emailService = {
 	},
 
 	// 邮件发送
-	async send(c, rawParams, userId) {
+	async send(c, rawParams, userId, internalOptions = {}) {
 		const params = normalizeSendParams(rawParams);
-		let { accountId, name, sendType, emailId, receiveEmail, text, content, subject, attachments, requestId } = params;
-		const { resendTokens, r2Domain, send, domainList } = await settingService.query(c);
+		let { accountId, name, sendType, emailId, receiveEmail, cc, bcc, allRecipients, text, content, subject, attachments, requestId } = params;
+		const { resendTokens, r2Domain, send } = await settingService.query(c);
 		if (send === settingConst.send.CLOSE) throw new BizError(t('disabledSend'), 403);
 
 		const userRow = await userService.selectById(c, userId);
@@ -318,10 +323,25 @@ const emailService = {
 			if (!replyEmail) throw new BizError(t('notExistEmailReply'), 404);
 		}
 
-		const managedDomains = new Set((domainList || []).map(value => String(value).replace(/^@/, '').toLowerCase()));
-		const internalRecipients = receiveEmail.filter(address => managedDomains.has(emailUtils.getDomain(address).toLowerCase()));
-		const externalRecipients = receiveEmail.filter(address => !managedDomains.has(emailUtils.getDomain(address).toLowerCase()));
+		// Read domain authority independently of the per-request/settings cache.
+		// Disabled domains remain internal destinations and must never be routed
+		// through the external provider as though they were unrelated domains.
+		const domainState = await managedDomainService.get(c);
+		const managedDomains = new Set(domainState.domains);
+		const activeDomains = new Set((domainState.entries || domainState.domains.map(domain => ({ domain, enabled: true })))
+			.filter(entry => entry.enabled).map(entry => entry.domain));
 		const domain = emailUtils.getDomain(accountRow.email).toLowerCase();
+		if (!activeDomains.has(domain)) throw new BizError(t('domainSenderInactive'), 403);
+		if (allRecipients.some(address => {
+			const recipientDomain = emailUtils.getDomain(address).toLowerCase();
+			return managedDomains.has(recipientDomain) && !activeDomains.has(recipientDomain);
+		})) throw new BizError(t('domainRecipientInactive'), 403);
+		const isExternal = address => !managedDomains.has(emailUtils.getDomain(address).toLowerCase());
+		const externalRecipients = allRecipients.filter(isExternal);
+		// One provider envelope preserves the public To/Cc participants and Bcc
+		// privacy for a mixed message. Pure internal mail remains independent.
+		const providerRoutesAll = externalRecipients.length > 0;
+		const internalRecipients = providerRoutesAll ? [] : allRecipients;
 		const resendToken = resendTokens?.[domain];
 		const useCloudflareEmail = externalRecipients.length > 0 && (await mailProviderService.read(c)).mailProvider === 'cloudflare';
 		if (useCloudflareEmail && !hasCloudflareEmail(c)) throw new BizError(t('cloudflareEmailNotBound'), 503);
@@ -351,6 +371,8 @@ const emailService = {
 			unread: emailConst.unread.READ,
 			userId,
 			recipient: JSON.stringify(recipient),
+			cc: JSON.stringify(cc.map(address => ({ address, name: '' }))),
+			bcc: JSON.stringify(bcc.map(address => ({ address, name: '' }))),
 		};
 		if (sendType === 'reply') {
 			emailData.inReplyTo = replyEmail.messageId;
@@ -359,7 +381,9 @@ const emailService = {
 		const deliveryParams = {
 			name,
 			accountEmail: accountRow.email,
-			receiveEmail: externalRecipients,
+			receiveEmail,
+			cc,
+			bcc,
 			subject,
 			text,
 			html,
@@ -368,8 +392,13 @@ const emailService = {
 			messageId: replyEmail.messageId,
 			references: replyEmail.relation,
 		};
+		if (internalOptions.forwardSource) {
+			deliveryParams.replyTo = [internalOptions.forwardSource.sendEmail];
+			deliveryParams.headers = { 'X-FlareMail-Forwarded': '1', 'Auto-Submitted': 'auto-generated' };
+		}
 		const preparedCloudflareEmail = useCloudflareEmail ? await emailSendService.prepareCloudflareEmail(deliveryParams) : null;
-		const previousSend = await emailSendService.claimSendRequest(c, userId, requestId);
+		const previousSend = await emailSendService.claimSendRequest(c, userId, requestId, await sendPayloadHash(params,
+			internalOptions.forwardSource ? { forwardSource: internalOptions.forwardSource.emailId, replyTo: deliveryParams.replyTo, headers: deliveryParams.headers } : {}), cc.length > 0 || bcc.length > 0 || Boolean(internalOptions.forwardSource));
 		if (previousSend) return [previousSend];
 
 		let quotaReserved = false;
@@ -387,7 +416,7 @@ const emailService = {
 		};
 		try {
 			if (!admin) {
-				await userService.reserveSendQuota(c, receiveEmail.length, userId, requestId);
+				await userService.reserveSendQuota(c, allRecipients.length, userId, requestId);
 				quotaReserved = true;
 			}
 
@@ -405,6 +434,8 @@ const emailService = {
 			if (externalRecipients.length > 0) {
 
 				let sendResult;
+				await emailSendService.storeDeliveryMetadata(c, emailResult.emailId, useCloudflareEmail ? 'cloudflare' : 'resend',
+					[...deliveryParams.receiveEmail, ...deliveryParams.cc, ...deliveryParams.bcc]);
 				try {
 					sendResult = useCloudflareEmail
 						? await emailSendService.sendByCloudflareEmail(c, deliveryParams, preparedCloudflareEmail)
@@ -420,7 +451,7 @@ const emailService = {
 				if (!providerOutcomeUnknown) {
 					if (sendResult?.error) throw new BizError(sendResult.error.message || 'Mail provider rejected the message.', 502);
 					providerAccepted = true;
-					providerId = sendResult?.data?.id || null;
+					providerId = useCloudflareEmail ? null : sendResult?.data?.id || null;
 					const providerMessageId = String(sendResult?.data?.messageId || '').trim();
 					if (providerMessageId) emailResult.messageId = providerMessageId;
 					addDeliveryWarning(sendResult?.data?.messageIdWarning);
@@ -428,6 +459,7 @@ const emailService = {
 				}
 			}
 			if (!emailResult.messageId && externalRecipients.length === 0) {
+				await emailSendService.storeDeliveryMetadata(c, emailResult.emailId, 'local', []);
 				const localMessageId = `<${crypto.randomUUID()}@${domain}>`;
 				emailResult.messageId = localMessageId;
 			}
@@ -435,7 +467,7 @@ const emailService = {
 			let message = '';
 			if (internalRecipients.length > 0) {
 				const allAttachments = await attService.selectAllByEmailIds(c, [emailResult.emailId]);
-				const localResult = await emailSendService.HandleOnSiteEmail(c, internalRecipients, emailResult, allAttachments);
+				const localResult = await emailSendService.HandleOnSiteEmail(c, internalRecipients, emailResult, allAttachments, { attachments });
 				localCommitted = localResult.handledCount > 0;
 				if (localResult.failedCount > 0) {
 					addDeliveryWarning(`${localResult.failedCount} internal recipient(s) could not be stored.`);
@@ -464,7 +496,9 @@ const emailService = {
 			emailResult.attList = await attService.selectByEmailIds(c, [emailResult.emailId]);
 			if (deliveryWarning) emailResult.deliveryWarning = deliveryWarning;
 			await emailSendService.completeSendRequest(c, userId, requestId, emailResult.emailId, finalStatus, deliveryWarning);
-			await emailSendService.incrementDaySendStat(c, receiveEmail.length);
+			try { await mailDeliveryService.reconcile(c, emailResult.emailId); }
+			catch (error) { console.warn('Accepted mail delivery reconciliation deferred', error?.name || 'unknown error'); }
+			await emailSendService.incrementDaySendStat(c, allRecipients.length);
 			return [emailResult];
 		} catch (error) {
 			const committed = providerAccepted || providerOutcomeUnknown || localCommitted;
@@ -506,7 +540,10 @@ const emailService = {
 				await emailSendService.deleteSendRequestAndReleaseQuota(c, userId, requestId);
 				requestClaimed = false;
 			} else if (quotaReserved) {
-				await userService.releaseSendQuota(c, receiveEmail.length, userId);
+				await userService.releaseSendQuota(c, allRecipients.length, userId);
+			}
+			if (/Managed domain is inactive\./i.test(String(error?.cause?.cause?.message || error?.cause?.message || error?.message || ''))) {
+				throw new BizError(t('domainInactive'), 403);
 			}
 			throw error;
 		}
@@ -707,7 +744,11 @@ const emailService = {
 
 	async emailAddReplyTo(c, list) {
 		if (!Array.isArray(list) || list.length === 0) return;
-		for (const row of list) row.replyTo = [];
+		const readerId = c.get?.('user')?.userId;
+		for (const row of list) {
+			row.replyTo = [];
+			if (row.type !== emailConst.type.SEND || row.userId !== readerId) row.bcc = '[]';
+		}
 		if (!await this.hasReplyToColumn(c)) return;
 		const ids = [...new Set(list.map(row => Number(row.emailId)).filter(Number.isSafeInteger))];
 		if (ids.length === 0) return;

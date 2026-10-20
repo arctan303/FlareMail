@@ -20,6 +20,14 @@ test('only credential changes require a settings confirmation', () => {
   const token = buildSettingPatch('mail', {}, {}, { resendTokens: { 'example.com': 'token' } });
   assert.equal(needsSettingConfirmation(token), true);
 });
+
+test('clearing a saved Resend key uses the existing empty-string API and still requires confirmation', () => {
+  const patch = buildSettingPatch('channels', {}, {}, { resendTokens: {
+    'clear.test': null, 'keep.test': '', 'replace.test': 're_local_fixture',
+  } });
+  assert.deepEqual(patch, { resendTokens: { 'clear.test': '', 'replace.test': 're_local_fixture' } });
+  assert.equal(needsSettingConfirmation(patch), true);
+});
 test('disabled policy skips password prompts; enabled policy passes its configured duration', async () => {
   let prompts = 0; let actions = 0;
   const disabled = createRecentAuthCoordinator({ getStatus: async () => ({ enabled: false, valid: false }), requestAuthentication: async () => { prompts++; return false; } });

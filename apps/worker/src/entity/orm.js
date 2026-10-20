@@ -6,6 +6,10 @@ const queryOnlyLogger = {
 	},
 };
 
+export function logQueryStructure(c, query) {
+	if (c.env.ORM_LOG === true || c.env.ORM_LOG === 'true') queryOnlyLogger.logQuery(query);
+}
+
 export default function orm(c) {
 	const logger = c.env.ORM_LOG === true || c.env.ORM_LOG === 'true'
 		? queryOnlyLogger

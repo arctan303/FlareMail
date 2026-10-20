@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add 30-day mail Trash, individual alias recovery, default sender selection, Web/CLI Cc/Bcc and Reply all, delivery diagnostics and verified Resend events, complete instance backup/restore and KV/R2 migration tools, and full contact-history pagination. Fix forwarding for internal mail using the recipient’s configured sending channel. Database patch 329 enables the new persisted safeguards.
+- 新增30天邮件回收站、单独别名恢复、默认发件选择、Web/CLI抄送密送与回复全部、收发自检及Resend签名投递回传、完整实例备份恢复和KV/R2迁移工具、联系人完整历史分页；修复站内邮件转发。新增持久化保护需数据库补丁329。
+
+- 邮箱域名支持修改、停用/重新启用、无关联时删除及整域邮箱迁移；预览影响和冲突后确认，保留用户/邮箱身份、邮件与附件，主登录变更后撤销旧会话与 CLI Token。需要数据库 328 更新。
+- Added mail-domain renaming, disable/enable, deletion of unreferenced domains and whole-domain mailbox migration. Preview impacts and conflicts before confirming; retain user/mailbox identity, messages and attachments, and revoke old sessions and CLI tokens after primary-address changes. Requires database patch 328.
+
 ## v1.1.1 — 2026-10-13
 
 本节包含 v1.1.0 之后的安全加固、邮件 Webhook、CLI 改进与双语文档优化。

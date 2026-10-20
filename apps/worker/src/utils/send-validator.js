@@ -1,6 +1,6 @@
 import { parseHTML } from 'linkedom';
 import BizError from '../error/biz-error';
-import verifyUtils from './verify-utils';
+import { normalizeRecipients } from './mail-recipients';
 
 export const sendLimits = Object.freeze({
 	maxRecipients: 20,
@@ -64,10 +64,7 @@ export function normalizeSendParams(params = {}) {
 	if (!Number.isInteger(accountId) || accountId <= 0) fail('A valid sender account is required.');
 
 	if (!Array.isArray(params.receiveEmail)) fail('Recipients must be an array.');
-	const receiveEmail = [...new Set(params.receiveEmail.map(value => String(value || '').trim().toLowerCase()))];
-	if (receiveEmail.length === 0) fail('At least one recipient is required.');
-	if (receiveEmail.length > sendLimits.maxRecipients) fail(`A message can have at most ${sendLimits.maxRecipients} recipients.`);
-	if (receiveEmail.some(address => !verifyUtils.isEmail(address))) fail('One or more recipient addresses are invalid.');
+	const { receiveEmail, cc, bcc, allRecipients } = normalizeRecipients(params.receiveEmail, params.cc, params.bcc, sendLimits.maxRecipients);
 
 	const subject = String(params.subject || '').trim();
 	if (!subject) fail('Subject is required.');
@@ -117,6 +114,9 @@ export function normalizeSendParams(params = {}) {
 		...params,
 		accountId,
 		receiveEmail,
+		cc,
+		bcc,
+		allRecipients,
 		subject,
 		text,
 		content,

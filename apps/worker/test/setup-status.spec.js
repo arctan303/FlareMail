@@ -4,6 +4,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import worker from '../src';
 import KvConst from '../src/const/kv-const';
 import { dbInit } from '../src/init/init';
+import { removeCapabilityPatch } from './capability-fixtures';
+import { DOMAIN_TRIGGERS } from '../src/init/domain-schema';
 import cryptoUtils from '../src/utils/crypto-utils';
 import { markInstalled } from './installed-instance';
 
@@ -115,6 +117,7 @@ async function makeSupportedOldSchema() {
 }
 
 async function restoreCurrentSchema() {
+	await removeCapabilityPatch(env);
 	// Tests deliberately remove migration markers and columns independently.
 	// Normalize an interrupted 325 fixture before asking the production migrator
 	// to restore the current schema; production correctly requires manual
@@ -130,6 +133,7 @@ async function restoreCurrentSchema() {
 }
 
 async function resetToFreshDatabase() {
+	await removeCapabilityPatch(env);
 	await env.db.batch([
 		env.db.prepare('DROP TABLE IF EXISTS account'),
 		env.db.prepare('DROP TABLE IF EXISTS attachments'),
@@ -302,6 +306,10 @@ describe.sequential('read-only setup status and controlled recovery', () => {
 		const duplicateSalt = 'collision-user-salt';
 		const duplicateHash = await cryptoUtils.genHashPassword(env.FLAREMAIL_ADMIN_PASSWORD, duplicateSalt);
 		try {
+			// This fixture intentionally recreates a pre-normalization database;
+			// remove the newer admission patch along with its other old schemas.
+			for (const name of Object.keys(DOMAIN_TRIGGERS)) await env.db.prepare(`DROP TRIGGER IF EXISTS ${name}`).run();
+			await env.db.prepare('DELETE FROM schema_migrations WHERE version=328').run();
 			const admin = await env.db.prepare(
 				'SELECT user_id AS userId FROM user WHERE email = ? COLLATE NOCASE LIMIT 1',
 			).bind(env.FLAREMAIL_ADMIN_EMAIL).first();

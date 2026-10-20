@@ -249,6 +249,14 @@ export function adminDomainsAdd(domains, revision) {
     return http.post('/admin/domains', { domains, revision });
 }
 
+export function adminDomainsPreview(payload) {
+    return http.post('/admin/domains/preview', payload, { noMsg: true });
+}
+
+export function adminDomainsApply(payload) {
+    return http.post('/admin/domains/apply', payload, { noMsg: true });
+}
+
 // Runtime business configuration APIs
 export function runtimeConfigQuery() {
     return http.get('/setting/runtime', { noMsg: true });

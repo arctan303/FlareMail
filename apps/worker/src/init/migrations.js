@@ -4,6 +4,8 @@ import { normalizeConfirmation } from '../service/confirmation-policy-service';
 import { emailConst } from '../const/entity-const';
 import { ensureMigrationTable } from './schema';
 import { webhookSchemaStatements, webhookSchemaValid } from './webhook-schema';
+import { domainSchemaStatements, domainSchemaValid } from './domain-schema';
+import { capabilitySchemaStatements, capabilitySchemaValid } from './capability-schema';
 import { managedDomains } from '../utils/managed-domain-utils';
 import {
 	normalizeAllowedOrigins,
@@ -50,6 +52,31 @@ function credentialPair(first, second, label) {
 
 export const migrations = {
 	ensureMigrationTable,
+	async v3_29Applied(c) {
+		return await this.hasTable(c,'schema_migrations') && await this.hasMigrationMarker(c,329) && await capabilitySchemaValid(c);
+	},
+	async v3_29UpgradePending(c) {
+		return await this.hasTable(c,'schema_migrations') && !await this.hasMigrationMarker(c,329) && await capabilitySchemaValid(c,true);
+	},
+	async v3_29DB(c) {
+		if(await this.v3_29Applied(c)) return;
+		if(!await this.v3_29UpgradePending(c)) throw new Error('Mail capability migration requires manual recovery.');
+		await c.env.db.batch([...(await capabilitySchemaStatements(c)),c.env.db.prepare('INSERT OR IGNORE INTO schema_migrations(version) VALUES (329)')]);
+		if(!await this.v3_29Applied(c)) throw new Error('Mail capability migration requires manual recovery.');
+	},
+	async v3_28Applied(c) {
+		return await this.hasTable(c, 'schema_migrations') && await this.hasMigrationMarker(c, 328) && await domainSchemaValid(c);
+	},
+	async v3_28UpgradePending(c) {
+		return await this.hasTable(c, 'schema_migrations') && !await this.hasMigrationMarker(c, 328) && await domainSchemaValid(c, true);
+	},
+	async v3_28DB(c) {
+		if (await this.v3_28Applied(c)) return;
+		if (!await this.v3_28UpgradePending(c)) throw new Error('Managed domain lifecycle migration requires manual recovery.');
+		const hasEnabled = await this.hasColumn(c, 'managed_domain', 'enabled');
+		await c.env.db.batch([...domainSchemaStatements(c.env.db, !hasEnabled), c.env.db.prepare('INSERT OR IGNORE INTO schema_migrations(version) VALUES (328)')]);
+		if (!await this.v3_28Applied(c)) throw new Error('Managed domain lifecycle migration requires manual recovery.');
+	},
 	async v3_27Applied(c) {
 		return await this.hasTable(c, 'schema_migrations') && await this.hasMigrationMarker(c, 327) && await webhookSchemaValid(c);
 	},

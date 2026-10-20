@@ -21,9 +21,14 @@ import '../api/oauth-api';
 import '../api/oauth-provider-api';
 import '../api/oauth-provider-config-api';
 import '../api/contact-api';
+import '../api/contact-timeline-api';
 import '../api/site-asset-api';
 import '../api/manifest-api';
 import '../api/managed-domain-api';
 import '../api/runtime-config-api';
+import '../api/mail-delivery-api';
+import '../api/mail-diagnostics-api';
+import '../api/mail-recovery-api';
+import '../api/mail-identities-api';
 
 export default app;

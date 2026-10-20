@@ -6,6 +6,7 @@ import { dbInit } from '../src/init/init';
 import cryptoUtils from '../src/utils/crypto-utils';
 import KvConst from '../src/const/kv-const';
 import { markInstalled } from './installed-instance';
+import { removeCapabilityPatch } from './capability-fixtures';
 
 const PASSWORD = 'upgrade-fixture-password';
 const ADMIN = 'patch-admin@example.com';
@@ -94,6 +95,7 @@ describe.sequential('compatible installed database patches', () => {
     } finally { await dbInit.migrate(context()); }
   });
   it('blocks an incompatible core schema even when the 323 patch is also absent', async () => {
+    await removeCapabilityPatch(env);
     await pending323();
     await env.db.prepare('DROP TABLE send_request').run();
     try { expect(await status()).toMatchObject({ setupRequired:false, upgradeRequired:true, upgradeBlocking:true }); await expectLoginBlocked(); }

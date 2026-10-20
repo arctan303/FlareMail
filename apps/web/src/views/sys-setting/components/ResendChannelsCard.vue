@@ -60,6 +60,10 @@
             class="input-standard"
             :placeholder="existingTokens?.[domain] ? $t('sysKeepExistingSecret') : 're_...'"
           />
+          <div v-if="existingTokens?.[domain]" class="secret-actions">
+            <span v-if="resendTokens[domain] === null" role="status">{{ $t('capabilities.keyClearPending') }}</span>
+            <el-button link :type="resendTokens[domain] === null ? 'primary' : 'danger'" @click="resendTokens[domain] = resendTokens[domain] === null ? '' : null">{{ $t(resendTokens[domain] === null ? 'cancel' : 'capabilities.clearKey') }}</el-button>
+          </div>
         </div>
       </div>
     </div>

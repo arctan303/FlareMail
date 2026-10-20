@@ -35,8 +35,8 @@ async function api(path, { method = 'GET', body, auth = token, cookie, origin = 
 const configBody = (extra = {}) => ({ revision: 0, url: 'https://hooks.example.com/inbox', enabled: true, mode: 'all', allowlist: [], ...extra });
 const configure = extra => webhookService.save(context(), owner.userId, owner.accountId, configBody(extra));
 async function saving(sender = 'sender@outside.test', extra = {}) {
-  const row = await env.db.prepare(`INSERT INTO email(user_id,account_id,type,status,is_del,send_email,subject,text,content,unread)
-    VALUES (?,?,0,6,1,?,'fixture','plain','<p>HTML body</p>',0) RETURNING email_id AS id`).bind(owner.userId, owner.accountId, sender).first();
+  const row = await env.db.prepare(`INSERT INTO email(user_id,account_id,type,status,is_del,send_email,subject,text,content,unread,to_email)
+    VALUES (?,?,0,6,1,?,'fixture','plain','<p>HTML body</p>',0,?) RETURNING email_id AS id`).bind(owner.userId, owner.accountId, sender,owner.email).first();
   if (Object.keys(extra).length) await env.db.prepare(`UPDATE email SET ${Object.keys(extra).map(key => `${key}=?`).join(',')} WHERE email_id=?`).bind(...Object.values(extra), row.id).run();
   return row.id;
 }

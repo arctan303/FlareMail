@@ -77,6 +77,37 @@ export function replyContext(email, accounts) {
   return { recipients, account }
 }
 
+export function replyAllContext(email, accounts, ownEmails = []) {
+  const context = replyContext(email, accounts)
+  const seen = new Set([...(accounts || []).map(account => account.email), ...ownEmails]
+    .map(value => String(value || '').trim().toLowerCase()).filter(Boolean))
+  const take = values => values.filter(value => {
+    const key = value.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  const recipients = take(context.recipients)
+  const cc = take([...(Number(email?.type) === 1 ? [] : sentRecipients(email?.recipient)), ...sentRecipients(email?.cc)])
+  if (!recipients.length && cc.length) recipients.push(cc.shift())
+  return { ...context, recipients, cc, bcc: [] }
+}
+
+export async function loadReplyAllContext(email, accounts, {owner, currentOwner, isCurrent, loadIdentities}) {
+  const identities = await loadIdentities()
+  if (!isCurrent() || owner !== currentOwner() || String(identities?.userId) !== String(owner)) return null
+  if (!Array.isArray(identities.addresses) || identities.addresses.some(address => typeof address !== 'string')) {
+    throw new Error('Invalid mailbox identity response')
+  }
+  return replyAllContext(email, accounts, identities.addresses)
+}
+
+export function composeRecipientSnapshot(source = {}) {
+  return Object.fromEntries(['receiveEmail', 'cc', 'bcc'].map(field => [field,
+    Array.isArray(source[field]) ? [...source[field]] : [],
+  ]))
+}
+
 export function findComposeAccount(accounts, { email, accountId } = {}) {
   const list = Array.isArray(accounts) ? accounts : []
   const normalizedEmail = String(email || '').trim().toLowerCase()

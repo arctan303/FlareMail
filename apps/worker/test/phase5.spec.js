@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import unmatchedService from '../src/service/unmatched-service';
 import accountService from '../src/service/account-service';
+import {env} from 'cloudflare:workers';
+import {dbInit} from '../src/init/init';
+import {markInstalled} from './installed-instance';
 
 describe('Phase 5 - Multi-mailbox identity & Unmatched quarantine boundaries', () => {
 
@@ -16,17 +19,12 @@ describe('Phase 5 - Multi-mailbox identity & Unmatched quarantine boundaries', (
 	});
 
 	it('supports default send account selection and fallback logic (AC-SND-001/002)', async () => {
-		const mockAccount = { accountId: 10, email: 'default@example.com' };
-		const mockDb = {
-			prepare: (sql) => ({
-				bind: (...args) => ({
-					first: async () => mockAccount,
-					raw: async () => [[10, 'default@example.com']]
-				})
-			})
-		};
-		const mockContext = { env: { db: mockDb } };
-		const res = await accountService.getDefaultSendAccount(mockContext, 1);
+		const mockContext={env,get:()=>undefined,set:()=>{}};
+		await dbInit.migrate(mockContext);
+		await markInstalled(env,['example.com'],[]);
+		const user=await env.db.prepare("INSERT INTO user(email,password,salt) VALUES ('owner@example.com','fixture','fixture') RETURNING user_id AS id").first();
+		await env.db.prepare("INSERT INTO account(email,user_id,is_default_send) VALUES ('default@example.com',?,1)").bind(user.id).run();
+		const res = await accountService.getDefaultSendAccount(mockContext, user.id);
 		expect(res.email).toBe('default@example.com');
 	});
 

@@ -17,6 +17,7 @@ const router=createRouter({
             mail('/sent','send','sent',()=>import('@/views/send/index.vue')),
             mail('/drafts','draft','drafts',()=>import('@/views/draft/index.vue')),
             mail('/starred','star','star',()=>import('@/views/star/index.vue')),
+            mail('/trash','trash','trash',()=>import('@/views/trash/index.vue')),
             mail('/contacts','contact','contacts',()=>import('@/views/contacts/index.vue')),
             {...mail('/settings','setting','settings',ReadonlySettings),props:{kind:'setting'}},
             {...mail('/all-users','user','allUsers',ReadonlySettings),props:{kind:'users'}},
