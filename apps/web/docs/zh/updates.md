@@ -108,7 +108,7 @@ git push origin main
 
 ## 仅使用命令行部署的实例
 
-如果从维护者仓库直接 clone，未连接 Git 自动部署，且实例配置一直保存在被忽略的 apps/worker/wrangler.toml，可在原本地目录更新固定版本。先备份并确认 git status --short 无输出、git remote get-url origin 为 https://github.com/arctan303/FlareMail.git，再执行：
+如果从维护者仓库直接 clone，未连接 Git 自动部署，且实例配置一直保存在被忽略的 apps/worker/wrangler.toml，可在原本地目录更新固定版本。先备份并确认 git status --short 无输出、git remote get-url origin 为 `https://github.com/arctan303/FlareMail.git`，再执行：
 
 ~~~sh
 git fetch --no-tags origin refs/tags/v1.1.2:refs/remotes/origin/releases/v1.1.2
@@ -129,7 +129,7 @@ npx --yes pnpm@10.34.5 build
 
 328 为现有域名补充启停与迁移保护，已有域名默认启用，不移动原邮件或附件。升级前的完整 327 实例仍可正常使用，新增管理操作需升级后开放。迁移域名后的账号使用新地址登录；旧版代码不识别停用状态，因此依赖域名停用时不能直接回退旧版服务。代码回退也不会自动还原已迁移的地址；需要在新版本重新预览并反向迁移。[域名管理](/docs/zh/administration)
 
-327 增量创建 Webhook 设置和投递表，不自动启用。保留实例资源 ID，在自己的 Wrangler 配置 triggers.crons 中保留每日任务并加入 `* * * * *`，否则失败通知只有后续收信或每日任务才可能补发。公开模板已包含该任务，已有定制配置需自行合并。D1 备份包含 Webhook 共享密钥，应按敏感数据保存；回退代码前停用 Webhook，保留新增表即可。完整配置见 [CLI / Agent](cli)。
+327 增量创建 Webhook 设置和投递表，不自动启用。保留实例资源 ID，在自己的 Wrangler 配置 triggers.crons 中保留每日任务并加入 `* * * * *`，否则失败通知只有后续收信或每日任务才可能补发。公开模板已包含该任务，已有定制配置需自行合并。D1 备份包含 Webhook 共享密钥，应按敏感数据保存；回退代码前停用 Webhook，保留新增表即可。完整配置见 [CLI / Agent](/docs/zh/cli)。
 
 326 是增量升级，保留已有账号及会话。回退代码时保留新增字段和会话撤销表；旧代码不会执行新的会话撤销规则，恢复旧代码服务前必须作废全部网页会话。浏览器草稿升级保留旧库及迁移记录，不能通过清空站点数据回退，否则可能丢失草稿。
 

@@ -108,7 +108,7 @@ Check the original Worker's build logs for success and confirm the deployed comm
 
 ## Instances deployed only from the command line
 
-If you cloned directly from the maintainer, have no Git-based automatic deployment, and keep instance configuration in the ignored apps/worker/wrangler.toml, update the pinned release in your existing local directory. Back up first, confirm git status --short is empty and git remote get-url origin is https://github.com/arctan303/FlareMail.git, then run:
+If you cloned directly from the maintainer, have no Git-based automatic deployment, and keep instance configuration in the ignored apps/worker/wrangler.toml, update the pinned release in your existing local directory. Back up first, confirm git status --short is empty and git remote get-url origin is `https://github.com/arctan303/FlareMail.git`, then run:
 
 ~~~sh
 git fetch --no-tags origin refs/tags/v1.1.2:refs/remotes/origin/releases/v1.1.2
@@ -129,7 +129,7 @@ Patch 329 adds deletion timestamps and generations, send fingerprints and delive
 
 Patch 328 adds domain state and migration protection. Existing domains remain enabled; messages and attachments are not moved. An intact 327 instance remains usable before the upgrade, with new domain operations available afterwards. Migrated primary users sign in with their new address. Older code does not enforce disabled domains, so do not restore it while relying on domain suspension. Rolling back code does not reverse address migrations; preview and perform a reverse migration with the new version when needed. See [domain management](/docs/en/administration).
 
-Patch 327 adds webhook configuration and delivery tables without enabling notifications. Preserve your resource IDs. Add `* * * * *` to triggers.crons in your own Wrangler configuration while retaining the daily task; otherwise recovery may wait for later mail or the daily run. Public templates include it, but customized existing configurations need merging. D1 backups contain shared webhook secrets and must remain private. Disable webhooks before rolling back code and retain the new tables. See [CLI / Agent](cli) for configuration.
+Patch 327 adds webhook configuration and delivery tables without enabling notifications. Preserve your resource IDs. Add `* * * * *` to triggers.crons in your own Wrangler configuration while retaining the daily task; otherwise recovery may wait for later mail or the daily run. Public templates include it, but customized existing configurations need merging. D1 backups contain shared webhook secrets and must remain private. Disable webhooks before rolling back code and retain the new tables. See [CLI / Agent](/docs/en/cli) for configuration.
 
 Patch 326 adds fields and a session revocation table while retaining existing accounts and sessions. Preserve both during a code rollback. Older code does not enforce the new revocation rules, so invalidate every browser session before serving it again. Draft migration retains legacy databases and migration records; clearing site data to roll back can lose drafts.
 
