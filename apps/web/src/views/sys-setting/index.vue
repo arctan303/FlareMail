@@ -15,7 +15,7 @@
         <el-button link type="primary" @click="router.push({ query: { tab: 'maintenance' } })">{{ $t('sysGoToMaintenance') }}</el-button>
       </el-alert>
       <p v-if="loadError" class="load-error" role="alert">{{ loadError }} <el-button link @click="load">{{ $t('sysReload') }}</el-button></p>
-      <div class="setting-cards-grid" :inert="!initialized || savingGroup ? '' : null">
+      <div class="setting-cards-grid" :inert="!initialized || savingGroup || domainsSaving || childBusy.domains ? '' : null">
         <transition name="tab-fade">
           <div v-show="activeSection === 'core'" class="section-panel">
             <CoreSwitchesCard :form="form">
@@ -34,7 +34,7 @@
 
         <transition name="tab-fade">
           <div v-show="activeSection === 'domains'" class="section-panel">
-            <ManagedDomainsCard :domains="managedDomains" :loading="domainsLoading" :saving="domainsSaving" :error="domainsError" @add="addManagedDomain" />
+            <ManagedDomainsCard :domains="managedDomains" :entries="managedDomainEntries" :revision="domainsRevision" :management-ready="domainManagementReady" :loading="domainsLoading" :saving="domainsSaving" :error="domainsError" :preview-action="previewManagedDomain" :apply-action="applyManagedDomain" @add="addManagedDomain" @reload="loadManagedDomains" @busy="childBusy.domains = $event" @dirty-change="childDirty.domains = $event" @applied="onDomainApplied" />
             <UnmatchedPolicyCard
               :unmatched-policy="unmatchedPolicy"
               :policy-loading="policyLoading"
@@ -61,6 +61,7 @@
             >
               <template #footer><SettingsSaveBar v-bind="saveBar('channels')" @save="save('channels')" @reset="resetGroup('channels')" /></template>
             </ResendChannelsCard>
+            <MailOperationsCard :domains="domains" :run-sensitive="runSensitive" @dirty-change="childDirty.mailOperations = $event" @busy="childBusy.mailOperations = $event" />
           </div>
         </transition>
 
@@ -107,9 +108,15 @@
 import { computed, onActivated, onDeactivated, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { setupStatus } from '@/request/login.js'
-import { settingsConfirmationStatus, adminDomains, adminDomainsAdd, settingQuery, settingSet, websiteConfig, upgradeDatabase } from '@/request/setting.js'
+import { settingsConfirmationStatus, adminDomains, adminDomainsAdd, adminDomainsPreview, adminDomainsApply, settingQuery, settingSet, websiteConfig, upgradeDatabase } from '@/request/setting.js'
 import { unmatchedGetPolicy, unmatchedSetPolicy } from '@/request/unmatched.js'
 import { useSettingStore } from '@/store/setting.js'
+import { useUserStore } from '@/store/user.js'
+import { useAccountStore } from '@/store/account.js'
+import { loginUserInfo } from '@/request/my.js'
+import { setAuthenticatedSession } from '@/utils/session-state.js'
+import { invalidateUserScopedStateAcrossTabs } from '@/utils/sensitive-state.js'
+import { normalizeDomainState } from '@/utils/domain-management.js'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import BrandSettingsCard from './components/BrandSettingsCard.vue'
 import RuntimeConfigCard from './components/RuntimeConfigCard.vue'
@@ -119,6 +126,7 @@ import CoreSwitchesCard from './components/CoreSwitchesCard.vue'
 import GoogleOAuthSettingCard from './components/GoogleOAuthSettingCard.vue'
 import UnmatchedPolicyCard from './components/UnmatchedPolicyCard.vue'
 import ResendChannelsCard from './components/ResendChannelsCard.vue'
+import MailOperationsCard from './components/MailOperationsCard.vue'
 import BlacklistFilterCard from './components/BlacklistFilterCard.vue'
 import DatabaseMaintenanceCard from './components/DatabaseMaintenanceCard.vue'
 import SettingsSaveBar from './components/SettingsSaveBar.vue'
@@ -137,6 +145,9 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const settingStore = useSettingStore()
+const userStore = useUserStore()
+const accountStore = useAccountStore()
+let domainReauthentication = false
 const upgradePending = computed(() => settingStore.setupStatus?.upgradeRequired === true)
 const activeSection = computed(() => resolveSysSettingSection(route.query.tab))
 const activeSectionMeta = computed(() => getSysSettingSection(activeSection.value))
@@ -146,8 +157,8 @@ const loadError = ref('')
 const savingGroup = ref('')
 const groupErrors = reactive({})
 const groupMessages = reactive({})
-const childDirty = reactive({ confirmation: false, runtime: false })
-const childBusy = reactive({ confirmation: false, runtime: false })
+const childDirty = reactive({ confirmation: false, runtime: false, domains: false })
+const childBusy = reactive({ confirmation: false, runtime: false, domains: false })
 const brandUploading = ref(false)
 const upgradeResult = ref('')
 const upgradeError = ref('')
@@ -163,6 +174,8 @@ const brandCardRef = ref()
 const resendTokens = reactive({})
 const googleClientSecret = ref('')
 const managedDomains = ref([])
+const managedDomainEntries = ref([])
+const domainManagementReady = ref(false)
 const domainsRevision = ref(null)
 const domainsLoading = ref(false)
 const domainsSaving = ref(false)
@@ -286,11 +299,12 @@ function resetGroup(group) {
 }
 const hasUnsaved = computed(() => initialized.value && (Object.keys(groupFields).some(group => Object.keys(groupPatch(group)).length) || Object.values(childDirty).some(Boolean)))
 function warnBeforeUnload(event) {
-  if (!hasUnsaved.value && !savingGroup.value && !brandUploading.value && !Object.values(childBusy).some(Boolean)) return
+  if (!hasUnsaved.value && !savingGroup.value && !domainsSaving.value && !brandUploading.value && !Object.values(childBusy).some(Boolean)) return
   event.preventDefault(); event.returnValue = ''
 }
 onBeforeRouteLeave(async () => {
-  if (savingGroup.value || brandUploading.value || Object.values(childBusy).some(Boolean)) { ElMessage.info(t('sysBusyLeave')); return false }
+  if (domainReauthentication) return true
+  if (savingGroup.value || domainsSaving.value || brandUploading.value || Object.values(childBusy).some(Boolean)) { ElMessage.info(t('sysBusyLeave')); return false }
   if (!hasUnsaved.value) return true
   try { await ElMessageBox.confirm(t('sysLeaveUnsavedMsg'), t('sysLeaveTitle'), { confirmButtonText: t('sysLeaveConfirm'), cancelButtonText: t('continueEditing'), type: 'warning' }); return true }
   catch { return false }
@@ -311,14 +325,24 @@ async function onAssetSaved({ type, config }) {
 }
 
 
+function applyDomainState(result) {
+  const state = normalizeDomainState(result)
+  managedDomains.value = state.domains
+  managedDomainEntries.value = state.entries
+  domainsRevision.value = state.revision
+  domainManagementReady.value = state.managementReady
+  settingStore.domainList = state.activeDomains
+  settingStore.settings.domainList = [...state.activeDomains]
+  form.domainList = [...state.activeDomains]
+  if (userStore.user?.userId) userStore.user.domainList = [...state.activeDomains]
+}
+
 async function loadManagedDomains() {
   domainsLoading.value = true
   domainsError.value = ''
   try {
     const result = await adminDomains()
-    managedDomains.value = Array.isArray(result?.domains) ? result.domains : []
-    domainsRevision.value = result?.revision ?? null
-    settingStore.domainList = managedDomains.value.map(domain => '@' + domain)
+    applyDomainState(result)
   } catch (error) {
     domainsError.value = error?.message || t('sysDomainsLoadFailed')
   } finally { domainsLoading.value = false }
@@ -331,14 +355,56 @@ async function addManagedDomain(value) {
   if (managedDomains.value.includes(domain)) { ElMessage({ message: t('sysDomainExists'), type: 'warning', plain: true }); return }
   domainsSaving.value = true
   try {
-    const result = await adminDomainsAdd([domain], domainsRevision.value)
-    managedDomains.value = Array.isArray(result?.domains) ? result.domains : [...managedDomains.value, domain]
-    domainsRevision.value = result?.revision ?? domainsRevision.value
-    settingStore.domainList = managedDomains.value.map(item => '@' + item)
+    const saved = await runSensitive(t('domainManagement.addPurpose'), () => adminDomainsAdd([domain], domainsRevision.value))
+    if (saved?.status !== 'completed') return
+    applyDomainState(saved.value)
+    if (!Object.hasOwn(resendTokens, domain)) resendTokens[domain] = ''
     ElMessage({ message: t('sysDomainAdded'), type: 'success', plain: true })
   } catch (error) {
     if (Number(error?.code) === 409) { await loadManagedDomains(); ElMessage({ message: t('sysDomainsUpdated'), type: 'warning', plain: true }) }
   } finally { domainsSaving.value = false }
+}
+
+async function previewManagedDomain(payload) {
+  try { return await adminDomainsPreview(payload) }
+  catch (error) { if (Number(error?.code) === 409) await loadManagedDomains(); throw error }
+}
+
+async function applyManagedDomain(payload) {
+  return runSensitive(t('domainManagement.managePurpose'), async () => {
+    let result
+    try { result = await adminDomainsApply(payload) }
+    catch (error) { if (Number(error?.code) === 409) await loadManagedDomains(); throw error }
+    applyDomainState(result.state)
+    // A successful primary-address migration has revoked this session. Do not
+    // make further authenticated requests or call logout, which clears drafts.
+    if (!result.reauthRequired) {
+      try {
+        const data = await settingQuery()
+        form.resendTokens = data.resendTokens || {}
+        generalBaseline.value.resendTokens = clone(form.resendTokens)
+        for (const domain of Object.keys(resendTokens)) if (!managedDomains.value.includes(domain)) delete resendTokens[domain]
+        for (const domain of managedDomains.value) if (!Object.hasOwn(resendTokens, domain)) resendTokens[domain] = ''
+        const user = await loginUserInfo()
+        userStore.user = user
+        accountStore.accountList = user.accountList || []
+        const current = accountStore.accountList.find(account => account.accountId === accountStore.currentAccountId) || user.account
+        if (current) { accountStore.currentAccount = current; accountStore.currentAccountId = current.accountId }
+      } catch { groupErrors.channels = t('domainManagement.refreshFailed') }
+    }
+    return result
+  })
+}
+
+async function onDomainApplied(result) {
+  if (result.reauthRequired) {
+    domainReauthentication = true
+    setAuthenticatedSession(false)
+    invalidateUserScopedStateAcrossTabs()
+    userStore.user = {}
+    ElMessage({ message: t('domainManagement.signInAgain'), type: 'success', duration: 7000, plain: true })
+    await router.replace('/login')
+  } else ElMessage({ message: t('domainManagement.saved'), type: 'success', plain: true })
 }
 
 async function load() {
@@ -432,7 +498,12 @@ async function save(group) {
     if (group === 'google' && payload.googleClientSecret) { form.googleClientSecret = 'configured'; googleClientSecret.value = '' }
     if (group === 'channels' && payload.resendTokens) {
       form.resendTokens = { ...form.resendTokens }
-      for (const domain of Object.keys(payload.resendTokens)) { form.resendTokens[domain] = 'configured'; resendTokens[domain] = '' }
+      for (const domain of Object.keys(payload.resendTokens)) {
+        if (payload.resendTokens[domain] === '') delete form.resendTokens[domain]
+        else form.resendTokens[domain] = 'configured'
+        resendTokens[domain] = ''
+      }
+      generalBaseline.value.resendTokens = { ...form.resendTokens }
     }
     if (group === 'brand') await refreshPublicBrand()
     groupMessages[group] = t('sysChangesSaved')
@@ -459,6 +530,7 @@ async function runUpgrade() {
     if (!status.upgradeRequired) form.mailProviderUpgradeRequired = false
     if (status.setupRequired || status.upgradeRequired) throw new Error(t('sysDbStillPending'))
     upgradeResult.value = t('sysDbUpToDate')
+    await loadManagedDomains()
   } catch (error) { upgradeError.value = error?.message || t('sysDbUpgradeFailed') } finally {
     upgradeLoading.value = false
   }

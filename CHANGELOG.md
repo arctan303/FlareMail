@@ -1,5 +1,46 @@
 # Changelog
 
+## Unreleased
+
+## v1.1.2 — 2026-10-20
+
+本节覆盖 v1.1.1 之后的域名管理、邮件生命周期、备份工具及文档界面改进。
+
+Changes since v1.1.1 cover domain management, mail lifecycle, backup tools and documentation improvements.
+
+### 新增与改进 / Added and improved
+
+- 邮箱域名支持修改、停用/重新启用、无关联时删除及整域邮箱迁移。操作前预览影响和冲突；迁移保留前缀、用户与邮箱身份、历史邮件和附件，目标地址占用时整次阻止，不自动合并。停用后停止新增地址与收发，仍可登录阅读历史。
+- Manage mail domains through renaming, disable/enable, deletion of unreferenced domains and whole-domain migration. Preview impacts and conflicts first. Migration preserves prefixes, user/mailbox identity, history and attachments; occupied target addresses block the entire operation without merging. Disabled domains stop new addresses and mail flow while retaining sign-in and history.
+- 新增30天回收站、恢复与彻底删除；已删除别名可单独恢复，保留邮箱身份和历史，并检查域名、归属和配额。可选择新邮件的默认发件地址。
+- Added 30-day Trash with restore and permanent deletion. Deleted aliases can be restored individually while preserving identity and history, subject to domain, ownership and quota checks. Choose a default sender for new messages.
+- Web与CLI支持To/Cc/Bcc和回复全部，保留草稿收件角色并校验总收件人。纯站内邮件直接投递；含任一站外收件人时整封由发信服务处理，保留公开To/Cc，避免重复投递，接收方看不到密送名单。
+- Web and CLI support To/Cc/Bcc and Reply all, retain recipient roles in drafts and validate combined recipients. Purely internal mail uses direct delivery. Messages with any external recipient use the sending provider for the entire envelope, preserving public To/Cc without duplicate delivery or exposing Bcc to recipients.
+- 管理员可执行DNS检查和显式收发测试，分别判断配置、服务商接受及真实收发结果。Resend签名投递回传记录逐收件人事件，处理重复与乱序；发件详情可查看，Cloudflare没有同类回传时明确显示未验证。网页补齐清除Resend Key入口。
+- Administrators can inspect DNS and run explicit send/receive tests, distinguishing configuration, provider acceptance and actual delivery. Signed Resend callbacks record per-recipient events with duplicate and ordering safeguards, visible in sent-mail details. Cloudflare channels without equivalent callbacks remain unverified. The Web UI also supports clearing a Resend key.
+- 新增本地完整实例备份、校验、空实例恢复及KV/R2对象迁移工具。备份覆盖D1、持久KV和必要对象，校验摘要及引用；迁移保留源对象，验证目标后再安排切换。联系人往来支持继续加载更早历史。
+- Added local full-instance backup, verification, empty-instance restore and KV/R2 object migration tools. Backups cover D1, persistent KV and required objects with checksum/reference verification. Migration retains source objects and verifies targets before a planned cutover. Contact history can load earlier correspondence.
+- 文档新增搜索、章节目录定位和提示框，改进中英、深浅色与手机阅读；补齐收信排查及已有部署仓库的具体更新步骤。
+- Documentation adds search, section navigation and callouts, with improved bilingual, light/dark and mobile reading. Receiving troubleshooting and concrete update steps for existing deployment repositories are expanded.
+
+### 修复 / Fixes
+
+- 修复纯站内收件未触发已配置的自动转发。转发使用收件方发信通道及额度，以收件邮箱发信并将Reply-To设为原发件人，保留正文和附件、不带出Bcc；失败保留站内原信并显示提示，不要求原发件人重发。
+- Fixed configured automatic forwarding for purely internal mail. Forwarding uses the recipient's sending channel and quota, sends from their mailbox with Reply-To set to the original sender, preserves body and attachments, and omits Bcc. Failures retain the internal message with a visible notice, without asking the sender to resend.
+- 邮件Webhook恢复本地图标并分开配置、维护与投递记录；管理员DNS、真实收发与投递回传分卡，加载失败归属各自设置，改善窄屏操作。
+- Restored local icons and separated mailbox webhook configuration, maintenance and delivery records. Administrator DNS, live mail tests and delivery callbacks use separate cards with correctly scoped errors and improved narrow-screen controls.
+
+### 升级与限制 / Upgrade and limitations
+
+- 已有实例先备份，更新原仓库并保留现有Worker、D1/KV/R2、私有配置和Secret；不要再次点部署按钮创建替代实例。部署后由管理员在「系统设置 → 系统维护」应用数据库补丁至 **329**。域名新动作需328，回收站和新增发送/投递保护需329；旧已删邮件从升级时起给予30天保留期。
+- Back up existing instances, update their original repository, and preserve the Worker, D1/KV/R2, private configuration and secrets. Do not use the deploy button again to create a replacement. After deployment, an administrator must apply database patches through **329** under System settings → Maintenance. Domain actions require 328; Trash and new send/delivery safeguards require 329. Previously deleted messages receive a fresh 30-day grace period at upgrade.
+- 在实例实际使用的Wrangler配置中保留每日Cron并加入`* * * * *`，以便及时重试通知和分批清理过期邮件；仅更新仓库里的公共模板不会更新私有构建配置。数据库补丁不会随代码部署自动执行。
+- Retain the daily Cron and add `* * * * *` in the instance's effective Wrangler configuration for timely notification retries and bounded expired-mail cleanup. Updating only the public template does not update private build configuration. Deploying code does not automatically apply database patches.
+- 主邮箱迁移后使用新地址和原密码重新登录，并重新生成CLI Token。代码回退不会还原已迁移地址，旧代码不执行域名停用保护；不要依赖回退恢复已永久删除的邮件。
+- After primary-address migration, sign in with the new address and original password and regenerate CLI tokens. Code rollback does not reverse address migration, and older code does not enforce disabled domains. Rollback cannot recover permanently deleted messages.
+- 完整备份和对象迁移需要实例停写；恢复仅支持新的空资源，并撤销旧会话/CLI与未兑换授权、取消待重试通知及清除Resend回传密钥。秘密和浏览器草稿另行保管。真实IPv6回调与助手唤醒仍待接收端联调。
+- Full backup and object migration require offline writers. Restore accepts only new empty resources, revokes old sessions/CLI and unredeemed grants, cancels pending notifications, and clears the Resend callback secret. Protect Worker secrets and browser drafts separately. Real IPv6 callbacks and assistant wake-up still require receiver-side integration testing.
+
 ## v1.1.1 — 2026-10-13
 
 本节包含 v1.1.0 之后的安全加固、邮件 Webhook、CLI 改进与双语文档优化。

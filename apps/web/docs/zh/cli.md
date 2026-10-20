@@ -115,7 +115,9 @@ URL 仅接受公网 HTTPS 域名与 443 端口，不接受 IP 字面量、内网
 
 ## 发送与回复
 
-发送 JSON 字段：`to`、`subject` 必填；`body` 为可选纯文本；`accountId` 为可选的发件邮箱 ID，省略时服务器选择可用邮箱。`requestId` 必填，16–128 字节唯一字符串。CLI 不支持抄送（CC）或上传附件。
+发送 JSON 字段：`to`、`subject` 必填；`to`可为单个地址或地址数组，`cc`、`bcc`为可选地址数组，合计最多20个去重地址；`body`为可选纯文本。`accountId`为可选的发件邮箱ID，省略时服务器选择可用邮箱；`requestId`必填，16–128字节唯一字符串。Cc/Bcc需要数据库329，CLI仍不支持上传附件。
+
+回复默认采用原有单独回复规则；传 `"replyAll":true` 使用Reply-To和原To/Cc，并排除自己的地址；不自动添加Bcc。发件人的详情保留自己的Bcc，收件人的详情不返回Bcc。删除进入30天回收站，可在网页恢复。相同requestId复用不同收件人、正文或附件会返回409，重试必须保持原请求内容。
 
 ```sh
 curl 'https://mail.example.com/api/cli/emails/send' \

@@ -12,6 +12,7 @@ import { readableMailBody } from '../utils/mail-text';
 import BizError from '../error/biz-error';
 import securityService from '../service/security-service';
 import { readSendBody } from './send-body';
+import { ownedMailIdentities, replyRecipientLists } from '../utils/mail-recipients';
 
 function textToHtml(text) {
 	return String(text || '')
@@ -114,6 +115,7 @@ app.get('/cli/emails', async (c) => {
 		id: e.emailId,
 		from: `${e.name || ''} <${e.sendEmail || ''}>`.trim(),
 		to: e.toEmail,
+		cc: e.cc,
 		replyTo: e.replyTo,
 		subject: e.subject,
 		date: e.createTime,
@@ -157,6 +159,7 @@ app.get('/cli/emails/:id', async (c) => {
 		to: emailRow.toEmail,
 		replyTo: emailRow.replyTo,
 		cc: emailRow.cc,
+		bcc: emailRow.bcc,
 		subject: emailRow.subject,
 		date: emailRow.createTime,
 		...readable,
@@ -176,13 +179,10 @@ app.post('/cli/emails/send', async (c) => {
 	const params = await readSendBody(c);
 	if (!params.requestId) throw new BizError('requestId is required for idempotent CLI sending.');
 
-	const { to, subject, body, cc, accountId } = params;
+	const { to, subject, body, cc, bcc, accountId } = params;
 
 	if (!to || !subject) {
 		throw new BizError('to and subject are required');
-	}
-	if (Array.isArray(cc) ? cc.length > 0 : String(cc || '').trim()) {
-		throw new BizError('CC recipients are not supported by the CLI endpoint.');
 	}
 
 	let useAccountId = accountId;
@@ -196,11 +196,12 @@ app.post('/cli/emails/send', async (c) => {
 
 	const sendParams = {
 		accountId: useAccountId,
-		receiveEmail: [to],
+		receiveEmail: typeof to === 'string' ? [to] : to,
 		subject,
 		text: body || '',
 		content: textToHtml(body),
-		cc: cc || '',
+		cc: cc ?? [],
+		bcc: bcc ?? [],
 		sendType: 'new',
 		requestId: params.requestId,
 	};
@@ -223,25 +224,12 @@ app.post('/cli/emails/:id/reply', async (c) => {
 	if (!original) {
 		throw new BizError('邮件不存在', 404);
 	}
-	if (Array.isArray(params.cc) ? params.cc.length > 0 : String(params.cc || '').trim()) {
-		throw new BizError('CC recipients are not supported by the CLI endpoint.');
-	}
-
-	let replyRecipients = original.type === 0
-		? (original.replyTo || []).map(item => item.address).filter(Boolean)
-		: [];
-	if (original.type === 0 && replyRecipients.length === 0) replyRecipients = [original.sendEmail];
-	if (original.type === 1) {
-		try {
-			replyRecipients = JSON.parse(original.recipient || '[]')
-				.map(item => item?.address)
-				.filter(Boolean);
-		} catch {
-			replyRecipients = [];
-		}
-		if (replyRecipients.length === 0 && original.toEmail) replyRecipients = [original.toEmail];
-	}
-	replyRecipients = [...new Set(replyRecipients.filter(Boolean))];
+	if (params.replyAll !== undefined && typeof params.replyAll !== 'boolean') throw new BizError('replyAll must be a boolean.', 400);
+	if (params.cc !== undefined && params.cc !== '' && !Array.isArray(params.cc)) throw new BizError('Cc recipients must be an array.', 400);
+	// Include every mailbox, including deleted aliases, when excluding our own
+	// identities. A paginated mailbox picker is not an identity authority.
+	const reply = replyRecipientLists(original, await ownedMailIdentities(c, userId), params.replyAll === true);
+	const replyRecipients = reply.receiveEmail;
 	if (replyRecipients.length === 0) throw new BizError('No reply recipient is available for this message.', 400);
 	const baseSubject = String(original.subject || '').replace(/^(?:(?:re|回复)\s*[:：]\s*)+/i, '');
 	const replySubject = `Re: ${baseSubject}`;
@@ -261,7 +249,8 @@ app.post('/cli/emails/:id/reply', async (c) => {
 		subject: replySubject,
 		text: body,
 		content: textToHtml(body),
-		cc: params.cc || '',
+		cc: [...reply.cc, ...(Array.isArray(params.cc) ? params.cc : [])],
+		bcc: params.bcc ?? [],
 		sendType: 'reply',
 		emailId,
 		requestId: params.requestId,

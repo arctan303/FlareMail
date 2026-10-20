@@ -124,6 +124,12 @@ async function cleanupRevoked(c, userId, entries) {
 }
 
 const sessionService = {
+	matchesEpoch(session, current) {
+		return !!session && !!current && Number(session.userId) === Number(current.userId)
+			&& (sessionEpoch(session.sessionEpoch) === sessionEpoch(current.sessionEpoch)
+				|| isPreserved(session, current, session.hash));
+	},
+
 	async create(c, userId, credentialFingerprint, authenticatedSnapshot = null) {
 		const current = await currentCredentials(c, userId);
 		const snapshot = authenticatedSnapshot || current;

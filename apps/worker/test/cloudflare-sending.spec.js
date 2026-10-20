@@ -96,7 +96,7 @@ describe.sequential('selectable Cloudflare sending', () => {
     expect(resend).toHaveBeenCalledOnce(); expect(e.email.send).not.toHaveBeenCalled();
     expect((await r.json()).data[0]).toMatchObject({status:1,resendEmailId:'resend-id'});
   });
-  it('persists an ID generated after queueing in sent and internal copies without sending twice', async () => {
+  it('persists a queued provider ID while routing the complete mixed envelope once', async () => {
     const post = vi.spyOn(Resend.prototype, 'post').mockResolvedValue({ data: { id: 'queued-provider-id' }, error: null });
     const get = vi.spyOn(Resend.prototype, 'get')
       .mockResolvedValueOnce({ data: { last_event: 'queued', message_id: null }, error: null })
@@ -108,21 +108,22 @@ describe.sequential('selectable Cloudflare sending', () => {
     expect(sent).toMatchObject({ status: 1, messageId: '<ready@provider.test>', resendEmailId: 'queued-provider-id' });
     expect(sent.deliveryWarning).toBeUndefined();
     const copies = await env.db.prepare('SELECT message_id AS messageId FROM email WHERE subject = ?').bind(payload.subject).all();
-    expect(copies.results).toHaveLength(2);
+    expect(copies.results).toHaveLength(1);
+    expect(post.mock.calls[0][1].to).toEqual([ADMIN, 'friend@outside.test']);
     expect(copies.results.every(copy => copy.messageId === '<ready@provider.test>')).toBe(true);
     const replay = await send(payload);
     expect((await replay.json()).data[0]).toMatchObject({ idempotentReplay: true, messageId: '<ready@provider.test>' });
     expect(post).toHaveBeenCalledTimes(1);
     expect(get).toHaveBeenCalledTimes(2);
   });
-  it('finishes internal delivery and idempotency when accepted Resend mail has no retrievable Message-ID', async () => {
+  it('keeps a mixed envelope idempotent without creating duplicate local copies when the RFC ID is unavailable', async () => {
     const resend = vi.spyOn(emailSendService,'sendByResend').mockResolvedValue({data:{id:'accepted-resend-id',messageId:'',messageIdWarning:'The provider accepted the message, but its Message-ID could not be retrieved.'}});
     const payload={receiveEmail:[ADMIN,'friend@outside.test'],subject:'resend metadata fallback',requestId:'resend_metadata_fallback_01'};
     const first=await send(payload); expect(first.status).toBe(200);
     const firstBody=await first.json(); expect(firstBody.data[0]).toMatchObject({status:1,resendEmailId:'accepted-resend-id',messageId:''});
     expect(firstBody.data[0].deliveryWarning).toMatch(/Message-ID could not be retrieved/);
     const local=await env.db.prepare("SELECT COUNT(*) AS n FROM email WHERE type = 0 AND subject = 'resend metadata fallback' AND user_id = (SELECT user_id FROM user WHERE email = ?)").bind(ADMIN).first();
-    expect(local.n).toBe(1);
+    expect(local.n).toBe(0);
     const request=await env.db.prepare('SELECT status, warning FROM send_request WHERE user_id = ? AND request_id = ?').bind(memberId,payload.requestId).first();
     expect(request.status).toBe('accepted'); expect(request.warning).toMatch(/Message-ID could not be retrieved/);
     const replay=await send(payload); expect(replay.status).toBe(200); expect((await replay.json()).data[0].idempotentReplay).toBe(true);
@@ -188,10 +189,10 @@ describe.sequential('selectable Cloudflare sending', () => {
     const first=await send(payload,e); expect(first.status).toBe(200); expect((await first.json()).data[0]).toMatchObject({status:5});
     expect((await send(payload,e)).status).toBe(200); expect(e.email.send).toHaveBeenCalledOnce(); expect(await quota()).toBe(before+1);
   });
-  it('keeps internal delivery independent and splits mixed recipients', async () => {
+  it('keeps pure internal delivery independent and routes every mixed recipient through the provider', async () => {
     await select('cloudflare'); expect((await send({receiveEmail:[ADMIN]},runtime)).status).toBe(200);
     const e=cf(); expect((await send({receiveEmail:[ADMIN,'friend@outside.test']},e)).status).toBe(200);
-    expect(e.email.send.mock.calls[0][0].to).toEqual(['friend@outside.test']);
+    expect(e.email.send.mock.calls[0][0].to).toEqual([ADMIN,'friend@outside.test']);
   });
   it('applies the same provider selection to CLI sending', async () => {
     const token='cf-cli-fixture-token'; await env.db.prepare('UPDATE user SET cli_token = ? WHERE user_id = ?').bind('sha256$' + await cryptoUtils.hashSecret(token),memberId).run();

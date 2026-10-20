@@ -2,11 +2,14 @@ import BizError from '../error/biz-error';
 import verifyUtils from '../utils/verify-utils';
 import sessionService from './session-service';
 import { isAdmin, selectPersistedAdmin } from '../security/admin-identity';
+import managedDomainService from './managed-domain-service';
+import { t } from '../i18n/i18n';
 
 const adminIdentityService = {
 	async migratePrimaryEmail(c, value, callerUserId) {
 		const targetEmail = String(value || '').trim().toLowerCase();
 		if (!verifyUtils.isEmail(targetEmail)) throw new BizError('Invalid target email');
+		if (!await managedDomainService.containsEmail(c,targetEmail)) throw new BizError(t('domainTargetInactive'),403);
 
 		const admin = await selectPersistedAdmin(c);
 		if (!admin || !isAdmin(admin) || admin.userId !== Number(callerUserId)

@@ -49,8 +49,9 @@
           <el-option
             v-for="acc in accountOptions"
             :key="acc.accountId"
-            :label="acc.name ? `${acc.name} <${acc.email}>` : acc.email"
+            :label="(acc.name ? `${acc.name} <${acc.email}>` : acc.email) + (acc.disabled ? ' (' + $t('domainManagement.cannotSend') + ')' : '')"
             :value="acc.accountId"
+            :disabled="acc.disabled === true"
           />
         </el-select>
       </div>

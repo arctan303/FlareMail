@@ -13,6 +13,8 @@ import emailUtils from '../utils/email-utils';
 import { isConfirmationUpgradePending } from '../service/confirmation-policy-service';
 
 const APPLICATION_TABLES = [
+	'mail_delivery_config',
+	'mail_delivery_event',
 	'webhook_config',
 	'webhook_delivery',
 	'account',
@@ -37,6 +39,7 @@ const APPLICATION_TABLES = [
 ];
 
 const USER_OWNED_TABLES = [
+	'mail_delivery_event',
 	'webhook_config',
 	'webhook_delivery',
 	'account',
@@ -50,6 +53,8 @@ const USER_OWNED_TABLES = [
 ];
 
 const BOOTSTRAP_SCHEMA_TABLES = [
+	'mail_delivery_event',
+	'mail_delivery_config',
 	'webhook_delivery',
 	'webhook_config',
 	'account',
@@ -141,10 +146,12 @@ const dbInit = {
 		const v325Applied = await migrations.v3_25Applied(c);
 		const v326Applied = await migrations.v3_26Applied(c);
 		const v327Applied = await migrations.v3_27Applied(c);
+		const v328Applied = await migrations.v3_28Applied(c);
+		const v329Applied = await migrations.v3_29Applied(c);
 		const legacyModernApplied = v308Applied && v309Applied && v310Applied && v311Applied
 			&& v312Applied && v314Applied && v315Applied && v316Applied && v317Applied && v318Applied;
 
-		if (legacyModernApplied && v319Applied && v320Applied && v321Applied && v322Applied && v323Applied && v324Applied && v325Applied && v326Applied && v327Applied) {
+		if (legacyModernApplied && v319Applied && v320Applied && v321Applied && v322Applied && v323Applied && v324Applied && v325Applied && v326Applied && v327Applied && v328Applied && v329Applied) {
 			await settingService.refresh(c);
 			return;
 		}
@@ -172,6 +179,8 @@ const dbInit = {
 			if (!v325Applied) await migrations.v3_25DB(c);
 			if (!v326Applied) await migrations.v3_26DB(c);
 			if (!v327Applied) await migrations.v3_27DB(c);
+			if (!v328Applied) await migrations.v3_28DB(c);
+			if (!v329Applied) await migrations.v3_29DB(c);
 			await settingService.refresh(c);
 			return;
 		}
@@ -217,6 +226,8 @@ const dbInit = {
 		await migrations.v3_25DB(c);
 		await migrations.v3_26DB(c);
 		await migrations.v3_27DB(c);
+		await migrations.v3_28DB(c);
+		await migrations.v3_29DB(c);
 
 		await settingService.refresh(c);
 	},
@@ -310,17 +321,21 @@ const dbInit = {
 			this.v3_25Applied(c),
 			this.v3_26Applied(c),
 			this.v3_27Applied(c),
+			this.v3_28Applied(c),
+			this.v3_29Applied(c),
 		]);
 
 		return {
 			current: applied.every(Boolean),
 			// Validate every supported core migration, not just MAX(version).
-			compatible: applied.slice(0, -5).every(Boolean)
-				&& (applied.at(-5) || await isConfirmationUpgradePending(c))
-				&& (applied.at(-4) || await isMailProviderUpgradePending(c))
-				&& (applied.at(-3) || await this.v3_25UpgradePending(c))
-				&& (applied.at(-2) || await this.v3_26UpgradePending(c))
-				&& (applied.at(-1) || await this.v3_27UpgradePending(c)),
+			compatible: applied.slice(0, -7).every(Boolean)
+				&& (applied.at(-7) || await isConfirmationUpgradePending(c))
+				&& (applied.at(-6) || await isMailProviderUpgradePending(c))
+				&& (applied.at(-5) || await this.v3_25UpgradePending(c))
+				&& (applied.at(-4) || await this.v3_26UpgradePending(c))
+				&& (applied.at(-3) || await this.v3_27UpgradePending(c))
+				&& (applied.at(-2) || await this.v3_28UpgradePending(c))
+				&& (applied.at(-1) || await this.v3_29UpgradePending(c)),
 			upgradeSupported: true
 		};
 	},
@@ -328,6 +343,7 @@ const dbInit = {
 	requiresManualRecovery(error) {
 		const message = String(error?.message || '').toLowerCase();
 		return message.includes('older than the supported safe-upgrade baseline')
+			|| message.includes('mail capability migration requires manual recovery')
 			|| message.includes('email addresses because duplicates would collide')
 			|| message.includes('administrator identity')
 			|| message.includes('configured admin')
@@ -336,6 +352,7 @@ const dbInit = {
 			|| message.includes('exactly one setting row')
 			|| message.includes('legacy managed domain')
 			|| message.includes('existing managed domain')
+			|| message.includes('managed domain lifecycle migration')
 			|| message.includes('legacy runtime configuration')
 			|| message.includes('existing runtime configuration')
 			|| message.includes('existing google')

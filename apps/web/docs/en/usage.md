@@ -4,6 +4,14 @@ Once delivery tests pass, this is your own domain mailbox. Start by reading and 
 
 ## Read and organize
 
+Trash retains deleted mail for 30 days. During that period you can view it, restore it to the original mailbox or permanently delete it. Emptying Trash requires confirmation and affects the messages in that confirmation snapshot. Restore a deleted alias in personal settings before restoring its mail. Existing deleted messages receive a fresh 30-day grace period when patch 329 is applied; hidden saving placeholders are excluded. After expiry, bounded background jobs remove records and queue safe attachment cleanup. Local drafts keep their existing lifecycle and do not enter Trash.
+
+Compose supports To, Cc and Bcc, with at most 20 unique addresses in total. Recipients can see To/Cc; Bcc stays only in the sender’s sent copy. Reply all uses Reply-To and the original To/Cc, excludes your own addresses and never automatically includes Bcc. Drafts and failed-send recovery preserve these fields. Patch 329 enables Cc/Bcc and content fingerprints. Any message containing an external recipient goes entirely through the provider with complete recipient roles; local recipients then arrive through real incoming routes, without duplicate local copies. Purely internal mail remains directly delivered without an external provider.
+
+Personal settings let you choose a default sender for new messages and restore individual deleted aliases without changing their IDs or history. Replies and reopened drafts keep their original sender. Disabled domains and current alias quotas apply. Contacts now offer Load earlier messages, using stable ID pagination across your active mailboxes and exact address matching, including Cc and your own sent Bcc.
+
+Expand Delivery events on sent mail for verified Resend acceptance, delivery, bounce, delay and complaint reports. An administrator must configure callbacks. A provider or binding without delivery callbacks never implies verified delivery.
+
 The inbox checks for new mail every 30 seconds by default while visible and online, and immediately when you return or reconnect. Updates preserve the current page and scroll position and are deferred while messages are selected or menus are open. Checks pause when the page is hidden; manual refresh remains available.
 
 Choose Inbox, Sent or Drafts from the sidebar. All mailboxes in the top toolbar combines your primary and alias addresses. Selecting one address filters its messages and returns to page one. Combine this with search, unread/star/attachment filters and date sorting; it does not change receiving policies or your login identity.
@@ -41,6 +49,8 @@ Personal settings let you add aliases, change sender names, pin addresses for so
 ## Preferences and integrations
 
 Personal settings manage language, forwarding, CLI tokens and Google linking. Forwarding destinations require Cloudflare verification; see [receiving setup](/docs/en/receiving). Google linking requires prior [administrator setup](/docs/en/administration).
+
+Internal incoming mail also follows the recipient mailbox's forwarding switch, using the recipient's sending channel and quota. The forwarded copy is sent from that mailbox with Reply-To pointing to the original sender; body, inline images and attachments are preserved, without Bcc addresses. If forwarding fails or is unconfirmed, the original stays in the inbox and its details show a failure notice. Check the channel, quota and forwarding settings before retrying an unconfirmed attempt.
 
 Changing your password invalidates old credentials, sessions, the personal CLI token and previously unredeemed OAuth authorization codes. Sign in again and generate a new token if needed. See [CLI / Agent](/docs/en/cli) for scripts.
 

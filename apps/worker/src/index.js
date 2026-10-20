@@ -6,6 +6,7 @@ import attService from './service/att-service';
 import unmatchedService from './service/unmatched-service';
 import oauthProviderService from './service/oauth-provider-service';
 import webhookService from './service/webhook-service';
+import mailRecoveryService from './service/mail-recovery-service';
 
 export default {
 	 async fetch(req, env, ctx) {
@@ -29,10 +30,12 @@ export default {
 	email: email,
 	async scheduled(c, env, ctx) {
 		if (c.cron === '* * * * *') {
+			await mailRecoveryService.cleanup({ env });
 			await webhookService.drain({ env });
 			return;
 		}
 		await userService.resetDaySendCount({ env })
+		await mailRecoveryService.cleanup({ env })
 		await emailService.cleanupSendRequests({ env })
 		await emailService.completeReceiveAll({ env })
 		await attService.cleanupDeleteQueue({ env })

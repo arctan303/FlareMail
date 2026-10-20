@@ -214,33 +214,41 @@ const accountService = {
 
 		const admin = isAdmin(targetUser);
 		const defaultName = targetUser.name || emailUtils.getName(email);
-		const inserted = await c.env.db.prepare(`
-			INSERT INTO account (email, name, user_id)
-			SELECT ?, ?, ?
-			WHERE EXISTS (
-				SELECT 1 FROM user
-				WHERE user_id = ? AND status = ? AND is_del = ?
-			)
-			AND (? = 1 OR (
-				SELECT COUNT(*) FROM account WHERE user_id = ? AND is_del = 0
-			) < (
-				SELECT account_limit FROM user WHERE user_id = ?
-			))
-			AND NOT EXISTS (SELECT 1 FROM account WHERE email = ? COLLATE NOCASE)
-			RETURNING account_id AS accountId, email, name, user_id AS userId,
-				all_receive AS allReceive, sort, is_del AS isDel
-		`).bind(
-			email,
-			defaultName,
-			targetUser.userId,
-			targetUser.userId,
-			userConst.status.NORMAL,
-			isDel.NORMAL,
-			admin ? 1 : 0,
-			targetUser.userId,
-			targetUser.userId,
-			email,
-		).first();
+		let inserted;
+		try {
+			inserted = await c.env.db.prepare(`
+				INSERT INTO account (email, name, user_id)
+				SELECT ?, ?, ?
+				WHERE EXISTS (
+					SELECT 1 FROM user
+					WHERE user_id = ? AND status = ? AND is_del = ?
+				)
+				AND (? = 1 OR (
+					SELECT COUNT(*) FROM account WHERE user_id = ? AND is_del = 0
+				) < (
+					SELECT account_limit FROM user WHERE user_id = ?
+				))
+				AND NOT EXISTS (SELECT 1 FROM account WHERE email = ? COLLATE NOCASE)
+				RETURNING account_id AS accountId, email, name, user_id AS userId,
+					all_receive AS allReceive, sort, is_del AS isDel
+			`).bind(
+				email,
+				defaultName,
+				targetUser.userId,
+				targetUser.userId,
+				userConst.status.NORMAL,
+				isDel.NORMAL,
+				admin ? 1 : 0,
+				targetUser.userId,
+				targetUser.userId,
+				email,
+			).first();
+		} catch (error) {
+			if (/Managed domain is inactive\./i.test(String(error?.message || ''))) {
+				throw new BizError(t('domainInactive'), 403);
+			}
+			throw error;
+		}
 
 		if (!inserted) {
 			if (await this.selectByEmailIncludeDel(c, email)) throw new BizError(t('isRegAccount'), 409);
@@ -311,23 +319,40 @@ const accountService = {
 		const accountId = Number(params.accountId);
 		const accountRow = await this.selectOwnedById(c, accountId, userId);
 		if (!accountRow) throw new BizError(t('noUserAccount'), 404);
-		await c.env.db.batch([
-			c.env.db.prepare(`UPDATE account SET is_default_send = 0 WHERE user_id = ?`).bind(userId),
-			c.env.db.prepare(`UPDATE account SET is_default_send = 1 WHERE account_id = ? AND user_id = ?`).bind(accountId, userId)
-		]);
+		const state = await managedDomainService.get(c);
+		if (!state.entries.some(entry => entry.enabled && entry.domain === emailUtils.getDomain(accountRow.email).toLowerCase())) {
+			throw new BizError(t('domainSenderInactive'), 403);
+		}
+		try {
+			await c.env.db.batch([
+				c.env.db.prepare('DELETE FROM installation_guard'),
+				c.env.db.prepare(`INSERT INTO installation_guard(valid) SELECT CASE WHEN EXISTS (
+					SELECT 1 FROM account a JOIN user u ON u.user_id=a.user_id
+					WHERE a.account_id=? AND a.user_id=? AND a.is_del=0 AND a.email=? COLLATE NOCASE AND u.is_del=0 AND u.status=0
+					AND EXISTS (SELECT 1 FROM installation_state WHERE id=1 AND revision=?)
+				) THEN 1 ELSE 0 END`).bind(accountId, userId, accountRow.email, state.revision),
+				c.env.db.prepare('UPDATE account SET is_default_send=0 WHERE user_id=?').bind(userId),
+				c.env.db.prepare('UPDATE account SET is_default_send=1 WHERE account_id=? AND user_id=?').bind(accountId, userId),
+				c.env.db.prepare('DELETE FROM installation_guard'),
+			]);
+		} catch (error) {
+			if (/CHECK constraint failed|constraint.*valid/i.test(String(error?.message || ''))) throw new BizError(t('domainChanged'), 409);
+			throw error;
+		}
 	},
 
 	async getDefaultSendAccount(c, userId) {
-		const defaultAccount = await c.env.db.prepare(`
+		const userRow = await userService.selectById(c, userId);
+		if (!userRow || userRow.status !== userConst.status.NORMAL) return null;
+		const state = await managedDomainService.get(c);
+		const domains = new Set(state.entries.filter(entry => entry.enabled).map(entry => entry.domain));
+		const rows = await c.env.db.prepare(`
 			SELECT account_id AS accountId, email, name, user_id AS userId, is_default_send AS isDefaultSend
 			FROM account
-			WHERE user_id = ? AND is_del = 0 AND is_default_send = 1
-			LIMIT 1
-		`).bind(userId).first();
-		if (defaultAccount) return defaultAccount;
-		const userRow = await userService.selectById(c, userId);
-		if (!userRow) return null;
-		return await this.selectByEmail(c, userRow.email);
+			WHERE user_id=? AND is_del=0
+			ORDER BY is_default_send DESC, CASE WHEN email=? COLLATE NOCASE THEN 0 ELSE 1 END, account_id
+		`).bind(userId, userRow.email).all();
+		return rows.results.find(row => domains.has(emailUtils.getDomain(row.email).toLowerCase())) || null;
 	},
 
 	async selectAllForUser(c, userId) {

@@ -15,6 +15,9 @@ import settingService from './setting-service';
 import accountService from './account-service';
 import userService from './user-service';
 import webhookService from './webhook-service';
+import managedDomainService from './managed-domain-service';
+import { t } from '../i18n/i18n';
+import internalForwardService from './internal-forward-service';
 
 const RESEND_MESSAGE_ID_TIMEOUT_MS = 5000;
 const RESEND_MESSAGE_ID_MAX_ATTEMPTS = 3;
@@ -26,6 +29,13 @@ function providerMessageId(value) {
 }
 
 export const emailSendService = {
+	async storeDeliveryMetadata(c, emailId, provider, recipients) {
+		const columns = (await c.env.db.prepare("PRAGMA table_info('email')").all()).results || [];
+		if (!['delivery_provider', 'delivery_recipients'].every(name => columns.some(column => column.name === name))) return;
+		await c.env.db.prepare('UPDATE email SET delivery_provider = ?, delivery_recipients = ? WHERE email_id = ? AND type = 1')
+			.bind(provider, JSON.stringify(recipients), emailId).run();
+	},
+
 	buildReplyHeaders(messageId, references) {
 		const inReplyTo = String(messageId || '').trim();
 		if (!inReplyTo) return undefined;
@@ -38,14 +48,16 @@ export const emailSendService = {
 		};
 	},
 
-	async claimSendRequest(c, userId, requestId) {
+	async claimSendRequest(c, userId, requestId, payloadHash = '', requireHash = false) {
+		const hashColumn = await c.env.db.prepare("SELECT 1 AS present FROM pragma_table_info('send_request') WHERE name = 'payload_hash'").first();
+		if (requireHash && !hashColumn) throw new BizError('Database upgrade 329 is required for this sending feature.', 503);
 		let inserted;
 		try {
 			inserted = await c.env.db.prepare(`
-				INSERT OR IGNORE INTO send_request(user_id, request_id)
-				VALUES (?, ?)
+				INSERT OR IGNORE INTO send_request(user_id, request_id${hashColumn ? ', payload_hash' : ''})
+				VALUES (?, ?${hashColumn ? ', ?' : ''})
 				RETURNING request_id AS requestId
-			`).bind(userId, requestId).first();
+			`).bind(...(hashColumn ? [userId, requestId, payloadHash] : [userId, requestId])).first();
 		} catch (error) {
 			if (error.message?.includes('no such table')) {
 				throw new BizError('Database upgrade required before sending mail.', 503);
@@ -56,14 +68,18 @@ export const emailSendService = {
 
 		const existing = await c.env.db.prepare(`
 			SELECT email_id AS emailId, status, delivery_status AS deliveryStatus, warning,
-			       recipient_count AS recipientCount, quota_reserved AS quotaReserved
+			       recipient_count AS recipientCount, quota_reserved AS quotaReserved,
+			       ${hashColumn ? 'payload_hash' : "''"} AS payloadHash
 			FROM send_request
 			WHERE user_id = ? AND request_id = ?
 		`).bind(userId, requestId).first();
+		if (payloadHash && ((existing?.payloadHash && existing.payloadHash !== payloadHash) || (requireHash && !existing?.payloadHash))) {
+			throw new BizError('This requestId was already used for a different message. Use a new requestId for changed content or recipients.', 409);
+		}
 		if (existing?.status === 'pending' && !existing.emailId) {
 			const stale = await this.deleteSendRequestAndReleaseQuota(c, userId, requestId, true);
 			if (stale) {
-				return this.claimSendRequest(c, userId, requestId);
+				return this.claimSendRequest(c, userId, requestId, payloadHash, requireHash);
 			}
 		}
 		if (existing?.emailId) {
@@ -74,7 +90,7 @@ export const emailSendService = {
 			if (existingEmail) {
 				if (existing.status === 'pending' && existingEmail.status === emailConst.status.FAILED) {
 					if (await this.deleteSendRequestAndReleaseQuota(c, userId, requestId)) {
-						return this.claimSendRequest(c, userId, requestId);
+						return this.claimSendRequest(c, userId, requestId, payloadHash, requireHash);
 					}
 				}
 				let warning = existing.warning;
@@ -156,6 +172,9 @@ export const emailSendService = {
 			to: [...params.receiveEmail],
 			subject: params.subject
 		};
+		if (params.cc?.length) sendForm.cc = [...params.cc];
+		if (params.bcc?.length) sendForm.bcc = [...params.bcc];
+		if (params.replyTo?.length) sendForm.replyTo = params.replyTo[0];
 
 		if (params.text) {
 			sendForm.text = params.text;
@@ -173,7 +192,7 @@ export const emailSendService = {
 		const replyHeaders = params.sendType === 'reply'
 			? this.buildReplyHeaders(params.messageId, params.references)
 			: undefined;
-		if (replyHeaders) sendForm.headers = replyHeaders;
+		if (replyHeaders || params.headers) sendForm.headers = { ...params.headers, ...replyHeaders };
 
 		validateCloudflareMessage(sendForm);
 		return sendForm;
@@ -205,11 +224,14 @@ export const emailSendService = {
 			html: params.html,
 			attachments: await this.toResendAttachments(params.attachments)
 		};
+		if (params.cc?.length) sendForm.cc = [...params.cc];
+		if (params.bcc?.length) sendForm.bcc = [...params.bcc];
+		if (params.replyTo?.length) sendForm.replyTo = [...params.replyTo];
 
 		const replyHeaders = params.sendType === 'reply'
 			? this.buildReplyHeaders(params.messageId, params.references)
 			: undefined;
-		if (replyHeaders) sendForm.headers = replyHeaders;
+		if (replyHeaders || params.headers) sendForm.headers = { ...params.headers, ...replyHeaders };
 
 		const result = await resend.emails.send(sendForm);
 		if (result?.data?.id && !result.error) {
@@ -380,7 +402,7 @@ export const emailSendService = {
 		return content;
 	},
 
-	async HandleOnSiteEmail(c, receiveEmail, sendEmailData, attList) {
+	async HandleOnSiteEmail(c, receiveEmail, sendEmailData, attList, forwardContent = {}) {
 		const { noRecipient } = await settingService.query(c);
 		const accountList = (await Promise.all(receiveEmail.map(async address => {
 			const accountRow = await accountService.selectByEmail(c, address);
@@ -396,6 +418,12 @@ export const emailSendService = {
 		let firstBounceMessage = '';
 
 		for (const address of receiveEmail) {
+			if (!await managedDomainService.containsEmail(c, address)) {
+				handledCount++;
+				bouncedCount++;
+				firstBounceMessage ||= `${t('domainInactive')} <${address}>`;
+				continue;
+			}
 			const accountRow = accountList.find(row => row.email.toLowerCase() === address.toLowerCase());
 			if (!accountRow && noRecipient === settingConst.noRecipient.CLOSE) {
 				handledCount++;
@@ -414,6 +442,7 @@ export const emailSendService = {
 				isDel: isDel.DELETE,
 				toEmail: address,
 				toName: emailUtils.getName(address),
+				bcc: '[]',
 			};
 			delete emailValues.attList;
 			delete emailValues.deliveryWarning;
@@ -435,7 +464,16 @@ export const emailSendService = {
 				await webhookService.completeReceive(c, accountRow ? emailConst.status.RECEIVE : emailConst.status.NOONE, receivedRow.emailId);
 				webhookService.kick(c, receivedRow.emailId);
 				deliveredCount++;
+				// The local copy is complete before forwarding. Provider failures
+				// remain a recipient-side warning and never ask the sender to retry.
+				if (accountRow) await internalForwardService.forward(c, receivedRow, forwardContent.attachments || []);
 			} catch (error) {
+				if (!receivedRow && /Managed domain is inactive\./i.test(String(error?.cause?.cause?.message || error?.cause?.message || error?.message || ''))) {
+					handledCount++;
+					bouncedCount++;
+					firstBounceMessage ||= `${t('domainInactive')} <${address}>`;
+					continue;
+				}
 				failedCount++;
 				console.error('Failed to persist an internal recipient copy', error?.message || error?.name || 'unknown error');
 				if (receivedRow) {

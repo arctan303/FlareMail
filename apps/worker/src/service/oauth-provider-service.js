@@ -8,6 +8,7 @@ import oauthProviderConfigService from './oauth-provider-config-service';
 import { isDel, userConst } from '../const/entity-const';
 import { isAdmin } from '../security/admin-identity';
 import { readLimitedBytes } from '../utils/req-utils';
+import { sessionEpoch, sessionEpochColumns } from '../security/session-epoch';
 
 const CODE_TTL_MS = 90 * 1000;
 const TOKEN_TTL_SECONDS = 5 * 60;
@@ -65,6 +66,7 @@ async function activeOAuthUser(c) {
 	if (!session) return null;
 	const user = await userService.selectByIdIncludeDel(c, session.userId);
 	if (!user || user.isDel !== isDel.NORMAL || user.status === userConst.status.BAN) return null;
+	if (!sessionService.matchesEpoch(session, user)) return null;
 	if (session.credentialFingerprint !== await cryptoUtils.hashSecret(user.password)) return null;
 	if (!sessionService.getOAuthRawToken(c)) sessionService.promoteCurrentToOAuth(c);
 	return user;
@@ -165,13 +167,15 @@ const oauthProviderService = {
 
 		const code = randomToken();
 		const now = Date.now();
+		const columns = await sessionEpochColumns(c);
 		await cleanupAuthorizationCodes(c, now);
 		const inserted = await c.env.db.prepare(`
 			INSERT INTO oauth_authorization_code(code_hash, client_id, redirect_uri, user_id, code_challenge, created_at, expires_at)
 			SELECT ?, ?, ?, user_id, ?, ?, ? FROM user
-			WHERE user_id = ? AND password = ? AND is_del = 0 AND status = 0
+			WHERE user_id = ? AND password = ? AND email = ? COLLATE NOCASE AND is_del = 0 AND status = 0
+			${columns.epoch ? 'AND session_epoch = ?' : ''}
 		`).bind(await cryptoUtils.hashSecret(code), clientId, redirectUri, challenge, now, now + CODE_TTL_MS,
-			user.userId, user.password).run();
+			user.userId, user.password, user.email, ...(columns.epoch ? [sessionEpoch(user.sessionEpoch)] : [])).run();
 		if (Number(inserted.meta?.changes || 0) !== 1) return oauthRedirect(c, appendError(redirectUri, 'login_required', state));
 
 		const target = new URL(redirectUri);

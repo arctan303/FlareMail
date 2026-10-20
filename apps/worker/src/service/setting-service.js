@@ -1,6 +1,6 @@
 import KvConst from '../const/kv-const';
 import setting from '../entity/setting';
-import orm from '../entity/orm';
+import orm, { logQueryStructure } from '../entity/orm';
 import r2Service from './r2-service';
 import mailProviderService, { hasCloudflareEmail } from './mail-provider-service';
 import BizError from '../error/biz-error';
@@ -60,7 +60,9 @@ const settingService = {
 			return c.get('setting')
 		}
 
+		const domainState = await managedDomainService.get(c);
 		let settingData = await c.env.kv.get(KvConst.SETTING, { type: 'json' });
+		if (settingData?.__domainRevision !== domainState.revision) settingData = null;
 		if (settingData) settingData = { ...settingData };
 
 		if (!settingData) {
@@ -68,7 +70,7 @@ const settingService = {
 			if (settingRow) {
 				settingData = hydrateSettingRow(settingRow);
 				if (populateCache) {
-					await c.env.kv.put(KvConst.SETTING, JSON.stringify(settingData));
+					await c.env.kv.put(KvConst.SETTING, JSON.stringify({...settingData,__domainRevision:domainState.revision}));
 				}
 			}
 		}
@@ -77,7 +79,8 @@ const settingService = {
 			throw new BizError('数据库未初始化 Database not initialized.');
 		}
 
-		settingData.domainList = await managedDomainService.suffixes(c);
+		delete settingData.__domainRevision;
+		settingData.domainList = domainState.entries.filter(row => row.enabled).map(row => '@'+row.domain);
 
 		c.set?.('setting', settingData);
 		return settingData;
@@ -139,6 +142,7 @@ const settingService = {
 
 		const settingData = await this.query(c);
 		const update = {};
+		let resendGuard;
 		const providerUpdate = Object.hasOwn(params, 'mailProvider')
 			? await mailProviderService.prepareUpdate(c, params.mailProvider) : null;
 		for (const field of ['receive', 'send', 'loginDomain']) {
@@ -219,7 +223,11 @@ const settingService = {
 		}
 
 		if (Object.hasOwn(params, 'resendTokens')) {
-			const allowedDomains = new Set((await managedDomainService.get(c)).domains);
+			const domainState = await managedDomainService.get(c);
+			const allowedDomains = new Set(domainState.domains);
+			const stored = await c.env.db.prepare('SELECT resend_tokens FROM setting').first();
+			const currentTokens = JSON.parse(stored.resend_tokens);
+			resendGuard = { revision:domainState.revision,tokens:stored.resend_tokens };
 			const rawChangedTokens = params.resendTokens;
 			if (!rawChangedTokens || typeof rawChangedTokens !== 'object' || Array.isArray(rawChangedTokens)) {
 				throw new BizError('Invalid Resend token configuration.');
@@ -231,11 +239,11 @@ const settingService = {
 				if (typeof token !== 'string' || token.length > 255 || /\s/.test(token)) {
 					throw new BizError('Invalid Resend token.');
 				}
-				const current = settingData.resendTokens[normalizedDomain] || '';
+				const current = currentTokens[normalizedDomain] || '';
 				if (current && token === `${current.slice(0, 12)}******`) continue;
 				changedTokens[normalizedDomain] = token;
 			}
-			const resendTokens = { ...settingData.resendTokens, ...changedTokens };
+			const resendTokens = { ...currentTokens, ...changedTokens };
 			Object.keys(resendTokens).forEach(domain => {
 				if (!resendTokens[domain]) delete resendTokens[domain];
 			});
@@ -259,7 +267,24 @@ const settingService = {
 				throw new BizError('Google configuration changed; reload and try again.', 409);
 			}
 		}
-		if (providerUpdate) {
+		if (resendGuard) {
+			const query = orm(c).update(setting).set(update).toSQL();
+			logQueryStructure(c,query.sql);
+			try {
+				await c.env.db.batch([
+					c.env.db.prepare('DELETE FROM installation_guard'),
+					c.env.db.prepare(`INSERT INTO installation_guard(valid) SELECT CASE WHEN EXISTS
+						(SELECT 1 FROM installation_state WHERE id=1 AND revision=?)
+						AND EXISTS (SELECT 1 FROM setting WHERE resend_tokens=?) THEN 1 ELSE 0 END`).bind(resendGuard.revision,resendGuard.tokens),
+					...(providerUpdate ? [providerUpdate] : []),
+					c.env.db.prepare(query.sql).bind(...query.params),
+					c.env.db.prepare('DELETE FROM installation_guard'),
+				]);
+			} catch (error) {
+				if (/constraint/i.test(String(error?.message || ''))) throw new BizError(t('domainChanged'),409);
+				throw error;
+			}
+		} else if (providerUpdate) {
 			const statements = [providerUpdate];
 			if (Object.keys(update).length > 0) {
 				const query = orm(c).update(setting).set(update).toSQL();

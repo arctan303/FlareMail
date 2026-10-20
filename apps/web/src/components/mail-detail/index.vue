@@ -93,7 +93,7 @@
                         </button>
                       </dd>
                     </template>
-                    <template v-if="formatReceive(email.bcc)">
+                    <template v-if="Number(email.type) === 1 && formatReceive(email.bcc)">
                       <dt>{{ $t('bcc') }}</dt>
                       <dd class="delivery-field-value">
                         <span>{{ formatReceive(email.bcc) }}</span>
@@ -125,7 +125,12 @@
             <el-alert v-if="email.status === 4" :closable="false" :title="$t('complained')" type="warning" show-icon />
             <el-alert v-if="email.status === 5" :closable="false" :title="$t('delayed')" type="warning" show-icon />
           </div>
+          <div v-if="hasInternalForwardFailure(email)" class="alert-block reading-aligned">
+            <el-alert :closable="false" :title="$t('mailRecipients.forwardFailed')" type="warning" show-icon />
+          </div>
         </header>
+
+        <DeliveryEvents v-if="Number(email.type) === 1" :key="email.emailId" :email-id="Number(email.emailId)" />
 
         <div class="email-body-content reading-aligned" :class="{ 'is-forced-light': forceLightView }">
           <ShadowHtml v-if="email.content" :html="email.content" :key="email.emailId" :force-light="forceLightView" />
@@ -163,6 +168,9 @@
           <button type="button" class="body-action-btn reply-action" @click="openReply">
             <Icon icon="solar:chat-round-line-linear" width="18" height="18" /><span>{{ $t('reply') }}</span>
           </button>
+          <button type="button" class="body-action-btn" @click="openReplyAll">
+            <Icon icon="solar:chat-round-line-linear" width="18" height="18" /><span>{{ $t('mailRecipients.replyAll') }}</span>
+          </button>
           <button type="button" class="body-action-btn" @click="openForward">
             <Icon icon="solar:plain-2-linear" width="18" height="18" /><span>{{ $t('forward') }}</span>
           </button>
@@ -186,6 +194,8 @@ import { Icon } from '@iconify/vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import ShadowHtml from '@/components/shadow-html/index.vue';
+import DeliveryEvents from '@/components/mail-delivery/DeliveryEvents.vue';
+import {hasInternalForwardFailure} from '@/utils/mail-forwarding.js';
 import { emailDelete, emailRead, emailUnread } from '@/request/email.js';
 import { starAdd, starCancel } from '@/request/star.js';
 import { useUiStore } from '@/store/ui.js';
@@ -342,6 +352,11 @@ function openReply() {
   if (target?.openReply) {
     target.openReply(props.email);
   }
+}
+
+function openReplyAll() {
+  const target = uiStore.writerRef?.value || uiStore.writerRef;
+  target?.openReplyAll?.(props.email);
 }
 
 function openForward() {

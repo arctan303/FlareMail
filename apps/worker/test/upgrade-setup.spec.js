@@ -77,7 +77,7 @@ async function snapshot() {
 		// Additive patch 326 must preserve business data and initialize revocation
 		// state to these defaults. Existing wrong/null values still fail equality.
 		if (table === 'user') data[table] = data[table].map(row => ({session_epoch: 0, preserved_session_hash: '', ...row}));
-		if (table === 'email') data[table] = data[table].map(({reply_to: _replyTo, ...emailRow}) => emailRow);
+		if (table === 'email') data[table] = data[table].map(({reply_to: _replyTo, ...emailRow}) => ({deleted_at:null,trash_revision:0,delivery_provider:'',delivery_recipients:'[]',ingress_source:'',...emailRow}));
   }
   data.attachment = await (await env.r2.get(ATTACHMENT_KEY)).text();
   data.session = await env.kv.get('upgrade320:preserved-session');
@@ -318,7 +318,7 @@ describe.each([baseline320, baseline321])('upgrade from frozen FlareMail schema 
       expect(await snapshot()).toEqual(before);
       const cookie = await login();
       const domains = await (await request('/api/admin/domains',{cookie,config})).json();
-      expect(domains.data).toEqual({domains:['example.com','example.net'],revision:3});
+      expect(domains.data).toMatchObject({domains:['example.com','example.net'],revision:3,managementReady:true});
       const secret = await (await request('/api/setting/runtime/oauth-secret',{method:'POST',cookie,body:{password:PASSWORD},config})).json();
       expect(secret.data.secret).toBe(PROVIDER_SECRET);
     });

@@ -67,6 +67,11 @@
             <span class="nav-label">{{ $t('contacts') }}</span>
           </div>
 
+          <div class="nav-item" :class="{ active: route.name === 'trash' }" @click="nav('trash')" v-perm="'email:delete'">
+            <div class="nav-icon-box"><Icon icon="solar:trash-bin-trash-linear" width="16" height="16" /></div>
+            <span class="nav-label">{{ $t('trash') }}</span>
+          </div>
+
           <template v-if="hasPerm(['user:query','setting:query'])">
             <div class="nav-section-divider"></div>
             <div class="nav-section-header">

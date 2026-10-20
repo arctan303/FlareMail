@@ -68,7 +68,7 @@ async function businessSnapshot() {
 		// Patch 326 adds these defaults; compare their values as well as preserving
 		// every older business field, without hiding an incorrect migrated value.
 		if (table === 'user') rows[table] = rows[table].map(row => ({ session_epoch: 0, preserved_session_hash: '', ...row }));
-		if (table === 'email') rows[table] = rows[table].map(({ reply_to: _replyTo, ...emailRow }) => emailRow);
+		if (table === 'email') rows[table] = rows[table].map(({ reply_to: _replyTo, ...emailRow }) => ({deleted_at:null,trash_revision:0,delivery_provider:'',delivery_recipients:'[]',ingress_source:'',...emailRow}));
   }
   rows.attachmentBody = await (await env.r2.get(ATTACHMENT_KEY)).text();
   rows.keptSession = await env.kv.get('upgrade:kept-session');

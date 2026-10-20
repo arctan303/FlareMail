@@ -7,6 +7,8 @@ import cryptoUtils from '../src/utils/crypto-utils';
 import oauthService from '../src/service/oauth-service';
 import sessionService from '../src/service/session-service';
 import { markInstalled } from './installed-instance';
+import { DOMAIN_TRIGGERS } from '../src/init/domain-schema';
+import { removeCapabilityPatch } from './capability-fixtures';
 
 const PASSWORD = 'schema-fixture-password';
 const ADMIN = 'schema-admin@example.com';
@@ -46,6 +48,11 @@ async function login(email = ADMIN) {
 }
 
 async function removeWebhookPatch() {
+	await removeCapabilityPatch(env);
+	for (const name of Object.keys(DOMAIN_TRIGGERS)) await env.db.prepare(`DROP TRIGGER IF EXISTS ${name}`).run();
+	const columns = (await env.db.prepare("PRAGMA table_info('managed_domain')").all()).results;
+	if (columns.some(column => column.name === 'enabled')) await env.db.prepare('ALTER TABLE managed_domain DROP COLUMN enabled').run();
+	await env.db.prepare('DELETE FROM schema_migrations WHERE version=328').run();
   await env.db.batch([
     env.db.prepare('DROP TABLE IF EXISTS webhook_delivery'),
     env.db.prepare('DROP TABLE IF EXISTS webhook_config'),
@@ -90,8 +97,8 @@ describe.sequential('admin database schema inspection API', () => {
     const body = await res.json();
     expect(body.code).toBe(200);
     expect(body.data).toMatchObject({
-      currentVersion: { id: 327, label: 'v3.27' },
-      latestVersion: { id: 327, label: 'v3.27' },
+      currentVersion: { id: 329, label: 'v3.29' },
+      latestVersion: { id: 329, label: 'v3.29' },
       upgradeRequired: false,
       upgradeBlocking: false,
       upgradeSupported: true,
@@ -100,9 +107,9 @@ describe.sequential('admin database schema inspection API', () => {
     expect(Array.isArray(body.data.history)).toBe(true);
     expect(body.data.history.length).toBeGreaterThanOrEqual(14);
     const topPatch = body.data.history[0];
-    expect(topPatch.version).toBe(327);
-    expect(topPatch.label).toBe('v3.27');
-    expect(topPatch.descKey).toBe('schemaPatch327');
+    expect(topPatch.version).toBe(329);
+    expect(topPatch.label).toBe('v3.29');
+    expect(topPatch.descKey).toBe('schemaPatch329');
     expect(topPatch.appliedTime).toBeTruthy();
   });
 
@@ -127,13 +134,15 @@ describe.sequential('admin database schema inspection API', () => {
     expect(behindRes.status).toBe(200);
     const behindData = (await behindRes.json()).data;
     expect(behindData.currentVersion).toMatchObject({ id: 324, label: 'v3.24' });
-    expect(behindData.latestVersion).toMatchObject({ id: 327, label: 'v3.27' });
+    expect(behindData.latestVersion).toMatchObject({ id: 329, label: 'v3.29' });
     expect(behindData.upgradeRequired).toBe(true);
     expect(behindData.upgradeBlocking).toBe(false);
     expect(behindData.pendingPatches).toEqual([
       expect.objectContaining({ version: 325, label: 'v3.25', descKey: 'schemaPatch325' }),
       expect.objectContaining({ version: 326, label: 'v3.26', descKey: 'schemaPatch326' }),
       expect.objectContaining({ version: 327, label: 'v3.27', descKey: 'schemaPatch327' }),
+      expect.objectContaining({ version: 328, label: 'v3.28', descKey: 'schemaPatch328' }),
+      expect.objectContaining({ version: 329, label: 'v3.29', descKey: 'schemaPatch329' }),
     ]);
     expect((await login(ADMIN))).toBeTruthy();
 
@@ -145,8 +154,8 @@ describe.sequential('admin database schema inspection API', () => {
     const afterRes = await api('/admin/schema', { cookie: adminCookie });
     expect(afterRes.status).toBe(200);
     const afterData = (await afterRes.json()).data;
-    expect(afterData.currentVersion).toMatchObject({ id: 327, label: 'v3.27' });
-    expect(afterData.latestVersion).toMatchObject({ id: 327, label: 'v3.27' });
+    expect(afterData.currentVersion).toMatchObject({ id: 329, label: 'v3.29' });
+    expect(afterData.latestVersion).toMatchObject({ id: 329, label: 'v3.29' });
     expect(afterData.upgradeRequired).toBe(false);
     expect(afterData.pendingPatches).toEqual([]);
     const replyToColumn = (await env.db.prepare("PRAGMA table_info('email')").all()).results.find(column => column.name === 'reply_to');
@@ -178,21 +187,23 @@ describe.sequential('admin database schema inspection API', () => {
     expect(behind.status).toBe(200);
     const behindData = (await behind.json()).data;
     expect(behindData.currentVersion).toMatchObject({ id: 323, label: 'v3.23' });
-    expect(behindData.latestVersion).toMatchObject({ id: 327, label: 'v3.27' });
+    expect(behindData.latestVersion).toMatchObject({ id: 329, label: 'v3.29' });
     expect(behindData).toMatchObject({ upgradeRequired: true, upgradeBlocking: false, upgradeSupported: true });
     expect(behindData.pendingPatches).toEqual([
       expect.objectContaining({ version: 324, descKey: 'schemaPatch324' }),
       expect.objectContaining({ version: 325, descKey: 'schemaPatch325' }),
       expect.objectContaining({ version: 326, descKey: 'schemaPatch326' }),
       expect.objectContaining({ version: 327, descKey: 'schemaPatch327' }),
+      expect.objectContaining({ version: 328, descKey: 'schemaPatch328' }),
+      expect.objectContaining({ version: 329, descKey: 'schemaPatch329' }),
     ]);
     expect(await login(ADMIN)).toBeTruthy();
 
     expect((await api('/admin/upgrade', { method: 'POST', cookie: adminCookie })).status).toBe(200);
     const upgraded = (await (await api('/admin/schema', { cookie: adminCookie })).json()).data;
     expect(upgraded).toMatchObject({
-      currentVersion: { id: 327, label: 'v3.27' },
-      latestVersion: { id: 327, label: 'v3.27' },
+      currentVersion: { id: 329, label: 'v3.29' },
+      latestVersion: { id: 329, label: 'v3.29' },
       upgradeRequired: false,
       upgradeBlocking: false,
     });
@@ -236,7 +247,7 @@ describe.sequential('admin database schema inspection API', () => {
     ]);
     try {
       const schema = (await (await api('/admin/schema', { cookie: adminCookie })).json()).data;
-      expect(schema).toMatchObject({ currentVersion: { id: 325 }, latestVersion: { id: 327 }, upgradeRequired: true, upgradeBlocking: false });
+      expect(schema).toMatchObject({ currentVersion: { id: 325 }, latestVersion: { id: 329 }, upgradeRequired: true, upgradeBlocking: false });
       expect(await login(ADMIN)).toBeTruthy();
       const legacyLogout = await login(ADMIN);
       expect((await api('/logout', { method: 'DELETE', cookie: legacyLogout })).status).toBe(200);

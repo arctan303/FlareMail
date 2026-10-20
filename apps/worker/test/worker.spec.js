@@ -120,7 +120,8 @@ describe('local Workers test environment', () => {
 		const inserted = await env.db.prepare(
 			'INSERT INTO user (email, password, salt, send_count) VALUES (?, ?, ?, ?)',
 		).bind('scheduled-test@example.com', 'test-hash', 'test-salt', 3).run();
-		expect(inserted.meta.changes).toBe(1);
+		expect(inserted.success).toBe(true);
+		expect(await env.db.prepare("SELECT COUNT(*) AS total FROM user WHERE email='scheduled-test@example.com'").first()).toEqual({total:1});
 
 		const before = await env.db.prepare(
 			'SELECT send_count AS sendCount FROM user WHERE email = ?',
@@ -596,7 +597,7 @@ describe('outgoing mail and forwarding boundaries', () => {
 		expect(recipientTotal.total).toBe(1);
 	});
 
-	it('splits mixed recipients and treats provider transport errors as an unknown accepted state', async () => {
+	it('keeps a mixed provider envelope intact and treats transport errors as an unknown accepted state', async () => {
 		await env.db.prepare("UPDATE mail_provider_config SET provider = 'cloudflare' WHERE id = 1").run();
 		const sender = 'mixed-sender@example.com';
 		const recipient = 'mixed-recipient@example.com';
@@ -613,9 +614,9 @@ describe('outgoing mail and forwarding boundaries', () => {
 		const accepted = await send(cookie, body, { ...env, email: provider });
 		expect(accepted.status).toBe(200);
 		expect(provider.send).toHaveBeenCalledTimes(1);
-		expect(provider.send.mock.calls[0][0].to).toEqual(['friend@outside.test']);
+		expect(provider.send.mock.calls[0][0].to).toEqual([recipient, 'friend@outside.test']);
 		const internal = await env.db.prepare('SELECT COUNT(*) AS total FROM email WHERE user_id = ? AND type = 0').bind(recipientId).first();
-		expect(internal.total).toBe(1);
+		expect(internal.total).toBe(0);
 
 		const failureSender = 'provider-failure@example.com';
 		const failureId = await createLegacyUser(failureSender, 'provider-failure-password');
@@ -658,8 +659,8 @@ describe('outgoing mail and forwarding boundaries', () => {
 		const userId = await createLegacyUser('recovery@example.com', 'recovery-password-long');
 		const accountId = await accountIdFor('recovery@example.com');
 		const inserted = await env.db.batch([
-			env.db.prepare('INSERT INTO email (user_id, account_id, type, status) VALUES (?, ?, 0, 6) RETURNING email_id AS emailId').bind(userId, accountId),
-			env.db.prepare("INSERT INTO email (user_id, account_id, type, status, create_time) VALUES (?, ?, 1, 6, datetime('now', '-10 minutes')) RETURNING email_id AS emailId").bind(userId, accountId),
+			env.db.prepare("INSERT INTO email (user_id, account_id, type, status, to_email) VALUES (?, ?, 0, 6, 'recovery@example.com') RETURNING email_id AS emailId").bind(userId, accountId),
+			env.db.prepare("INSERT INTO email (user_id, account_id, type, status, create_time,send_email) VALUES (?, ?, 1, 6, datetime('now', '-10 minutes'),'recovery@example.com') RETURNING email_id AS emailId").bind(userId, accountId),
 		]);
 		await worker.scheduled(createScheduledController({ cron: '0 16 * * *', scheduledTime: Date.now() }), env, createExecutionContext());
 		const inboundId = inserted[0].results[0].emailId;
@@ -675,13 +676,13 @@ describe('outgoing mail and forwarding boundaries', () => {
 		const accountId = await accountIdFor(sender);
 		const requestId = 'request_scheduled_send_0001';
 		const outgoing = await env.db.prepare(`
-			INSERT INTO email(user_id, account_id, type, status, subject)
-			VALUES (?, ?, 1, 6, 'in progress') RETURNING email_id AS emailId
-		`).bind(userId, accountId).first();
+			INSERT INTO email(user_id, account_id, type, status, subject,send_email)
+			VALUES (?, ?, 1, 6, 'in progress',?) RETURNING email_id AS emailId
+		`).bind(userId, accountId,sender).first();
 		const unlinkedOutgoing = await env.db.prepare(`
-			INSERT INTO email(user_id, account_id, type, status, subject)
-			VALUES (?, ?, 1, 6, 'not linked yet') RETURNING email_id AS emailId
-		`).bind(userId, accountId).first();
+			INSERT INTO email(user_id, account_id, type, status, subject,send_email)
+			VALUES (?, ?, 1, 6, 'not linked yet',?) RETURNING email_id AS emailId
+		`).bind(userId, accountId,sender).first();
 		await env.db.prepare(`
 			INSERT INTO send_request(user_id, request_id, email_id, recipient_count, quota_reserved)
 			VALUES (?, ?, ?, 1, 1)
@@ -1071,7 +1072,7 @@ describe('outgoing mail and forwarding boundaries', () => {
 		expect(body.data[0].deliveryWarning).toMatch(/persistence was incomplete/i);
 		const localCopy = await env.db.prepare('SELECT message_id AS messageId FROM email WHERE user_id = ? AND type = 0 AND subject = ?')
 			.bind(localRecipientId, 'accepted before local failure').first();
-		expect(localCopy.messageId).toBe('<accepted-before-db-failure@provider.test>');
+		expect(localCopy).toBeNull();
 		const quota = await env.db.prepare('SELECT send_count AS sendCount FROM user WHERE user_id = ?').bind(userId).first();
 		expect(quota.sendCount).toBe(2);
 	});
@@ -1132,9 +1133,9 @@ describe('outgoing mail and forwarding boundaries', () => {
 		const accountId = await accountIdFor(sender);
 		const requestId = 'request_pending_email_0001';
 		const outgoing = await env.db.prepare(`
-			INSERT INTO email(user_id, account_id, type, status, subject)
-			VALUES (?, ?, 1, 6, 'pending') RETURNING email_id AS emailId
-		`).bind(userId, accountId).first();
+			INSERT INTO email(user_id, account_id, type, status, subject,send_email)
+			VALUES (?, ?, 1, 6, 'pending',?) RETURNING email_id AS emailId
+		`).bind(userId, accountId,sender).first();
 		await env.db.prepare('UPDATE user SET send_count = 1 WHERE user_id = ?').bind(userId).run();
 		await env.db.prepare(`
 			INSERT INTO send_request(user_id, request_id, email_id, recipient_count, quota_reserved, create_time)
@@ -1157,7 +1158,7 @@ describe('outgoing mail and forwarding boundaries', () => {
 		expect((await env.db.prepare('SELECT send_count AS sendCount FROM user WHERE user_id = ?').bind(userId).first()).sendCount).toBe(1);
 	});
 
-	it('keeps all warnings when provider outcome is unknown and internal persistence fails', async () => {
+	it('keeps provider and persistence warnings without local duplicates when a mixed outcome is unknown', async () => {
 		await env.db.prepare("UPDATE mail_provider_config SET provider = 'cloudflare' WHERE id = 1").run();
 		const sender = 'partial-internal@example.com';
 		const firstRecipient = 'partial-first@example.com';
@@ -1200,15 +1201,38 @@ describe('outgoing mail and forwarding boundaries', () => {
 		});
 		expect(response.status).toBe(200);
 		const body = await response.json();
-		// Finalizing the first internal copy is now an atomic readable-mail/outbox
-		// transaction. The injected update failure also makes that copy incomplete.
-		expect(body.data[0].deliveryWarning).toMatch(/2 internal recipient/i);
+		// The entire mixed envelope was attempted once at the provider. No local
+		// delivery is claimed while its network outcome remains unconfirmed.
+		expect(body.data[0].deliveryWarning).not.toMatch(/internal recipient/i);
 		expect(body.data[0].deliveryWarning).toMatch(/do not resend/i);
 		expect(body.data[0].deliveryWarning).toMatch(/persistence was incomplete/i);
 		expect((await env.db.prepare('SELECT send_count AS sendCount FROM user WHERE user_id = ?').bind(senderId).first()).sendCount).toBe(3);
-		expect((await env.db.prepare('SELECT COUNT(*) AS total FROM email WHERE user_id = ? AND type = 0').bind(firstId).first()).total).toBe(1);
-		expect(await env.db.prepare('SELECT status,is_del FROM email WHERE user_id=? AND type=0').bind(firstId).first()).toEqual({ status: 6, is_del: 1 });
+		expect((await env.db.prepare('SELECT COUNT(*) AS total FROM email WHERE user_id = ? AND type = 0').bind(firstId).first()).total).toBe(0);
 		expect((await env.db.prepare('SELECT COUNT(*) AS total FROM email WHERE user_id = ? AND type = 0').bind(secondId).first()).total).toBe(0);
+	});
+
+	it('keeps the complete local copy and reports a partial pure internal delivery failure', async () => {
+		const sender = 'pure-partial-sender@example.com';
+		const first = 'pure-partial-first@example.com';
+		const second = 'pure-partial-second@example.com';
+		const senderId = await createLegacyUser(sender, 'pure-partial-password');
+		const firstId = await createLegacyUser(first, 'pure-first-password');
+		const secondId = await createLegacyUser(second, 'pure-second-password');
+		const cookie = await login(sender, 'pure-partial-password');
+		let inserts = 0;
+		const failingDb = new Proxy(env.db, { get(target, key) {
+			if (key === 'prepare') return statement => {
+				if (/^\s*insert\s+into\s+"?email"?/i.test(statement) && ++inserts === 3) throw new Error('injected pure internal recipient failure');
+				return target.prepare(statement);
+			};
+			const value = target[key]; return typeof value === 'function' ? value.bind(target) : value;
+		} });
+		const response = await send(cookie, { accountId: await accountIdFor(sender), receiveEmail: [first, second], subject: 'pure partial delivery', content: '<p>partial</p>' }, { ...env, db: failingDb });
+		expect(response.status).toBe(200);
+		expect((await response.json()).data[0].deliveryWarning).toMatch(/1 internal recipient/i);
+		expect(await env.db.prepare('SELECT status,is_del FROM email WHERE user_id=? AND type=0').bind(firstId).first()).toEqual({ status: 0, is_del: 0 });
+		expect((await env.db.prepare('SELECT COUNT(*) AS n FROM email WHERE user_id=? AND type=0').bind(secondId).first()).n).toBe(0);
+		expect((await env.db.prepare('SELECT send_count AS n FROM user WHERE user_id=?').bind(senderId).first()).n).toBe(2);
 	});
 
 	it('does not deliver internal mail to a soft-deleted user', async () => {

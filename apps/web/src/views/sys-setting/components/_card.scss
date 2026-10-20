@@ -6,7 +6,7 @@
 }
 .card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:20px 24px 0; }
 .header-left-group { display:flex; align-items:flex-start; gap:10px; min-width:0; }
-.header-icon { display:none; }
+.header-icon { display:flex; align-items:center; justify-content:center; width:36px; height:36px; flex-shrink:0; border-radius:9px; color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,transparent); }
 .card-title { font-family:inherit; font-size:16px; font-weight:600; line-height:1.5; color:var(--text-strong); margin:0; }
 .card-desc { font-size:12px; line-height:1.6; color:var(--muted); margin:4px 0 0; overflow-wrap:anywhere; }
 .card-body { padding:20px 24px 24px; display:flex; flex-direction:column; gap:20px; min-width:0; }
@@ -21,7 +21,8 @@
 .setting-card :deep(.el-input__wrapper), .setting-card :deep(.el-select__wrapper) { min-height:36px; box-sizing:border-box; }
 .setting-card :deep(.el-textarea__inner) { min-height:80px; line-height:1.6; }
 .setting-card :deep(.el-button) { margin-left:0; border-radius:8px; }
-.setting-card :deep(.el-button:not(.el-button--small):not(.is-link):not(.is-text)) { min-height:36px; }
+.setting-card :deep(.el-button > span) { gap:6px; }
+.setting-card :deep(.el-button:not(.el-button--small):not(.is-link)) { min-height:36px; }
 .setting-card :deep(.el-switch) { flex-shrink:0; }
 .setting-card :deep(button:focus-visible), .setting-card :deep(summary:focus-visible), .setting-card :deep(input[type=radio]:focus-visible) { outline:2px solid var(--accent); outline-offset:3px; }
 .switch-item { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:14px 0; background:transparent; border:0; border-bottom:1px solid var(--line); border-radius:0; }

@@ -79,11 +79,12 @@ describe.sequential('D1 managed domain authority', () => {
 	});
 
 	it('adds normalized domains with CAS and immediately governs mailbox creation', async () => {
-		const added = await add(adminCookie, { domains: ['Example.NET'], revision: 1 });
+		const before = (await (await request('/api/admin/domains', { headers: { Cookie: adminCookie } })).json()).data;
+		const added = await add(adminCookie, { domains: ['Example.NET'], revision: before.revision });
 		expect(added.status).toBe(200);
-		expect((await added.json()).data).toEqual({
+		expect((await added.json()).data).toMatchObject({
 			domains: ['example.com', 'example.net'],
-			revision: 2,
+			revision: before.revision + 1,
 		});
 		expect((await add(adminCookie, { domains: ['other.example'], revision: 1 })).status).toBe(409);
 

@@ -115,7 +115,9 @@ Records show pending/sending/delivered/failed/cancelled, attempts, httpStatus, f
 
 ## Send and reply
 
-Sending requires JSON fields `to` and `subject`. `body` is optional plain text; optional `accountId` selects your sender mailbox. If omitted, the server selects an available mailbox. `requestId` is required: a unique string of 16–128 bytes. CLI sending does not support CC recipients or attachment uploads.
+Sending requires `to` and `subject`. `to` accepts one address or an array; optional `cc` and `bcc` accept address arrays, with at most 20 unique recipients in total. `body` is optional plain text. Optional `accountId` selects your sender mailbox; otherwise the server chooses an available mailbox. `requestId` is required: a unique string of 16–128 bytes. Cc/Bcc require database patch 329. Attachment uploads remain unsupported by this CLI endpoint.
+
+Pass `"replyAll":true` when replying to include Reply-To and the original To/Cc while excluding your own addresses. Bcc is never added automatically. Only a sender can read their own Bcc list. Deletion moves mail to the 30-day Trash, with recovery available in the web UI. Reusing a requestId with changed recipients, body or attachments returns 409; retries must keep the original payload.
 
 ```sh
 curl 'https://mail.example.com/api/cli/emails/send' \
