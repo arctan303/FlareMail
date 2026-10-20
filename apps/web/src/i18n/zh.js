@@ -1260,6 +1260,7 @@ const zh = {
         enabled: '启用通知', senders: '通知范围', all: '所有发件人', allowlist: '指定发件人', addresses: '发件邮箱（每行一个）',
         filterHint: '发件人过滤可选。指定列表为空时不通知。仅匹配 From 邮箱地址，不代表身份认证；所有邮件仍会正常接收。',
         secret: 'Webhook 密钥', secretHint: '留空保留原密钥；首次保存时自动生成', secretOnce: '新密钥：请现在显示并保存，之后无法再次查看。',
+        advanced: '密钥与配置维护', saveHint: '更改需保存后才会应用于所选邮箱。', savedActionsHint: '以下操作使用已保存的配置，不包含尚未保存的更改。',
         reload: '刷新', rotate: '轮换密钥', test: '发送测试', remove: '删除配置', removeConfirm: '删除此邮箱的 Webhook 配置并取消排队中的投递？',
         deliveries: '投递记录', deliveryHint: '记录保留 7 天。已送达表示接收端已返回 HTTP 确认；助手自行管理任务队列与去重。',
         empty: '暂无投递记录', event: '事件', status: '状态 / 次数', retry: '重试', more: '加载更多', failedAction: '请求失败，请刷新后重试。',

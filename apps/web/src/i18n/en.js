@@ -1093,6 +1093,7 @@ const en = {
         enabled: 'Enable notifications', senders: 'Notify for', all: 'All senders', allowlist: 'Selected senders', addresses: 'Sender addresses (one per line)',
         filterHint: 'Sender filtering is optional. An empty selected-senders list sends no notifications. It compares the From address, not a verified identity; all mail is still received.',
         secret: 'Webhook secret', secretHint: 'Leave blank to keep the secret, or generate one for a new configuration', secretOnce: 'New secret: reveal and save it now. It will not be shown again.',
+        advanced: 'Secret and configuration maintenance', saveHint: 'Save changes to apply them to the selected mailbox.', savedActionsHint: 'These actions use the saved configuration, without unsaved changes.',
         reload: 'Refresh', rotate: 'Rotate secret', test: 'Send test', remove: 'Delete configuration', removeConfirm: 'Delete this mailbox’s webhook settings and cancel queued deliveries?',
         deliveries: 'Delivery records', deliveryHint: 'Records are retained for 7 days. Delivery confirms the receiver’s HTTP acknowledgment; your assistant manages its own queue and deduplication.',
         empty: 'No delivery records', event: 'Event', status: 'Status / attempts', retry: 'Retry', more: 'Load more', failedAction: 'Request failed. Refresh and try again.',

@@ -1,55 +1,83 @@
 <template>
-  <section class="setting-card arc-card webhook-card" v-loading="busy">
-    <h3 class="arc-serif-title">{{ t('webhook.title') }}</h3>
-    <p class="hint">{{ t('webhook.description') }}</p>
-    <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
-    <el-form label-position="top" :disabled="busy">
-      <el-form-item :label="t('mailboxAddress')">
-        <el-select v-model="accountId" @change="load" style="width: 100%">
-          <el-option v-for="account in accounts" :key="account.accountId" :value="account.accountId" :label="account.email" />
-        </el-select>
-      </el-form-item>
-      <template v-if="form">
-        <el-form-item label="URL"><el-input v-model="form.url" placeholder="https://assistant.example.com/mail" maxlength="2048" /></el-form-item>
-        <el-form-item :label="t('webhook.enabled')"><el-switch v-model="form.enabled" /></el-form-item>
-        <el-form-item :label="t('webhook.senders')">
-          <el-radio-group v-model="form.mode">
-            <el-radio value="all">{{ t('webhook.all') }}</el-radio>
-            <el-radio value="allowlist">{{ t('webhook.allowlist') }}</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="form.mode === 'allowlist'" :label="t('webhook.addresses')"><el-input v-model="addresses" type="textarea" :rows="3" placeholder="owner@example.com" /></el-form-item>
-        <p class="hint">{{ t('webhook.filterHint') }}</p>
-        <el-form-item :label="t('webhook.secret')"><el-input v-model="newSecret" type="password" show-password autocomplete="new-password" :placeholder="t('webhook.secretHint')" maxlength="256" /></el-form-item>
-        <div class="actions">
-          <el-button type="primary" :disabled="!form.mode" @click="save">{{ t('save') }}</el-button>
-          <el-button @click="load">{{ t('webhook.reload') }}</el-button>
-          <el-button :disabled="!form.hasSecret" @click="act(() => rotateWebhookSecret(accountId, form.revision), true)">{{ t('webhook.rotate') }}</el-button>
-          <el-button :disabled="!form.hasSecret" @click="act(() => testWebhook(accountId))">{{ t('webhook.test') }}</el-button>
-          <el-button type="danger" plain :disabled="!form.hasSecret" @click="remove">{{ t('webhook.remove') }}</el-button>
+  <div class="webhook-settings">
+    <section class="setting-card arc-card" v-loading="busy">
+      <header class="card-header">
+        <div class="header-left-group">
+          <div class="header-icon" aria-hidden="true"><Icon icon="solar:letter-linear" width="20" /></div>
+          <div><h3 class="card-title">{{ t('webhook.title') }}</h3><p class="card-desc">{{ t('webhook.description') }}</p></div>
         </div>
-      </template>
-    </el-form>
-    <div v-if="revealedSecret" class="secret-result">
-      <el-alert :title="t('webhook.secretOnce')" type="success" :closable="false" />
-      <el-input :model-value="revealedSecret" readonly type="password" show-password :aria-label="t('webhook.secret')" />
-    </div>
-    <template v-if="form">
-      <div class="delivery-title"><h4>{{ t('webhook.deliveries') }}</h4><el-button :disabled="busy" @click="refreshDeliveries">{{ t('webhook.reload') }}</el-button></div>
-      <p class="hint">{{ t('webhook.deliveryHint') }}</p>
-      <el-table :data="deliveries" :empty-text="t('webhook.empty')" style="width: 100%">
-        <el-table-column :label="t('webhook.event')" min-width="180"><template #default="{ row }"><div>{{ row.event }}</div><small>{{ row.eventId }}</small></template></el-table-column>
-        <el-table-column :label="t('webhook.status')" min-width="120"><template #default="{ row }">{{ t(`webhook.${row.status}`) }} · {{ row.attempts }}<div v-if="row.httpStatus">HTTP {{ row.httpStatus }}</div><small>{{ row.error }}</small></template></el-table-column>
-        <el-table-column :label="t('action')" width="100"><template #default="{ row }"><el-button v-if="row.status === 'failed'" link :disabled="busy" @click="act(() => retryWebhook(accountId, row.eventId))">{{ t('webhook.retry') }}</el-button></template></el-table-column>
-      </el-table>
-      <el-button v-if="nextBefore" :disabled="busy" @click="more">{{ t('webhook.more') }}</el-button>
-    </template>
-  </section>
+        <el-button text :disabled="busy || !accountId" @click="load"><Icon icon="solar:refresh-circle-linear" width="16" aria-hidden="true" />{{ t('webhook.reload') }}</el-button>
+      </header>
+      <div class="card-body">
+        <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
+        <el-form label-position="top" :disabled="busy" class="webhook-form">
+          <el-form-item :label="t('mailboxAddress')">
+            <el-select v-model="accountId" :aria-label="t('mailboxAddress')" @change="load">
+              <el-option v-for="account in accounts" :key="account.accountId" :value="account.accountId" :label="account.email" />
+            </el-select>
+          </el-form-item>
+          <template v-if="form">
+            <div class="switch-item">
+              <div class="switch-meta"><label for="webhook-enabled" class="switch-title">{{ t('webhook.enabled') }}</label></div>
+              <el-switch id="webhook-enabled" v-model="form.enabled" :aria-label="t('webhook.enabled')" />
+            </div>
+            <el-form-item label="URL"><el-input v-model="form.url" placeholder="https://assistant.example.com/mail" maxlength="2048" /></el-form-item>
+            <el-form-item :label="t('webhook.senders')">
+              <el-radio-group v-model="form.mode" :aria-label="t('webhook.senders')">
+                <el-radio value="all">{{ t('webhook.all') }}</el-radio>
+                <el-radio value="allowlist">{{ t('webhook.allowlist') }}</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item v-if="form.mode === 'allowlist'" :label="t('webhook.addresses')"><el-input v-model="addresses" type="textarea" :rows="3" placeholder="owner@example.com" /></el-form-item>
+            <p class="field-hint">{{ t('webhook.filterHint') }}</p>
+            <details class="help-details secret-settings">
+              <summary><Icon icon="solar:key-linear" width="16" aria-hidden="true" />{{ t('webhook.advanced') }}</summary>
+              <div class="maintenance-fields">
+                <el-form-item :label="t('webhook.secret')"><el-input v-model="newSecret" type="password" show-password autocomplete="new-password" :placeholder="t('webhook.secretHint')" maxlength="256" /></el-form-item>
+                <p class="field-hint">{{ t('webhook.savedActionsHint') }}</p>
+                <div class="maintenance-actions">
+                  <el-button :disabled="!form.hasSecret" @click="act(() => testWebhook(accountId))"><Icon icon="solar:plain-2-linear" width="16" aria-hidden="true" />{{ t('webhook.test') }}</el-button>
+                  <el-button text :disabled="!form.hasSecret" @click="act(() => rotateWebhookSecret(accountId, form.revision), true)"><Icon icon="solar:refresh-circle-linear" width="16" aria-hidden="true" />{{ t('webhook.rotate') }}</el-button>
+                </div>
+                <div class="remove-action"><el-button type="danger" text :disabled="!form.hasSecret" @click="remove"><Icon icon="solar:trash-bin-trash-linear" width="16" aria-hidden="true" />{{ t('webhook.remove') }}</el-button></div>
+              </div>
+            </details>
+          </template>
+        </el-form>
+        <div v-if="revealedSecret" class="secret-result" role="status">
+          <el-alert :title="t('webhook.secretOnce')" type="success" :closable="false" />
+          <el-input :model-value="revealedSecret" readonly type="password" show-password :aria-label="t('webhook.secret')" />
+        </div>
+      </div>
+      <footer v-if="form" class="webhook-save-bar">
+        <p>{{ t('webhook.saveHint') }}</p>
+        <el-button type="primary" :disabled="busy || !form.mode" @click="save"><Icon icon="solar:diskette-linear" width="16" aria-hidden="true" />{{ t('save') }}</el-button>
+      </footer>
+    </section>
+    <section v-if="form" class="setting-card arc-card" :aria-busy="busy">
+      <header class="card-header">
+        <div class="header-left-group">
+          <div class="header-icon" aria-hidden="true"><Icon icon="solar:history-linear" width="20" /></div>
+          <div><h3 class="card-title">{{ t('webhook.deliveries') }}</h3><p class="card-desc">{{ t('webhook.deliveryHint') }}</p></div>
+        </div>
+        <el-button text :disabled="busy" @click="refreshDeliveries"><Icon icon="solar:refresh-circle-linear" width="16" aria-hidden="true" />{{ t('webhook.reload') }}</el-button>
+      </header>
+      <div class="card-body">
+        <el-table :data="deliveries" :empty-text="t('webhook.empty')">
+          <el-table-column :label="t('webhook.event')" min-width="180"><template #default="{ row }"><div>{{ row.event }}</div><small>{{ row.eventId }}</small></template></el-table-column>
+          <el-table-column :label="t('webhook.status')" min-width="150"><template #default="{ row }">{{ t(`webhook.${row.status}`) }} · {{ row.attempts }}<div v-if="row.httpStatus">HTTP {{ row.httpStatus }}</div><small>{{ row.error }}</small></template></el-table-column>
+          <el-table-column :label="t('action')" width="100"><template #default="{ row }"><el-button v-if="row.status === 'failed'" link :disabled="busy" @click="act(() => retryWebhook(accountId, row.eventId))"><Icon icon="solar:refresh-circle-linear" width="16" aria-hidden="true" />{{ t('webhook.retry') }}</el-button></template></el-table-column>
+        </el-table>
+        <el-button v-if="nextBefore" class="more-records" :disabled="busy" @click="more">{{ t('webhook.more') }}</el-button>
+      </div>
+    </section>
+  </div>
 </template>
 
 <script setup>
 import { onMounted, onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Icon } from '@iconify/vue'
 import { ElMessageBox } from 'element-plus'
 import { accountList } from '@/request/account.js'
 import { getWebhook, saveWebhook, deleteWebhook, rotateWebhookSecret, testWebhook, webhookDeliveries, retryWebhook } from '@/request/webhook.js'
@@ -124,14 +152,29 @@ onMounted(async () => {
 onBeforeUnmount(() => { disposed = true; epoch += 1; revealedSecret.value = ''; newSecret.value = '' })
 </script>
 
-<style scoped>
-.webhook-card { padding: 24px; }
-h3 { margin: 0 0 8px; }
-.hint, small { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
-.hint { line-height: 1.6; }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.actions :deep(.el-button) { margin: 0; }
-.secret-result { display: grid; gap: 12px; margin-top: 20px; }
-.delivery-title { display: flex; align-items: center; justify-content: space-between; margin-top: 24px; }
-@media (max-width: 767px) { .webhook-card { padding: 16px; } }
+<style scoped lang="scss">
+@use '../../sys-setting/components/card' as *;
+.webhook-settings { display:flex; flex-direction:column; gap:24px; min-width:0; }
+.card-header > .el-button { flex-shrink:0; }
+.webhook-form { display:flex; flex-direction:column; gap:20px; max-width:600px; width:100%; }
+.webhook-form :deep(.el-form-item) { margin:0; }
+.webhook-form :deep(.el-form-item__label) { font-size:13px; font-weight:500; color:var(--text-strong); margin-bottom:7px; line-height:1.5; }
+.webhook-form :deep(.el-form-item__content) { line-height:1.6; }
+.webhook-form :deep(.el-select) { width:100%; }
+.webhook-form :deep(.el-radio-group) { display:flex; flex-wrap:wrap; gap:8px 20px; }
+.webhook-form :deep(.el-radio) { margin-right:0; }
+.webhook-form .switch-item { padding:0 0 18px; }
+.secret-settings { padding-top:18px; border-top:1px solid var(--line); }
+.secret-settings > summary { display:flex; align-items:center; gap:8px; }
+.secret-settings > summary::before { content:'›'; font-size:18px; line-height:1; transform:rotate(0); }
+.secret-settings[open] > summary::before { transform:rotate(90deg); }
+.maintenance-fields { display:flex; flex-direction:column; gap:14px; padding-top:10px; }
+.maintenance-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.remove-action { padding-top:12px; border-top:1px solid var(--line); }
+.secret-result { display:grid; gap:12px; max-width:600px; }
+.webhook-save-bar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 24px; border-top:1px solid var(--line); background:color-mix(in srgb,var(--paper) 35%,var(--surface)); }
+.webhook-save-bar p { margin:0; font-size:12px; line-height:1.6; color:var(--muted); }
+small { color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+.more-records { align-self:flex-start; }
+@media (max-width:640px) { .webhook-settings { gap:16px; } .webhook-save-bar { padding:12px 16px; flex-wrap:wrap; } .webhook-save-bar > .el-button { margin-left:auto; } }
 </style>
